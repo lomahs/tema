@@ -1,0 +1,47 @@
+{
+  "sheets": [
+    {
+      "dataset": "summary",
+      "sheet": "Summary",
+      "header_row": 1,
+      "first_column": "A",
+      "columns": [
+        {"field": "run_date"},
+        {"field": "file"},
+        {"field": "device"},
+        {"field": "total"},
+        {"expand": "statuses"}
+      ]
+    },
+    {
+      "dataset": "daily",
+      "sheet": "Daily",
+      "header_row": 1,
+      "first_column": "A",
+      "columns": [
+        {"field": "run_date"},
+        {"field": "date"},
+        {"field": "file"},
+        {"field": "device"},
+        {"field": "pic"},
+        {"field": "total"},
+        {"expand": "statuses"}
+      ]
+    },
+    {
+      "dataset": "issues",
+      "sheet": "Issues",
+      "header_row": 1,
+      "first_column": "A",
+      "columns": [
+        {"field": "run_date"},
+        {"field": "file"},
+        {"field": "row"},
+        {"field": "case_no"},
+        {"field": "status"},
+        {"field": "ticket_id"},
+        {"field": "note"}
+      ]
+    }
+  ]
+}

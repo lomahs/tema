@@ -1,0 +1,15 @@
+.venv/
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local run artifacts
+output/
+snapshots/
+*.xlsx
+!tests/fixtures/*.xlsx
+*.egg-info/
+
+# Microsoft Graph refresh tokens, if GRAPH_TOKEN_CACHE points inside the repo
+graph_token_cache.json
