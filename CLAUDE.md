@@ -56,33 +56,82 @@ statuses that must carry a Ticket ID or a Note; `/api/summary` reports violators
 `/api/productivity` divides those cases by the days a PIC actually tested. Any number of statuses
 may set it (a config with none simply yields a productivity table of zeros).
 
+Each status also carries a `tone` — `success` / `danger` / `warn` / `neutral` / `muted` — which
+is the *only* colour input the UI has. Badges, the numbers in the status band and the chart
+slices all derive from it, which is what stops the chart palette drifting from the table's the
+way a positional colour array once did. The tone names what a status *means*; what it looks
+like lives in `tokens.css`. A config that predates the field has its tone inferred from the old
+Bootstrap `badge` string, so `badge` and `text` are still emitted but nothing in the UI reads
+them. Several statuses may share a tone (OK and NG-OK are both good outcomes); charts separate
+them by stepping the shade in taxonomy order.
+
 Adding or renaming a status means editing only that JSON. Backend, `/api/statuses`, the UI and the
 sample generator all read from it — never hard-code status keys in Python or JS.
+
+**No CSS framework.** The UI is hand-written CSS in two files:
+[static/css/tokens.css](static/css/tokens.css) holds every colour, type and spacing token
+(light palette on bare `:root`, dark redefined under both `prefers-color-scheme` and
+`[data-theme="dark"]`), and [static/css/app.css](static/css/app.css) holds the components.
+The organising idea is **the ledger** — this tool sits between two spreadsheets, so the grid
+is the structure. There is no `.card` and no `.panel`; the setup drawer and the empty state
+are the only boxed surfaces. Tables are ruled, never framed.
+
+**The interface has no accent colour.** Colour on screen always means *status*. Tabs, primary
+buttons, selection and focus are rendered as inverted ink blocks, and the device/PIC charts use
+a monochrome ink ramp — so a device breakdown can never be misread as a pass/fail one. Do not
+introduce a brand or accent hue; it will collide with the five status tones.
 
 **Frontend state ownership.** No framework, no bundler; `templates/index.html` loads
 [static/js/main.js](static/js/main.js) as `<script type="module">`. An imported ES binding can't be
 reassigned by the importer, so each piece of mutable state lives in exactly one module and is
-reached through functions: taxonomy in `taxonomy.js`, cases/filters/page in `views/detail.js`,
-daily rows in `views/daily.js`, per-PIC productivity rows in `views/productivity.js`,
-Chart.js instances in `charts.js`. `pagination.js` is a
-self-contained widget taking `{totalItems, pageSize, currentPage, onPageChange, container}` —
-it must not import `views/detail.js` (circular). Both the detail table (50/page, `#pagination`)
-and the daily table (10/page, `#dailyPagination`) use it, so each pager needs its own `<nav>`
-selector passed in.
+reached through functions: taxonomy in `taxonomy.js`, cases/filters/page/expansion in
+`views/detail.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
+`views/productivity.js`, Chart.js instances in `charts.js`, theme in `theme.js`.
+
+`pagination.js` and `groupedTable.js` are self-contained widgets that **must not import any
+view module** (circular). `groupedTable.js` takes the caller's rows, grouping keys and its own
+`expanded` Set, and reports back through `onToggle`; build group paths with its `groupPath()`
+rather than joining labels by hand, because the separator is a NUL.
+
+**Never round-trip a group path through the DOM.** An HTML attribute is not a lossless
+channel — the tokenizer rewrites U+0000 to U+FFFD in attribute values, so a path written to
+`data-…` and read back off `dataset` no longer matches the one held in `expanded`, and the
+chevron silently stops working with no error anywhere. The markup therefore carries only an
+integer index (`data-group`) into a render-local `paths` array. Keep it that way: any identity
+that must survive a click belongs in a JS array, not in an attribute.
 
 Behavior worth preserving when touching the UI:
 - `refreshViews()` in `main.js` must call `setTaxonomy()` before any header/card render.
-- `makeSortable(".sortable", …)` is bound **once** at init; `.daily-sortable` and
-  `.prod-sortable` are rebound per render because `renderDailyHead` / `renderProductivityHead`
-  replace the `<th>`s. Duplicating a listener sorts twice and looks like nothing happened.
+- **Every** sortable header is now generated — `renderSummaryHead`, `renderDailyHead`,
+  `renderProductivityHead` and `renderDetailHead` each replace their `<th>`s and so each calls
+  `makeSortable` itself. None is bound at init any more. Binding one twice sorts twice per
+  click and looks like nothing happened.
+- Sorting a grouped table goes through `sortGrouped`, which orders the *groups* by their
+  roll-up and the rows within each group. Sorting by "NG descending" must mean the worst file
+  first, not the file that happens to own the worst row.
+- Paging counts **groups**, not rows, wherever grouping is on (Daily always; Detail when the
+  group-by control is set). A page that split a group would make its roll-up a lie.
 - The productivity table sits inside `#dailyView` but ignores the daily filters on purpose —
   it reports over everything loaded, so it re-renders only on sort, never on filter change.
-- `showView("detail")` calls `resizeCharts()` — Chart.js sizes to a 0×0 container while hidden.
-- The Chart.js CDN `<script>` must stay before the module tag.
+- Every table lives in a `.scroll-x` pane that has `overflow: auto` **and** a `max-height`.
+  Both halves matter: the overflow makes the pane — not the viewport — the scrollport for
+  the sticky `<thead>` and `<tfoot>`, and the height cap is what gives it something to
+  scroll. Drop the cap and the pane grows to fit its content, nothing scrolls inside it, and
+  a sticky header with a non-zero `top` gets pushed *down into* the rows instead of pinning.
+  Headers therefore stick at `top: 0`, never at a measured viewport offset.
+- `showView("detail")` calls `resizeCharts()`, and so does expanding the charts strip —
+  Chart.js sizes to a 0×0 container while hidden.
+- The Chart.js CDN `<script>` must stay before the module tag. Chart.js resolves colours at
+  construction, so `theme.js` fires `onThemeChange` and `charts.js` rebuilds; a chart that is
+  not rebuilt keeps the old palette.
 - Every `fetch` lives in `api.js`; no view or panel module calls it directly.
 - `reportPanel.js` mirrors `sourcePanel.js`: it owns where results *go* and knows nothing
   about the views. `refreshViews()` calls `setReportEnabled(true)` — publishing with nothing
   loaded would clear the day's rows and write none back, which the endpoint also refuses.
+- `setupDrawer.js` owns chrome only. It opens itself when nothing is loaded and closes on a
+  successful load; `sourcePanel.js` and `reportPanel.js` do not know it exists.
+- `views/summary.js` must not import `views/detail.js`. Jumping from a missing-reason row into
+  Detail goes through the `onJumpToCase` callback `main.js` passes in.
 
 **Aggregation is shared, not owned by the routes.** [aggregate.py](aggregate.py) holds
 `summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` as plain functions over

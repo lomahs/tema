@@ -1,0 +1,517 @@
+/*
+ * Components.
+ *
+ * The organising idea is the ledger: this tool sits between two spreadsheets,
+ * its users already think in rows and columns, so the grid is the structure.
+ * There is no `.card` and no `.panel` here — the drawer and the empty state are
+ * the only boxed surfaces in the app. Everything else is ruled, not framed.
+ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--fs-base);
+    line-height: var(--lh-base);
+}
+
+[hidden] { display: none !important; }
+
+/* Anything that can carry Japanese needs the extra leading. */
+.cjk, .badge, .tab, th, td { line-height: var(--lh-cjk); }
+
+:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 1px;
+}
+
+/* --- top bar -------------------------------------------------------------- */
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-5);
+    height: var(--topbar-h);
+    padding: 0 var(--sp-5);
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule-strong);
+}
+
+.brand {
+    font-size: var(--fs-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+}
+
+.topbar-end {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-left: auto;
+}
+
+.source-summary {
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+}
+
+/* --- tabs: an ink block, not a coloured underline -------------------------- */
+
+.tabs {
+    display: flex;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+}
+
+.tab {
+    appearance: none;
+    border: 0;
+    padding: var(--sp-1) var(--sp-4);
+    background: var(--paper);
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+}
+
+.tab:hover { background: var(--paper-hover); color: var(--ink); }
+
+.tab[aria-selected="true"] {
+    background: var(--ink);
+    color: var(--ink-invert);
+}
+
+/* --- buttons -------------------------------------------------------------- */
+
+.btn {
+    appearance: none;
+    padding: var(--sp-1) var(--sp-4);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    background: var(--paper-raised);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) { background: var(--paper-hover); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* The primary action is a stamped ink block. No accent colour exists. */
+.btn-primary {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--ink-invert);
+}
+.btn-primary:hover:not(:disabled) { background: var(--ink-soft); border-color: var(--ink-soft); }
+
+.btn-quiet { border-color: transparent; background: transparent; }
+.btn-quiet:hover:not(:disabled) { background: var(--paper-hover); }
+
+.btn-icon { padding: var(--sp-1) var(--sp-2); line-height: 1; }
+
+/* --- fields --------------------------------------------------------------- */
+
+.field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.field > label {
+    color: var(--ink-soft);
+    font-size: var(--fs-xs);
+}
+
+.input, .select, textarea.input {
+    padding: var(--sp-1) var(--sp-2);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    background: var(--paper-raised);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--fs-sm);
+    min-width: 0;
+}
+
+textarea.input { font-family: var(--font-mono); resize: vertical; }
+.input-mono { font-family: var(--font-mono); }
+
+.input-row { display: flex; }
+.input-row .input { flex: 1; border-radius: var(--radius) 0 0 var(--radius); }
+.input-row .btn { border-radius: 0 var(--radius) var(--radius) 0; border-left: 0; }
+
+/* --- toolbar -------------------------------------------------------------- */
+
+.toolbar {
+    position: sticky;
+    top: var(--topbar-h);
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-5);
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+}
+
+.toolbar-end { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
+
+.count {
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 1px var(--sp-2);
+    border: 1px solid var(--rule-strong);
+    background: var(--paper-sunk);
+    font-size: var(--fs-xs);
+}
+
+.chip button {
+    appearance: none; border: 0; background: none; padding: 0;
+    color: var(--ink-soft); cursor: pointer; font: inherit; line-height: 1;
+}
+.chip button:hover { color: var(--ink); }
+
+/* --- the ledger ----------------------------------------------------------- */
+
+.view { padding: 0 var(--sp-5) var(--sp-6); }
+
+.section-title {
+    margin: var(--sp-6) 0 var(--sp-2);
+    font-size: var(--fs-md);
+    font-weight: 600;
+}
+.section-note { margin: 0 0 var(--sp-3); color: var(--ink-soft); font-size: var(--fs-sm); max-width: 68ch; }
+
+/*
+ * The table's own scroll pane.
+ *
+ * `overflow` here makes this — not the viewport — the scrollport for anything
+ * sticky inside it, which is exactly what a data table wants: the column
+ * headers and the totals row pin to the pane while the rows scroll under them,
+ * and a wide table scrolls sideways without the page ever doing so.
+ *
+ * The height cap is what gives the pane something to scroll. Without it the
+ * pane grows to fit its content, nothing ever scrolls inside it, and a sticky
+ * header with a non-zero offset gets pushed *down into* the rows instead.
+ */
+.scroll-x {
+    overflow: auto;
+    max-height: calc(100vh - 170px);
+    overscroll-behavior: contain;
+}
+
+.ledger {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-base);
+}
+
+.ledger th, .ledger td {
+    padding: 0 var(--sp-3);
+    height: var(--row-h);
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+}
+
+.ledger thead th {
+    position: sticky;
+    top: 0;              /* pins to the .scroll-x pane, not the viewport */
+    z-index: 10;
+    background: var(--paper-sunk);
+    border-bottom: 1px solid var(--rule-strong);
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    font-weight: 500;   /* sentence case, medium — never uppercase and tracked */
+}
+
+.ledger tbody tr:hover td { background: var(--paper-hover); }
+
+.ledger tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: var(--paper-sunk);
+    border-top: 1px solid var(--rule-strong);
+    border-bottom: 0;
+    font-weight: 600;
+}
+
+/* Numbers right-align on tabular figures so digits stack down the page. */
+.num {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--ink-soft); }
+
+/* --- the status band ------------------------------------------------------
+ * The run of status columns recurs across Summary, Daily and Productivity: it
+ * is this app's signature structure, so it reads as one unit. The eye gets two
+ * zones — identity | measurement — instead of a dozen equal columns.
+ */
+
+.ledger .band { background: var(--paper-sunk); }
+.ledger tbody tr:hover .band { background: var(--paper-hover); }
+.ledger .band--first { border-left: 1px solid var(--rule-strong); }
+
+/* --- grouped rows --------------------------------------------------------- */
+
+.ledger .cell-label { padding-left: calc(var(--sp-3) + var(--depth, 0) * 14px); }
+
+.ledger tr[data-depth="0"] > td { font-weight: 600; }
+.ledger tr[data-depth="0"] > td:not(.band) { background: var(--paper-raised); }
+.ledger tbody tr[data-depth="0"]:hover > td:not(.band) { background: var(--paper-hover); }
+
+.twisty {
+    appearance: none;
+    border: 0;
+    background: none;
+    padding: 0;
+    margin-right: var(--sp-2);
+    width: 12px;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    line-height: 1;
+}
+.twisty:hover { color: var(--ink); }
+.twisty--leaf { visibility: hidden; cursor: default; }
+
+/* --- sortable headers ----------------------------------------------------- */
+
+.ledger th.sortable { padding: 0; }
+
+.ledger th.sortable > button {
+    appearance: none;
+    width: 100%;
+    height: var(--row-h);
+    padding: 0 var(--sp-3);
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+}
+
+.ledger th.num.sortable > button { justify-content: flex-end; }
+.ledger th.sortable > button:hover { color: var(--ink); }
+
+/* A persistent, low-contrast affordance — not a hover-only underline. */
+.ledger th.sortable > button::after {
+    content: "\2195";
+    color: var(--ink-faint);
+    font-size: 9px;
+}
+.ledger th[aria-sort="ascending"] > button::after  { content: "\25B2"; color: var(--ink); }
+.ledger th[aria-sort="descending"] > button::after { content: "\25BC"; color: var(--ink); }
+
+/* --- badges --------------------------------------------------------------- */
+
+.badge {
+    display: inline-block;
+    padding: 0 var(--sp-2);
+    border-radius: var(--radius);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    background: var(--tone-neutral);
+    color: var(--tone-neutral-fg);
+}
+
+[data-tone="success"] .badge, .badge[data-tone="success"] { background: var(--tone-success); color: var(--tone-success-fg); }
+[data-tone="danger"]  .badge, .badge[data-tone="danger"]  { background: var(--tone-danger);  color: var(--tone-danger-fg); }
+[data-tone="warn"]    .badge, .badge[data-tone="warn"]    { background: var(--tone-warn);    color: var(--tone-warn-fg); }
+[data-tone="neutral"] .badge, .badge[data-tone="neutral"] { background: var(--tone-neutral); color: var(--tone-neutral-fg); }
+[data-tone="muted"]   .badge, .badge[data-tone="muted"]   { background: var(--tone-muted);   color: var(--tone-muted-fg); }
+
+/* Numeric cells and stat figures take the tone as text colour. */
+[data-tone="success"].num, [data-tone="success"].stat-value, th[data-tone="success"] { color: var(--tone-success); }
+[data-tone="danger"].num,  [data-tone="danger"].stat-value,  th[data-tone="danger"]  { color: var(--tone-danger); }
+[data-tone="warn"].num,    [data-tone="warn"].stat-value,    th[data-tone="warn"]    { color: var(--tone-warn); }
+[data-tone="neutral"].num, [data-tone="neutral"].stat-value, th[data-tone="neutral"] { color: var(--tone-neutral); }
+[data-tone="muted"].num,   [data-tone="muted"].stat-value,   th[data-tone="muted"]   { color: var(--tone-muted); }
+
+/* A zero is noise; keep it present for alignment but recede it. */
+.zero { color: var(--ink-faint) !important; }
+
+/* --- flags ---------------------------------------------------------------
+ * A field that should have been filled in. A left rule plus a wash, rather
+ * than a full red cell — across twelve columns the old treatment shouted.
+ */
+.flag {
+    background: var(--tone-danger-bg);
+    box-shadow: inset 2px 0 0 var(--tone-danger);
+}
+
+/* --- pager ---------------------------------------------------------------- */
+
+.pager { display: flex; justify-content: center; gap: var(--sp-1); padding: var(--sp-4) 0; }
+
+.pager button {
+    appearance: none;
+    min-width: 26px;
+    height: 24px;
+    padding: 0 var(--sp-2);
+    border: 1px solid var(--rule);
+    background: var(--paper-raised);
+    color: var(--ink-soft);
+    font: inherit;
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+}
+.pager button:hover:not(:disabled) { background: var(--paper-hover); color: var(--ink); }
+.pager button[aria-current="page"] {
+    background: var(--ink); border-color: var(--ink); color: var(--ink-invert);
+}
+.pager .gap { border: 0; background: none; cursor: default; color: var(--ink-faint); }
+
+/* --- stats ---------------------------------------------------------------- */
+
+.stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-left: 0;
+    margin: var(--sp-4) 0;
+    background: var(--paper-raised);
+}
+
+.stat {
+    flex: 1 1 92px;
+    padding: var(--sp-2) var(--sp-4);
+    border-left: 1px solid var(--rule);
+}
+
+.stat-label { color: var(--ink-soft); font-size: var(--fs-xs); }
+.stat-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-lg);
+    font-weight: 500;
+}
+
+/* --- charts --------------------------------------------------------------- */
+
+.charts-toggle {
+    display: flex; align-items: center; gap: var(--sp-2);
+    margin: var(--sp-4) 0 0;
+}
+
+.charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--sp-5);
+    padding: var(--sp-4) 0;
+    border-bottom: 1px solid var(--rule);
+}
+
+.chart { min-width: 0; height: 220px; position: relative; }
+
+/* --- drawer --------------------------------------------------------------- */
+
+.scrim {
+    position: fixed; inset: 0; z-index: 40;
+    background: color-mix(in srgb, var(--ink) 32%, transparent);
+}
+
+.drawer {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    z-index: 50;
+    width: min(560px, 100%);
+    overflow-y: auto;
+    padding: var(--sp-5);
+    background: var(--paper-raised);
+    border-left: 1px solid var(--rule-strong);
+}
+
+.drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: var(--sp-5);
+}
+.drawer-head h2 { margin: 0; font-size: var(--fs-md); }
+
+.drawer section + section {
+    margin-top: var(--sp-6);
+    padding-top: var(--sp-5);
+    border-top: 1px solid var(--rule);
+}
+.drawer h3 { margin: 0 0 var(--sp-3); font-size: var(--fs-base); font-weight: 600; }
+
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.row { display: flex; gap: var(--sp-3); align-items: flex-end; flex-wrap: wrap; }
+
+.status-line { font-size: var(--fs-sm); color: var(--ink-soft); min-height: 18px; }
+.status-line b { color: var(--ink); font-family: var(--font-mono); }
+.is-error { color: var(--tone-danger); }
+.is-ok { color: var(--tone-success); }
+
+/* --- empty states --------------------------------------------------------- */
+
+.empty {
+    max-width: 44ch;
+    margin: 12vh auto;
+    padding: var(--sp-6);
+    border: 1px solid var(--rule);
+    background: var(--paper-raised);
+    text-align: center;
+}
+.empty h2 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); font-weight: 600; }
+.empty p { margin: 0 0 var(--sp-5); color: var(--ink-soft); }
+
+.empty-row td {
+    padding: var(--sp-6);
+    text-align: center;
+    color: var(--ink-soft);
+}
+
+/* --- motion --------------------------------------------------------------- *
+ * One moment only: the row reveal on expand, which answers a click and shows
+ * what changed. Nothing animates on load.
+ */
+@keyframes reveal {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: none; }
+}
+.ledger tr[data-revealed] { animation: reveal 120ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* --- narrow --------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+    .topbar { gap: var(--sp-3); padding: 0 var(--sp-3); }
+    .source-summary { display: none; }
+    .view, .toolbar { padding-left: var(--sp-3); padding-right: var(--sp-3); }
+}

@@ -30,15 +30,42 @@ def _default_text(badge: str) -> str:
     return ""
 
 
+#: The semantic colour tokens the UI understands. The taxonomy names which tone
+#: a status carries; what that tone *looks* like belongs to the CSS theme, so a
+#: palette change never touches this file.
+TONES = ("success", "danger", "warn", "neutral", "muted")
+
+DEFAULT_TONE = "neutral"
+
+#: Tone inferred for a status that configures a `badge` but no `tone`, so a
+#: config written before tones existed still renders sensibly.
+BADGE_TONES = {
+    "bg-success": "success",
+    "bg-danger": "danger",
+    "bg-warning": "warn",
+    "bg-dark": "muted",
+    "bg-secondary": "neutral",
+}
+
+
+def _default_tone(badge: str) -> str:
+    for token, tone in BADGE_TONES.items():
+        if token in badge:
+            return tone
+    return DEFAULT_TONE
+
+
 @dataclass(frozen=True)
 class Status:
     key: str
     label: str
     badge: str
     text: str
+    tone: str
 
     def to_dict(self) -> dict:
-        return {"key": self.key, "label": self.label, "badge": self.badge, "text": self.text}
+        return {"key": self.key, "label": self.label, "badge": self.badge,
+                "text": self.text, "tone": self.tone}
 
 
 class StatusSet:
@@ -91,11 +118,22 @@ class StatusSet:
             # `"text": ""` is meaningful (use the default body colour), so an
             # absent key — not a falsy one — is what falls back to the badge.
             text = entry.get("text")
+
+            tone = entry.get("tone")
+            if tone is None:
+                tone = _default_tone(badge)
+            elif tone not in TONES:
+                raise ValueError(
+                    f"{source}: status '{key}' has unknown tone '{tone}'; "
+                    f"expected one of {', '.join(TONES)}"
+                )
+
             statuses.append(Status(
                 key=key,
                 label=str(entry.get("label") or key),
                 badge=badge,
                 text=str(text) if isinstance(text, str) else _default_text(badge),
+                tone=tone,
             ))
 
             for value in entry.get("match") or []:

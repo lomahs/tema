@@ -3,13 +3,14 @@
  *
  * Sits under the daily table but deliberately ignores its filters — it answers
  * "how much does each member get through", a question about the whole dataset,
- * so `/api/productivity` does the counting and this module only draws it.
+ * so `/api/productivity` does the counting and this module only draws it. That
+ * is also why it re-renders on sort and never on a filter change.
  *
  * Owns the productivity dataset and its sort state.
  */
-import { $, $$, esc } from "../dom.js";
-import { makeSortable, sortRows } from "../sorting.js";
-import { getExecutedStatuses, statusTextClass } from "../taxonomy.js";
+import { $, esc } from "../dom.js";
+import { makeSortable, paintSortIndicators, sortableTh, sortRows } from "../sorting.js";
+import { getExecutedStatuses, toneFor } from "../taxonomy.js";
 
 /** @type {Object[]} rows from /api/productivity */
 let prodData = [];
@@ -23,36 +24,36 @@ const prodSort = { ...DEFAULT_SORT };
 /** Columns that are not one of the executed statuses. */
 const NUMERIC_BASE = ["executed", "days", "productivity"];
 
+const SELECTOR = "#productivityHead th.sortable";
+
 /**
  * Build the header from the taxonomy and make it sortable.
  *
  * This replaces `#productivityHead`'s contents, discarding the previous header
- * cells and their listeners, so calling {@link makeSortable} here rebinds rather
- * than stacking duplicates — the same arrangement the daily header uses.
+ * cells and their listeners, so `makeSortable` rebinds here rather than
+ * stacking duplicates — the same arrangement the daily header uses.
  */
 export function renderProductivityHead() {
-    const statusHeads = getExecutedStatuses().map((s) => {
-        const cls = statusTextClass(s.key).replace(" fw-bold", "");
-        return `<th class="prod-sortable${cls ? " " + cls : ""}" `
-             + `data-col="${esc(s.key)}">${esc(s.label)}</th>`;
-    }).join("");
+    const statusHeads = getExecutedStatuses().map((s) =>
+        sortableTh(s.key, s.label, { cls: "num band", tone: toneFor(s.key) })).join("");
 
     $("#productivityHead").innerHTML =
-        `<th class="prod-sortable" data-col="pic">PIC</th>`
+        sortableTh("pic", "PIC")
         + statusHeads
-        + `<th class="prod-sortable" data-col="executed">Executed</th>`
-        + `<th class="prod-sortable" data-col="days">Working days</th>`
-        + `<th class="prod-sortable" data-col="productivity">Cases / day</th>`;
+        + sortableTh("executed", "Executed", { cls: "num" })
+        + sortableTh("days", "Working days", { cls: "num" })
+        + sortableTh("productivity", "Cases / day", { cls: "num" });
 
-    makeSortable(".prod-sortable", prodSort, renderProductivity);
+    makeSortable(SELECTOR, prodSort, renderProductivity);
+    paintSortIndicators(SELECTOR, prodSort);
 }
 
 /**
  * Adopt a fresh dataset: reset the sort to fastest-first and redraw.
  *
  * Call {@link renderProductivityHead} first — the header must reflect the
- * current taxonomy before the body is drawn against it, and the default sort
- * indicator is written onto the header cells this function finds.
+ * current taxonomy before the body is drawn against it, and the sort indicator
+ * is painted onto the header cells this function finds.
  *
  * @param {Object[]} data `/api/productivity` body.
  */
@@ -60,12 +61,7 @@ export function initProductivity(data) {
     prodData = data;
     prodSort.col = DEFAULT_SORT.col;
     prodSort.asc = DEFAULT_SORT.asc;
-    $$(".prod-sortable").forEach((t) => {
-        t.classList.remove("sort-asc", "sort-desc");
-        if (t.dataset.col === prodSort.col) {
-            t.classList.add(prodSort.asc ? "sort-asc" : "sort-desc");
-        }
-    });
+    paintSortIndicators(SELECTOR, prodSort);
     renderProductivity();
 }
 
@@ -75,15 +71,23 @@ function renderProductivity() {
     const numeric = new Set([...NUMERIC_BASE, ...statuses.map((s) => s.key)]);
     const rows = sortRows(prodData, prodSort, numeric);
 
+    if (!rows.length) {
+        $("#productivityBody").innerHTML =
+            `<tr class="empty-row"><td colspan="${statuses.length + 4}">`
+            + "No executed cases yet.</td></tr>";
+        $("#productivityFoot").innerHTML = "";
+        return;
+    }
+
     $("#productivityBody").innerHTML = rows.map((r) => `<tr>
         <td>${esc(r.pic)}</td>
         ${statuses.map((s) => {
-            const cls = statusTextClass(s.key);
-            return `<td${cls ? ` class="${cls}"` : ""}>${r[s.key] || ""}</td>`;
+            const v = r[s.key] || 0;
+            return `<td class="num band${v ? "" : " zero"}" data-tone="${esc(toneFor(s.key))}">${v}</td>`;
         }).join("")}
-        <td>${r.executed}</td>
-        <td>${r.days}</td>
-        <td class="fw-bold">${r.productivity.toFixed(2)}</td>
+        <td class="num">${r.executed}</td>
+        <td class="num">${r.days}</td>
+        <td class="num"><b>${r.productivity.toFixed(2)}</b></td>
     </tr>`).join("");
 
     renderProductivityFoot(rows, statuses);
@@ -107,9 +111,9 @@ function renderProductivityFoot(rows, statuses) {
 
     $("#productivityFoot").innerHTML = `<tr>
         <td>Team</td>
-        ${statuses.map((s) => `<td>${sum(s.key) || ""}</td>`).join("")}
-        <td>${executed}</td>
-        <td>${days}</td>
-        <td>${rate.toFixed(2)}</td>
+        ${statuses.map((s) => `<td class="num band">${sum(s.key) || 0}</td>`).join("")}
+        <td class="num">${executed}</td>
+        <td class="num">${days}</td>
+        <td class="num">${rate.toFixed(2)}</td>
     </tr>`;
 }

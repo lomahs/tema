@@ -6,10 +6,15 @@
  * and the backend always agree on which status columns exist. This module owns
  * that state: nothing else caches the status list, because an ES-module export
  * cannot be reassigned by an importer.
+ *
+ * Colour comes from each status' `tone` — a semantic name, not a hex value.
+ * What a tone looks like belongs to `tokens.css`, which is why the same five
+ * names drive badges, number columns and chart slices alike.
  */
 import { $, esc } from "./dom.js";
+import { shade } from "./theme.js";
 
-/** @typedef {{key: string, label: string, badge: string, text: string}} Status */
+/** @typedef {{key: string, label: string, tone: string}} Status */
 
 /** @type {Status[]} */
 let statuses = [];
@@ -17,10 +22,10 @@ let statuses = [];
 let needsReason = new Set();
 /** @type {Set<string>} status keys that count as work actually carried out */
 let executed = new Set();
-/** @type {Object<string, string>} status key -> bootstrap badge class */
-let badgeOf = {};
-/** @type {Object<string, string>} status key -> bootstrap text colour class */
-let textOf = {};
+/** @type {Object<string, string>} status key -> tone */
+let toneOf = {};
+/** @type {Object<string, number>} status key -> its position among statuses sharing its tone */
+let shadeOf = {};
 
 /**
  * Adopt the taxonomy from `/api/statuses`.
@@ -34,8 +39,18 @@ export function setTaxonomy(taxonomy) {
     statuses = taxonomy.statuses || [];
     needsReason = new Set(taxonomy.needs_reason || []);
     executed = new Set(taxonomy.executed || []);
-    badgeOf = Object.fromEntries(statuses.map((s) => [s.key, s.badge]));
-    textOf = Object.fromEntries(statuses.map((s) => [s.key, s.text || ""]));
+    toneOf = Object.fromEntries(statuses.map((s) => [s.key, s.tone || "neutral"]));
+
+    // Several statuses legitimately share a tone — OK and NG-OK are both good
+    // outcomes, Cancel and NYS are both grey. Charts still need to tell them
+    // apart, so each gets a shade step by its position within its tone.
+    const seen = {};
+    shadeOf = {};
+    statuses.forEach((s) => {
+        const tone = toneOf[s.key];
+        seen[tone] = seen[tone] === undefined ? 0 : seen[tone] + 1;
+        shadeOf[s.key] = seen[tone];
+    });
 }
 
 /**
@@ -60,12 +75,26 @@ export function getExecutedStatuses() {
 }
 
 /**
- * Bootstrap badge class for a status key.
+ * Semantic colour name for a status key.
  * @param {string} key
- * @returns {string} Empty string when the key is unknown.
+ * @returns {string} One of success / danger / warn / neutral / muted.
  */
-export function badgeFor(key) {
-    return badgeOf[key] || "";
+export function toneFor(key) {
+    return toneOf[key] || "neutral";
+}
+
+/**
+ * A concrete colour for a status, for anything that paints outside CSS.
+ *
+ * Charts cannot be handed `var(--tone-success)`, and two statuses sharing a
+ * tone must not come out as the same slice, so the tone is resolved and then
+ * stepped by the status' position within it.
+ *
+ * @param {string} key
+ * @returns {string} A computed CSS colour.
+ */
+export function colourFor(key) {
+    return shade(`--tone-${toneFor(key)}`, shadeOf[key] || 0);
 }
 
 /**
@@ -97,57 +126,52 @@ export function sumRows(rows) {
 }
 
 /**
- * One `<td>` per status, in taxonomy order.
+ * The Total cell plus one `<td>` per status, in taxonomy order.
+ *
+ * These columns are the status band — the run of measurements that recurs
+ * across Summary, Daily and Productivity — so the first of them carries
+ * `band--first`, which is what draws the rule separating identity from
+ * measurement.
+ *
  * @param {Object} row A row (or a totals object) keyed by status.
- * @param {boolean} [emphasise] Colour the counts by status.
  * @returns {string} HTML.
  */
-export function statusCells(row, emphasise) {
-    return statuses.map((s) => {
-        const cls = emphasise ? statusTextClass(s.key) : "";
-        const v = row[s.key];
-        return `<td${cls ? ` class="${cls}"` : ""}>${v || ""}</td>`;
-    }).join("");
+export function statusCells(row) {
+    const cells = statuses.map((s) => {
+        const v = row[s.key] || 0;
+        const zero = v ? "" : " zero";
+        return `<td class="num band${zero}" data-tone="${esc(toneFor(s.key))}">${v}</td>`;
+    });
+    return `<td class="num band band--first">${row.total || 0}</td>` + cells.join("");
 }
 
 /**
- * Text colour for a status. Taken from the status' configured `text` class so
- * the palette stays in one place (`parser/result_status.json`) — a badge class
- * cannot serve here, since several statuses share a badge but want different
- * text colours (NG-OK vs Pending, Cancel vs NYS).
+ * Header cells matching {@link statusCells}, each sortable.
  *
- * A status with no `text` keeps the default body colour, which is what NYS
- * wants: a muted grey there is indistinguishable from the table header.
- *
- * @param {string} key
- * @returns {string} Bootstrap utility classes, possibly empty.
+ * @param {(col: string, label: string, opts: Object) => string} th A cell
+ *   builder — `sortableTh` for a sortable table, a plain one otherwise.
+ * @returns {string} HTML.
  */
-export function statusTextClass(key) {
-    const text = textOf[key];
-    return text ? `${text} fw-bold` : "";
+export function statusHeadCells(th) {
+    return th("total", "Total", { cls: "num band band--first" })
+        + statuses.map((s) =>
+            th(s.key, s.label, { cls: "num band", tone: toneFor(s.key) })).join("");
 }
 
 /**
  * Build the detail view's stat cards: Total, one per status, then Files.
  *
- * The cards are generated rather than written into the template because the
- * status list is configurable. {@link setTaxonomy} must have run first.
+ * Generated rather than written into the template because the status list is
+ * configurable. {@link setTaxonomy} must have run first.
  */
 export function renderStatCards() {
-    const subtle = (key) => {
-        const badge = badgeFor(key);
-        if (badge.includes("bg-success")) return " bg-success-subtle";
-        if (badge.includes("bg-danger")) return " bg-danger-subtle";
-        if (badge.includes("bg-warning")) return " bg-warning-subtle";
-        return "";
-    };
-    const card = (label, id, extra) => `
-        <div class="col-auto"><div class="card stat-card${extra || ""}"><div class="card-body py-2 px-3">
-            <div class="small text-muted">${esc(label)}</div>
-            <div class="fs-5 fw-bold" id="${esc(id)}">0</div>
-        </div></div></div>`;
+    const cell = (label, id, tone) => `
+        <div class="stat">
+            <div class="stat-label">${esc(label)}</div>
+            <div class="stat-value"${tone ? ` data-tone="${esc(tone)}"` : ""} id="${esc(id)}">0</div>
+        </div>`;
 
-    $("#statsRow").innerHTML = card("Total", "statTotal")
-        + statuses.map((s) => card(s.label, `stat-${s.key}`, subtle(s.key))).join("")
-        + card("Files", "statFiles", " bg-info-subtle");
+    $("#statsRow").innerHTML = cell("Total", "statTotal")
+        + statuses.map((s) => cell(s.label, `stat-${s.key}`, toneFor(s.key))).join("")
+        + cell("Files", "statFiles");
 }

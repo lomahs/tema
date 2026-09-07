@@ -47,10 +47,13 @@ def summary_rows(cases):
         groups.append({"file": file_name, "device": device, "total": len(group), **counts})
 
         for c in group:
-            if STATUS.classify(c.result) not in needs_reason:
+            status = STATUS.classify(c.result)
+            if status not in needs_reason:
                 continue
             if c.ticket_id or c.note:
                 continue
+            # `status` rides along so the UI can colour the row from the
+            # taxonomy instead of re-classifying the raw result itself.
             missing_reason.append({
                 "file": c.file_name,
                 "sheet": c.sheet,
@@ -58,6 +61,7 @@ def summary_rows(cases):
                 "row": c.row_num,
                 "case_no": c.case_no,
                 "result": c.result,
+                "status": status,
             })
 
     return groups, missing_reason

@@ -61,7 +61,7 @@ async function refreshStatus() {
     try {
         status = await getSharePointStatus();
     } catch (e) {
-        signInStatus.innerHTML = `<span class="text-danger">${esc(e.message)}</span>`;
+        signInStatus.innerHTML = `<span class="is-error">${esc(e.message)}</span>`;
         return "error";
     }
     renderStatus(status);
@@ -74,18 +74,17 @@ async function refreshStatus() {
  */
 function renderStatus(status) {
     const signedIn = status.state === "signed_in";
-    btnSignIn.classList.toggle("d-none", signedIn);
-    btnSignOut.classList.toggle("d-none", !signedIn);
+    btnSignIn.hidden = signedIn;
+    btnSignOut.hidden = !signedIn;
 
     if (signedIn) {
-        signInStatus.innerHTML = `<span class="text-success">Signed in as ${esc(status.account)}</span>`;
+        signInStatus.innerHTML = `<span class="is-ok">Signed in as ${esc(status.account)}</span>`;
         return;
     }
     if (status.state === "not_configured") {
         btnSignIn.disabled = true;
         signInStatus.innerHTML =
-            '<span class="text-warning-emphasis">Set <code>GRAPH_CLIENT_ID</code> to publish '
-            + "to SharePoint (see README).</span>";
+            "Set <b>GRAPH_CLIENT_ID</b> to publish to SharePoint. See the README.";
         return;
     }
     btnSignIn.disabled = false;
@@ -94,8 +93,8 @@ function renderStatus(status) {
         return;
     }
     signInStatus.innerHTML = status.error
-        ? `<span class="text-danger">${esc(status.error)}</span>`
-        : '<span class="text-muted">Not signed in.</span>';
+        ? `<span class="is-error">${esc(status.error)}</span>`
+        : "Not signed in.";
 }
 
 /**
@@ -105,22 +104,22 @@ function renderStatus(status) {
  */
 function showCode(code, uri) {
     signInStatus.innerHTML = `Open <a href="${esc(uri)}" target="_blank" rel="noopener">${esc(uri)}</a>`
-        + ` and enter code <b class="user-select-all">${esc(code)}</b>, then come back here.`;
+        + ` and enter code <b>${esc(code)}</b>, then come back here.`;
 }
 
 async function doSignIn() {
     btnSignIn.disabled = true;
-    signInStatus.innerHTML = '<span class="text-muted">Asking Microsoft for a code...</span>';
+    signInStatus.textContent = "Asking Microsoft for a code…";
     try {
         const { ok, json } = await postSharePointLogin();
         if (!ok) {
-            signInStatus.innerHTML = `<span class="text-danger">${esc(json.error)}</span>`;
+            signInStatus.innerHTML = `<span class="is-error">${esc(json.error)}</span>`;
             return;
         }
         showCode(json.user_code, json.verification_uri);
         startPolling();
     } catch (e) {
-        signInStatus.innerHTML = `<span class="text-danger">Sign-in failed: ${esc(e.message)}</span>`;
+        signInStatus.innerHTML = `<span class="is-error">Sign-in failed: ${esc(e.message)}</span>`;
     } finally {
         btnSignIn.disabled = false;
     }
@@ -159,13 +158,13 @@ async function doSignOut() {
 async function doPublish() {
     const url = reportUrl.value.trim();
     if (!url) {
-        publishStatus.innerHTML = '<span class="text-danger">Paste the report file link first.</span>';
+        publishStatus.innerHTML = '<span class="is-error">Paste the report file link first.</span>';
         return;
     }
     localStorage.setItem(STORAGE_KEY, url);
 
     btnPublish.disabled = true;
-    publishStatus.innerHTML = '<span class="text-muted">Publishing...</span>';
+    publishStatus.textContent = "Publishing…";
     try {
         const { ok, json } = await postPublishReport(url);
         if (!ok) {
@@ -173,16 +172,15 @@ async function doPublish() {
             // failure part-way leaves the file partly updated. Say so, and say
             // that re-running is the fix.
             publishStatus.innerHTML =
-                `<span class="text-danger">${esc(json.error)}</span>`
-                + '<br><span class="text-muted">Nothing may have been written, or only some'
-                + " sheets. Fix the problem and publish again — same-day rows are replaced,"
-                + " not duplicated.</span>";
+                `<span class="is-error">${esc(json.error)}</span>`
+                + "<br>Nothing may have been written, or only some sheets. Fix the problem"
+                + " and publish again — same-day rows are replaced, not duplicated.";
             return;
         }
         publishStatus.innerHTML = renderResult(json);
         await refreshStatus();
     } catch (e) {
-        publishStatus.innerHTML = `<span class="text-danger">Publish failed: ${esc(e.message)}</span>`;
+        publishStatus.innerHTML = `<span class="is-error">Publish failed: ${esc(e.message)}</span>`;
     } finally {
         btnPublish.disabled = false;
     }
@@ -202,6 +200,6 @@ function renderResult(result) {
     const link = result.web_url
         ? ` <a href="${esc(result.web_url)}" target="_blank" rel="noopener">Open</a>`
         : "";
-    return `<span class="text-success">Published to <b>${esc(result.file)}</b>`
+    return `<span class="is-ok">Published to <b>${esc(result.file)}</b>`
         + ` for ${esc(result.run_date)}.</span> ${per}.${link}`;
 }

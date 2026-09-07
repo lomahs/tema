@@ -77,7 +77,7 @@ def test_statuses_endpoint_mirrors_the_config(client):
     assert [s["key"] for s in body["statuses"]] == STATUS.keys
     assert body["needs_reason"] == STATUS.needs_reason
     assert body["executed"] == STATUS.executed
-    assert all({"key", "label", "badge", "text"} <= set(s) for s in body["statuses"])
+    assert all({"key", "label", "badge", "text", "tone"} <= set(s) for s in body["statuses"])
 
 
 def test_reload_before_any_load_is_rejected(client):
@@ -295,3 +295,18 @@ def test_empty_store_returns_empty_aggregates(client):
     assert client.get("/api/daily").get_json() == []
     assert client.get("/api/productivity").get_json() == []
     assert client.get("/api/summary").get_json() == {"groups": [], "missing_reason": []}
+
+
+def test_missing_reason_rows_carry_their_status(client, workbook_dir):
+    """The UI colours these rows from the taxonomy, so it needs the status key.
+
+    Re-deriving it in JavaScript would mean naming status keys there, which the
+    taxonomy exists to keep in one place.
+    """
+    load(client, workbook_dir)
+    rows = client.get("/api/summary").get_json()["missing_reason"]
+    assert rows, "fixture should produce at least one case owing a reason"
+    assert all(r["status"] in STATUS.keys for r in rows)
+    by_case = {r["case_no"]: r["status"] for r in rows}
+    assert by_case["TC-3"] == "NG"
+    assert by_case["TC-4"] == "Other"

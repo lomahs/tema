@@ -131,3 +131,58 @@ def test_invalid_configs_are_rejected(mutate, message):
     mutate(cfg)
     with pytest.raises(ValueError, match=message):
         StatusSet.from_dict(cfg)
+
+
+def test_tone_derives_from_the_badge_when_unset():
+    """A config written before tones existed still gets sensible colours.
+
+    The UI paints badges, number cells and charts from one semantic tone, so a
+    status that only names a Bootstrap badge has its tone inferred from it.
+    """
+    config = dict(MINIMAL)
+    config["statuses"] = [
+        {"key": "OK", "match": ["OK"], "badge": "bg-success"},
+        {"key": "NG", "match": ["NG"], "badge": "bg-danger"},
+        {"key": "Hold", "match": ["HOLD"], "badge": "bg-warning text-dark"},
+        {"key": "Skip", "match": ["SKIP"], "badge": "bg-secondary"},
+        {"key": "NYS", "empty": True},
+        {"key": "Other", "fallback": True, "badge": "bg-dark"},
+    ]
+    tone = {s.key: s.tone for s in StatusSet.from_dict(config).statuses}
+    assert tone == {"OK": "success", "NG": "danger", "Hold": "warn",
+                    "Skip": "neutral", "NYS": "neutral", "Other": "muted"}
+
+
+def test_the_shipped_taxonomy_names_a_tone_for_every_status():
+    tone = {s.key: s.tone for s in STATUS.statuses}
+    assert tone == {"OK": "success", "NG": "danger", "NG-OK": "warn",
+                    "Pending": "warn", "Cancel": "neutral", "NYS": "neutral",
+                    "Other": "muted"}
+
+
+def test_an_explicit_tone_wins_over_the_badge():
+    config = dict(MINIMAL)
+    config["statuses"] = [
+        {**MINIMAL["statuses"][0], "badge": "bg-success", "tone": "warn"},
+        *MINIMAL["statuses"][1:],
+    ]
+    assert StatusSet.from_dict(config).statuses[0].tone == "warn"
+
+
+def test_an_unknown_tone_is_rejected():
+    config = dict(MINIMAL)
+    config["statuses"] = [
+        {**MINIMAL["statuses"][0], "tone": "chartreuse"},
+        *MINIMAL["statuses"][1:],
+    ]
+    with pytest.raises(ValueError, match="tone"):
+        StatusSet.from_dict(config)
+
+
+def test_tone_defaults_to_neutral_without_a_badge():
+    custom = StatusSet.from_dict(MINIMAL)
+    assert custom.statuses[0].tone == "neutral"
+
+
+def test_tone_is_served_to_the_ui():
+    assert all("tone" in s for s in STATUS.to_dict()["statuses"])

@@ -1,12 +1,12 @@
 {
   "statuses": [
-    {"key": "OK",      "label": "OK",             "match": ["OK"],    "executed": true, "badge": "bg-success",           "text": "text-success"},
-    {"key": "NG",      "label": "NG",             "match": ["NG"],    "executed": true, "issue": true, "badge": "bg-danger",            "text": "text-danger"},
-    {"key": "NG-OK",   "label": "NG-OK",          "match": ["NG-OK"], "executed": true, "badge": "bg-warning text-dark", "text": "text-success"},
-    {"key": "Pending", "label": "Pending (保留)",   "match": ["保留"],   "issue": true, "badge": "bg-warning text-dark", "text": "text-warning-emphasis"},
-    {"key": "Cancel",  "label": "Cancel (対象外)",  "match": ["対象外"], "issue": true, "badge": "bg-secondary",         "text": "text-secondary"},
-    {"key": "NYS",     "label": "NYS",            "empty": true,      "badge": "bg-secondary",         "text": ""},
-    {"key": "Other",   "label": "Other",          "fallback": true,   "badge": "bg-dark",              "text": ""}
+    {"key": "OK",      "label": "OK",             "match": ["OK"],    "executed": true, "tone": "success", "badge": "bg-success",           "text": "text-success"},
+    {"key": "NG",      "label": "NG",             "match": ["NG"],    "executed": true, "issue": true, "tone": "danger",  "badge": "bg-danger",            "text": "text-danger"},
+    {"key": "NG-OK",   "label": "NG-OK",          "match": ["NG-OK"], "executed": true, "tone": "warn",    "badge": "bg-warning text-dark", "text": "text-success"},
+    {"key": "Pending", "label": "Pending (保留)",   "match": ["保留"],   "issue": true, "tone": "warn",    "badge": "bg-warning text-dark", "text": "text-warning-emphasis"},
+    {"key": "Cancel",  "label": "Cancel (対象外)",  "match": ["対象外"], "issue": true, "tone": "neutral", "badge": "bg-secondary",         "text": "text-secondary"},
+    {"key": "NYS",     "label": "NYS",            "empty": true,      "tone": "neutral", "badge": "bg-secondary",         "text": ""},
+    {"key": "Other",   "label": "Other",          "fallback": true,   "tone": "muted",   "badge": "bg-dark",              "text": ""}
   ],
   "needs_reason": ["NG", "NG-OK", "Pending", "Cancel", "Other"]
 }

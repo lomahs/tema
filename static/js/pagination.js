@@ -1,14 +1,17 @@
 /**
  * Self-contained pagination widget.
  *
- * Deliberately knows nothing about the detail view: the caller passes its own
- * state in and reacts through `onPageChange`. Keeping the dependency one-way
- * avoids a cycle between this module and the view that uses it.
+ * Deliberately knows nothing about the views: the caller passes its own state
+ * in and reacts through `onPageChange`. Keeping the dependency one-way avoids a
+ * cycle between this module and the views that use it.
+ *
+ * A grouped table pages over *groups* rather than rows, which needs no change
+ * here — the caller simply passes the group count as `totalItems`.
  */
 import { $ } from "./dom.js";
 
 /** Pages shown either side of the current one before an ellipsis takes over. */
-const PAGE_WINDOW = 3;
+const PAGE_WINDOW = 2;
 
 /**
  * The page numbers to show, with `null` marking each gap.
@@ -40,36 +43,39 @@ function pageNumbers(total, current) {
 /**
  * Render the pager into `container`, or hide it when there is nothing to page.
  *
- * The links are rebuilt on every call, which discards the previous click
+ * The buttons are rebuilt on every call, which discards the previous click
  * listeners along with the old elements.
  *
  * @param {Object} opts
- * @param {number} opts.totalItems Row count after filtering.
- * @param {number} opts.pageSize Rows per page.
+ * @param {number} opts.totalItems Rows — or groups — after filtering.
+ * @param {number} opts.pageSize Items per page.
  * @param {number} opts.currentPage 1-based current page.
  * @param {(page: number) => void} opts.onPageChange Called with the new page.
- * @param {string} [opts.container] Selector of the `<nav>` holding the `<ul>`;
- *   each view that pages needs its own, so pass one when it isn't the detail
- *   view's `#pagination`.
+ * @param {string} [opts.container] Selector of the `<nav>` to fill; each view
+ *   that pages needs its own, so pass one when it isn't the detail view's
+ *   `#pagination`.
  */
 export function renderPagination({ totalItems, pageSize, currentPage, onPageChange,
                                    container = "#pagination" }) {
     const totalPages = Math.ceil(totalItems / pageSize);
     const nav = $(container);
-    if (totalPages <= 1) { nav.style.display = "none"; return; }
-    nav.style.display = "";
-    const ul = nav.querySelector("ul");
+    if (totalPages <= 1) { nav.hidden = true; nav.innerHTML = ""; return; }
+    nav.hidden = false;
 
-    ul.innerHTML = pageNumbers(totalPages, currentPage).map((p) => {
-        if (p === null) {
-            return '<li class="page-item disabled"><span class="page-link">…</span></li>';
-        }
-        return `<li class="page-item${p === currentPage ? " active" : ""}">
-            <a class="page-link" href="#" data-page="${p}">${p}</a></li>`;
-    }).join("");
+    const step = (label, page, disabled) =>
+        `<button data-page="${page}"${disabled ? " disabled" : ""} aria-label="${label}">`
+        + `${label === "Previous" ? "‹" : "›"}</button>`;
 
-    ul.querySelectorAll("a").forEach((a) => a.addEventListener("click", (e) => {
-        e.preventDefault();
-        onPageChange(parseInt(a.dataset.page, 10));
+    nav.innerHTML = step("Previous", currentPage - 1, currentPage === 1)
+        + pageNumbers(totalPages, currentPage).map((p) => {
+            if (p === null) return '<button class="gap" disabled>…</button>';
+            const current = p === currentPage ? ' aria-current="page"' : "";
+            return `<button data-page="${p}"${current}>${p}</button>`;
+        }).join("")
+        + step("Next", currentPage + 1, currentPage === totalPages);
+
+    nav.querySelectorAll("button[data-page]").forEach((b) => b.addEventListener("click", () => {
+        if (b.disabled) return;
+        onPageChange(parseInt(b.dataset.page, 10));
     }));
 }

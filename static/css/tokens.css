@@ -1,0 +1,159 @@
+/*
+ * Design tokens: the whole palette, type scale and spacing rhythm.
+ *
+ * Two rules govern this file.
+ *
+ * 1. The interface has no accent colour. Colour on screen always means *status*,
+ *    so chrome (tabs, buttons, focus, selection) is rendered in ink and paper
+ *    only. That is what keeps a device breakdown from reading as pass/fail.
+ *
+ * 2. Every colour is defined on bare `:root` first. The dark blocks only
+ *    redefine; nothing gets its sole definition inside a media query, so a
+ *    browser that never matches one still has a complete palette.
+ */
+
+:root {
+    /* --- ground ------------------------------------------------------------
+     * A pale cool green-grey rather than white or cream. The cast is
+     * functional: it damps green slightly and lifts red, which is the right
+     * bias for a tool whose green column is the boring majority and whose red
+     * column is the thing you are hunting for.
+     */
+    --paper:          #f1f3ef;
+    --paper-sunk:     #e7eae4;   /* the status band, and table headers */
+    --paper-raised:   #f8f9f6;   /* drawer and empty state, the only boxes */
+    --paper-hover:    #e4e8e0;
+
+    --rule:           #d3d8cf;
+    --rule-strong:    #b4bcb0;
+
+    /* --- ink --------------------------------------------------------------- */
+    --ink:            #1c211c;
+    --ink-soft:       #5b635a;
+    --ink-faint:      #8b937f;
+    --ink-invert:     #f1f3ef;   /* text on an ink block */
+
+    /* --- status tones ------------------------------------------------------
+     * The only chromatic values in the system. `parser/result_status.json`
+     * names which tone a status carries; what the tone looks like lives here,
+     * so a palette change never touches the taxonomy and vice versa.
+     */
+    --tone-success:   #1f7a4c;
+    --tone-danger:    #c2352a;
+    --tone-warn:      #9a6b05;
+    --tone-neutral:   #5f675e;
+    --tone-muted:     #949c90;
+
+    /* Badge fills: the tone at full strength, text knocked out in paper. */
+    --tone-success-fg: #ffffff;
+    --tone-danger-fg:  #ffffff;
+    --tone-warn-fg:    #ffffff;
+    --tone-neutral-fg: #ffffff;
+    --tone-muted-fg:   #ffffff;
+
+    /* Washes for row-level flags, kept far below text contrast. */
+    --tone-danger-bg:  #f7e4e1;
+    --tone-warn-bg:    #f5ecd8;
+
+    /* --- type -------------------------------------------------------------
+     * IBM Plex, for two reasons specific to this app rather than to taste:
+     * the status labels are bilingual ("Pending (保留)"), and Plex Sans JP is a
+     * real in-family companion, so CJK does not fall back to a mismatched
+     * system face partway through a label. Plex Mono carries anything
+     * genuinely code-like — counts, case numbers, paths, Excel column letters.
+     */
+    --font-sans: "IBM Plex Sans", "IBM Plex Sans JP", ui-sans-serif, system-ui,
+                 -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --fs-xs:   11px;
+    --fs-sm:   12px;
+    --fs-base: 13px;
+    --fs-md:   15px;
+    --fs-lg:   19px;
+
+    --lh-tight: 1.25;
+    --lh-base:  1.45;
+    --lh-cjk:   1.6;    /* a 13px kanji is not a 13px "a" */
+
+    /* --- space ------------------------------------------------------------- */
+    --sp-1: 4px;
+    --sp-2: 6px;
+    --sp-3: 8px;
+    --sp-4: 12px;
+    --sp-5: 16px;
+    --sp-6: 24px;
+
+    --row-h:    28px;
+    --topbar-h: 48px;
+
+    /* The grid has corners. 2px on inputs only, so a focus ring reads as a
+     * ring rather than as a rounded card. */
+    --radius: 2px;
+}
+
+/*
+ * Dark. Guarded so an explicit light choice still wins over the OS setting.
+ */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --paper:        #161a16;
+        --paper-sunk:   #1e231e;
+        --paper-raised: #1f251f;
+        --paper-hover:  #232922;
+
+        --rule:         #2c332c;
+        --rule-strong:  #3e463d;
+
+        --ink:          #e4e8e0;
+        --ink-soft:     #9aa396;
+        --ink-faint:    #6e7a6c;
+        --ink-invert:   #161a16;
+
+        --tone-success: #4fb07a;
+        --tone-danger:  #e8695c;
+        --tone-warn:    #d9a02e;
+        --tone-neutral: #9aa396;
+        --tone-muted:   #6e7a6c;
+
+        --tone-success-fg: #0d1a12;
+        --tone-danger-fg:  #21100e;
+        --tone-warn-fg:    #201802;
+        --tone-neutral-fg: #14170f;
+        --tone-muted-fg:   #e4e8e0;
+
+        --tone-danger-bg:  #33201d;
+        --tone-warn-bg:    #2e2814;
+    }
+}
+
+/* The toggle, winning in both directions. */
+:root[data-theme="dark"] {
+    --paper:        #161a16;
+    --paper-sunk:   #1e231e;
+    --paper-raised: #1f251f;
+    --paper-hover:  #232922;
+
+    --rule:         #2c332c;
+    --rule-strong:  #3e463d;
+
+    --ink:          #e4e8e0;
+    --ink-soft:     #9aa396;
+    --ink-faint:    #6e7a6c;
+    --ink-invert:   #161a16;
+
+    --tone-success: #4fb07a;
+    --tone-danger:  #e8695c;
+    --tone-warn:    #d9a02e;
+    --tone-neutral: #9aa396;
+    --tone-muted:   #6e7a6c;
+
+    --tone-success-fg: #0d1a12;
+    --tone-danger-fg:  #21100e;
+    --tone-warn-fg:    #201802;
+    --tone-neutral-fg: #14170f;
+    --tone-muted-fg:   #e4e8e0;
+
+    --tone-danger-bg:  #33201d;
+    --tone-warn-bg:    #2e2814;
+}

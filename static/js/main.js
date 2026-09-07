@@ -6,45 +6,47 @@
  */
 import { $, $$ } from "./dom.js";
 import { fetchAll } from "./api.js";
-import { resizeCharts } from "./charts.js";
+import { refreshChartTheme, resizeCharts } from "./charts.js";
+import { initTheme, onThemeChange } from "./theme.js";
+import { closeDrawer, initSetupDrawer, setSourceSummary } from "./setupDrawer.js";
 import { initSourcePanel } from "./sourcePanel.js";
 import { initReportPanel, setReportEnabled } from "./reportPanel.js";
 import { renderStatCards, setTaxonomy } from "./taxonomy.js";
-import { renderSummary, renderSummaryHead } from "./views/summary.js";
+import { initSummaryView, renderSummary, renderSummaryHead } from "./views/summary.js";
 import { initDaily, initDailyView, renderDailyHead } from "./views/daily.js";
 import { initProductivity, renderProductivityHead } from "./views/productivity.js";
-import { initDetail, initDetailView } from "./views/detail.js";
+import { initDetail, initDetailView, renderDetailHead, showCase } from "./views/detail.js";
+
+const VIEWS = ["summary", "daily", "detail"];
 
 /**
  * Show one of the three views and hide the others.
  * @param {"summary"|"daily"|"detail"} view
  */
 function showView(view) {
-    $("#summaryView").style.display = view === "summary" ? "" : "none";
-    $("#dailyView").style.display = view === "daily" ? "" : "none";
-    $("#detailView").style.display = view === "detail" ? "" : "none";
+    VIEWS.forEach((v) => { $(`#${v}View`).hidden = v !== view; });
+    $$("#viewTabs .tab").forEach((t) =>
+        t.setAttribute("aria-selected", String(t.dataset.view === view)));
     // Chart.js sizes to the container, which is 0x0 while the tab is hidden.
     if (view === "detail") resizeCharts();
 }
 
 /** Wire the Summary / Daily / Detail tabs. */
 function initViewTabs() {
-    $$("#viewTabs a[data-view]").forEach((tab) => tab.addEventListener("click", (e) => {
-        e.preventDefault();
-        $$("#viewTabs a").forEach((t) => t.classList.remove("active"));
-        tab.classList.add("active");
-        showView(tab.dataset.view);
-    }));
+    $$("#viewTabs .tab").forEach((tab) =>
+        tab.addEventListener("click", () => showView(tab.dataset.view)));
 }
 
 /**
  * Pull every endpoint and redraw all three views.
  *
  * Order matters: the taxonomy defines the status columns, so it is applied
- * before the stat cards and the three generated table headers, and the headers
+ * before the stat cards and the four generated table headers, and the headers
  * are built before the bodies that fill them.
+ *
+ * @param {Object} loadResult The `/api/load` or `/api/reload` response.
  */
-async function refreshViews() {
+async function refreshViews(loadResult) {
     const { taxonomy, cases, summary, daily, productivity } = await fetchAll();
 
     setTaxonomy(taxonomy);
@@ -52,6 +54,7 @@ async function refreshViews() {
     renderSummaryHead();
     renderDailyHead();
     renderProductivityHead();
+    renderDetailHead();
 
     initDetail(cases);
     renderSummary(summary);
@@ -61,13 +64,32 @@ async function refreshViews() {
     // There is something to publish now.
     setReportEnabled(true);
 
-    $("#viewTabs").style.display = "";
-    $$("#viewTabs a").forEach((t) => t.classList.toggle("active", t.dataset.view === "summary"));
+    setSourceSummary(loadResult);
+    $("#emptyState").hidden = true;
+    $("#viewTabs").hidden = false;
     showView("summary");
+    closeDrawer();
 }
 
+/**
+ * Open one case in the detail view.
+ *
+ * Passed to the summary view as a callback rather than imported by it, so
+ * `views/summary.js` keeps knowing nothing about `views/detail.js`.
+ *
+ * @param {Object} c A missing-reason case.
+ */
+function jumpToCase(c) {
+    showView("detail");
+    showCase(c);
+}
+
+initTheme();
+onThemeChange(refreshChartTheme);
+initSetupDrawer();
 initSourcePanel({ onLoaded: refreshViews });
 initReportPanel();
+initSummaryView({ onJumpToCase: jumpToCase });
 initDetailView();
 initDailyView();
 initViewTabs();

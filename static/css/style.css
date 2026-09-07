@@ -1,7 +1,0 @@
-.stat-card { min-width: 100px; }
-.sortable, .daily-sortable { cursor: pointer; user-select: none; }
-.sortable:hover, .daily-sortable:hover { text-decoration: underline; }
-.sort-asc::after { content: " ▲"; font-size: .7em; }
-.sort-desc::after { content: " ▼"; font-size: .7em; }
-#loadStatus .text-danger { font-weight: 500; }
-textarea#filePaths { font-size: .85em; }

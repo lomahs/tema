@@ -1,15 +1,27 @@
 /**
- * Daily view: progress grouped by (file, device, PIC, date).
+ * Daily view: progress grouped by date, with each date rolling up the
+ * (file, device, PIC) rows beneath it.
  *
- * Owns the daily dataset and its sort state.
+ * Paging here counts **date groups**, not rows — a page that cut a date in half
+ * would make the roll-up above it a lie. `pagination.js` needs no change for
+ * that; it is handed the group count.
+ *
+ * Owns the daily dataset, its sort state and its expansion state.
  */
-import { $, $$, esc } from "../dom.js";
+import { $, esc } from "../dom.js";
 import { populateSelect, uniqueOf } from "../filters.js";
+import { groupPath, renderGroupedTable, setAllGroups, toggleGroup } from "../groupedTable.js";
 import { renderPagination } from "../pagination.js";
-import { makeSortable, sortRows } from "../sorting.js";
-import { getStatuses, statusCells, statusTextClass, sumRows } from "../taxonomy.js";
+import { makeSortable, paintSortIndicators, sortableTh, sortGrouped } from "../sorting.js";
+import { getStatuses, statusCells, statusHeadCells, sumRows } from "../taxonomy.js";
 
+/** Dates per page. A date is a group, however many rows it holds. */
 const PAGE_SIZE = 10;
+
+const GROUP_BY = ["date"];
+
+/** Most dates are history; the one being worked on is the one worth opening. */
+const DEFAULT_EXPANDED = false;
 
 /** @type {Object[]} rows from /api/daily */
 let dailyData = [];
@@ -17,8 +29,11 @@ let dailyData = [];
 let dailyRows = [];
 let currentPage = 1;
 
-/** Column the table falls back to whenever a fresh dataset is adopted. */
-const DEFAULT_SORT = { col: "date", asc: true };
+/** @type {Set<string>} which dates are open */
+const expanded = new Set();
+
+/** A daily log reads newest-first. */
+const DEFAULT_SORT = { col: "date", asc: false };
 
 /** @type {import("../sorting.js").SortState} */
 const dailySort = { ...DEFAULT_SORT };
@@ -29,43 +44,50 @@ const FILTER_SELECTORS = [
 ];
 
 /**
- * Attach the filter listeners. Call once, at startup.
+ * Attach the filter, clear and expand-all listeners. Call once, at startup.
  *
- * The filter controls live in the static template, so unlike the sortable
- * headers they are never replaced and must only be bound a single time.
+ * These controls live in the static template, so unlike the sortable headers
+ * they are never replaced and must only be bound a single time.
  */
 export function initDailyView() {
     FILTER_SELECTORS.forEach((sel) => $(sel).addEventListener("change", renderDaily));
+
+    $("#btnClearDailyFilters").addEventListener("click", () => {
+        FILTER_SELECTORS.forEach((sel) => { $(sel).value = ""; });
+        renderDaily();
+    });
+
+    document.querySelectorAll('[data-expand="daily"]').forEach((btn) =>
+        btn.addEventListener("click", () => {
+            setAllGroups(expanded, dailyRows, GROUP_BY, (r, k) => r[k], btn.dataset.all === "1");
+            renderDailyBody();
+        }));
 }
 
 /**
- * Build the daily table header from the taxonomy and make it sortable.
+ * Build the daily header from the taxonomy and make it sortable.
  *
  * This replaces `#dailyHead`'s contents, discarding the previous header cells
- * and their listeners, so calling {@link makeSortable} here rebinds rather than
- * stacking duplicates.
+ * and their listeners, so `makeSortable` rebinds here rather than stacking
+ * duplicates.
  */
 export function renderDailyHead() {
-    const base = [["date", "Date"], ["file", "File"], ["device", "Device"],
-                  ["pic", "PIC"], ["total", "Total"]];
     $("#dailyHead").innerHTML =
-        base.map(([col, label]) =>
-            `<th class="daily-sortable" data-col="${esc(col)}">${esc(label)}</th>`).join("")
-        + getStatuses().map((s) => {
-            const cls = statusTextClass(s.key).replace(" fw-bold", "");
-            return `<th class="daily-sortable${cls ? " " + cls : ""}" `
-                 + `data-col="${esc(s.key)}">${esc(s.label)}</th>`;
-        }).join("");
-    makeSortable(".daily-sortable", dailySort, renderDaily);
+        sortableTh("date", "Date")
+        + sortableTh("file", "File")
+        + sortableTh("device", "Device")
+        + sortableTh("pic", "PIC")
+        + statusHeadCells(sortableTh);
+    makeSortable("#dailyHead th.sortable", dailySort, renderDaily);
+    paintSortIndicators("#dailyHead th.sortable", dailySort);
 }
 
 /**
- * Adopt a fresh dataset: reset the sort to oldest-date-first, refill the
- * filters, redraw.
+ * Adopt a fresh dataset: reset the sort to newest-first, open the most recent
+ * date, refill the filters, redraw.
  *
  * Call {@link renderDailyHead} first — the header must reflect the current
- * taxonomy before the body is drawn against it, and the default sort indicator
- * is written onto the header cells this function finds.
+ * taxonomy before the body is drawn against it.
  *
  * @param {Object[]} data `/api/daily` body.
  */
@@ -73,22 +95,31 @@ export function initDaily(data) {
     dailyData = data;
     dailySort.col = DEFAULT_SORT.col;
     dailySort.asc = DEFAULT_SORT.asc;
-    $$(".daily-sortable").forEach((t) => {
-        t.classList.remove("sort-asc", "sort-desc");
-        if (t.dataset.col === dailySort.col) t.classList.add(dailySort.asc ? "sort-asc" : "sort-desc");
-    });
+    paintSortIndicators("#dailyHead th.sortable", dailySort);
+
+    // Everything closed except the latest date: a log of thirty days should
+    // open on the day you are actually working on.
+    expanded.clear();
+    const latest = data.reduce((max, r) => (r.date > max ? r.date : max), "");
+    if (latest) expanded.add(groupPath(latest));
+
     populateSelect("#dailyFilterFile", uniqueOf(data, "file"));
     populateSelect("#dailyFilterDevice", uniqueOf(data, "device"));
     populateSelect("#dailyFilterPIC", uniqueOf(data, "pic"));
     renderDaily();
 }
 
+/** Column count, for colspans. */
+function totalCols() {
+    return 5 + getStatuses().length;
+}
+
 /**
- * Recompute `dailyRows` from the current filters and sort, then redraw the
- * table and its pager from the first page.
+ * Recompute `dailyRows` from the current filters and sort, then redraw from the
+ * first page.
  *
- * Any change of filter or sort order reshuffles the rows, so the view goes back
- * to page 1 rather than leaving the reader on a page that now holds other data.
+ * Any change of filter or sort reshuffles the rows, so the view goes back to
+ * page 1 rather than leaving the reader on a page that now holds other data.
  *
  * Dates are compared as ISO strings, which orders correctly without parsing.
  */
@@ -109,50 +140,59 @@ function renderDaily() {
     });
 
     const numeric = new Set(["total", ...getStatuses().map((s) => s.key)]);
-    dailyRows = sortRows(rows, dailySort, numeric);
+    dailyRows = sortGrouped(rows, GROUP_BY, dailySort, numeric, sumRows);
 
     currentPage = 1;
     renderDailyBody();
-    renderDailyPagination();
+}
+
+/** The distinct dates, in the order they appear after sorting. */
+function pageDates() {
+    const seen = [];
+    dailyRows.forEach((r) => { if (!seen.includes(r.date)) seen.push(r.date); });
+    return seen;
 }
 
 /**
- * Draw the current page of `dailyRows` into the table body.
+ * Draw the current page of date groups.
  *
- * The footer stays a total over *every* filtered row, not just the visible
- * page — it answers "how much matches the filters", which paging must not
- * change.
+ * The footer totals **every** filtered row, not just the visible page — it
+ * answers "how much matches the filters", which paging must not change.
  */
 function renderDailyBody() {
+    const dates = pageDates();
     const start = (currentPage - 1) * PAGE_SIZE;
-    const page = dailyRows.slice(start, start + PAGE_SIZE);
+    const visible = new Set(dates.slice(start, start + PAGE_SIZE));
+    const rows = dailyRows.filter((r) => visible.has(r.date));
 
-    $("#dailyBody").innerHTML = page.map((r) => `<tr>
-        <td>${esc(r.date)}</td><td>${esc(r.file)}</td>
-        <td>${esc(r.device)}</td><td>${esc(r.pic)}</td>
-        <td>${r.total}</td>
-        ${statusCells(r, true)}
-    </tr>`).join("");
+    renderGroupedTable({
+        container: "#dailyBody",
+        rows,
+        groupBy: GROUP_BY,
+        aggregate: sumRows,
+        renderValues: statusCells,
+        renderLabelCells: (r) => `<td></td>`
+            + `<td>${esc(r.file)}</td><td>${esc(r.device)}</td><td>${esc(r.pic)}</td>`,
+        labelCols: 4,
+        totalCols: totalCols(),
+        expanded,
+        defaultExpanded: DEFAULT_EXPANDED,
+        onToggle: (path) => {
+            toggleGroup(expanded, path, DEFAULT_EXPANDED);
+            renderDailyBody();
+        },
+        emptyMessage: "No days match these filters.",
+    });
 
     const totals = sumRows(dailyRows);
-    $("#dailyFoot").innerHTML = `<tr>
-        <td colspan="4">Total</td>
-        <td>${totals.total}</td>
-        ${statusCells(totals, true)}
-    </tr>`;
-}
+    $("#dailyFoot").innerHTML =
+        `<tr><td colspan="4">Total</td>${statusCells(totals)}</tr>`;
 
-/** Draw the pager, wiring page clicks back into the table body. */
-function renderDailyPagination() {
     renderPagination({
         container: "#dailyPagination",
-        totalItems: dailyRows.length,
+        totalItems: dates.length,
         pageSize: PAGE_SIZE,
         currentPage,
-        onPageChange: (page) => {
-            currentPage = page;
-            renderDailyBody();
-            renderDailyPagination();
-        },
+        onPageChange: (page) => { currentPage = page; renderDailyBody(); },
     });
 }

@@ -18,8 +18,9 @@ let loadStatus, fileResultsWrapper, fileResultsBody;
 /**
  * Wire up the panel. Call once, at startup.
  * @param {Object} opts
- * @param {() => Promise<void>} opts.onLoaded Runs after a successful load or
- *   reload, to refresh the views.
+ * @param {(json: Object) => Promise<void>} opts.onLoaded Runs after a successful
+ *   load or reload, handed the API response so the shell can report what
+ *   arrived and put the setup drawer away.
  */
 export function initSourcePanel({ onLoaded }) {
     sourceType = $("#sourceType");
@@ -38,8 +39,8 @@ export function initSourcePanel({ onLoaded }) {
     restoreSource();
 
     sourceType.addEventListener("change", () => {
-        folderGroup.classList.toggle("d-none", sourceType.value !== "folder");
-        filesGroup.classList.toggle("d-none", sourceType.value !== "files");
+        folderGroup.hidden = sourceType.value !== "folder";
+        filesGroup.hidden = sourceType.value !== "files";
     });
     // Sync the input visibility with the (possibly restored) dropdown value.
     sourceType.dispatchEvent(new Event("change"));
@@ -82,7 +83,7 @@ async function doBrowse(mode) {
     try {
         const { ok, json } = await postBrowse(mode, initialDir(mode));
         if (!ok) {
-            loadStatus.innerHTML = `<span class="text-danger">${esc(json.error)}</span>`;
+            loadStatus.innerHTML = `<span class="is-error">${esc(json.error)}</span>`;
             return;
         }
         if (!json.paths.length) return;  // cancelled
@@ -94,7 +95,7 @@ async function doBrowse(mode) {
             filePaths.value = existing.concat(added).join("\n");
         }
     } catch (e) {
-        loadStatus.innerHTML = `<span class="text-danger">Browse failed: ${esc(e.message)}</span>`;
+        loadStatus.innerHTML = `<span class="is-error">Browse failed: ${esc(e.message)}</span>`;
     } finally {
         btn.disabled = false;
     }
@@ -152,7 +153,7 @@ async function doLoad(onLoaded) {
     if (!body) return;
 
     btnLoad.disabled = true;
-    loadStatus.innerHTML = '<span class="text-muted">Loading...</span>';
+    loadStatus.textContent = "Loading…";
 
     try {
         const { ok, json } = await postLoad(body);
@@ -160,12 +161,12 @@ async function doLoad(onLoaded) {
             showError(json.error);
             return;
         }
-        loadStatus.innerHTML = `Loaded <b>${json.loaded}</b> test cases from <b>${json.file_count}</b> file(s).`;
+        loadStatus.innerHTML = `Loaded <b>${json.loaded}</b> cases from <b>${json.file_count}</b> file(s).`;
         renderFileResults(json.file_results);
         btnReload.disabled = false;
-        await onLoaded();
+        await onLoaded(json);
     } catch (e) {
-        loadStatus.innerHTML = `<span class="text-danger">Request failed: ${esc(e.message)}</span>`;
+        loadStatus.innerHTML = `<span class="is-error">Request failed: ${esc(e.message)}</span>`;
     } finally {
         btnLoad.disabled = false;
     }
@@ -177,18 +178,18 @@ async function doLoad(onLoaded) {
  */
 async function doReload(onLoaded) {
     btnReload.disabled = true;
-    loadStatus.innerHTML = '<span class="text-muted">Reloading...</span>';
+    loadStatus.textContent = "Reloading…";
     try {
         const { ok, json } = await postReload();
         if (!ok) {
             showError(json.error);
             return;
         }
-        loadStatus.innerHTML = `Reloaded <b>${json.loaded}</b> test cases from <b>${json.file_count}</b> file(s).`;
+        loadStatus.innerHTML = `Reloaded <b>${json.loaded}</b> cases from <b>${json.file_count}</b> file(s).`;
         renderFileResults(json.file_results);
-        await onLoaded();
+        await onLoaded(json);
     } catch (e) {
-        loadStatus.innerHTML = `<span class="text-danger">Reload failed: ${esc(e.message)}</span>`;
+        loadStatus.innerHTML = `<span class="is-error">Reload failed: ${esc(e.message)}</span>`;
     } finally {
         btnReload.disabled = false;
     }
@@ -199,8 +200,8 @@ async function doReload(onLoaded) {
  * @param {string} message
  */
 function showError(message) {
-    loadStatus.innerHTML = `<span class="text-danger">${esc(message)}</span>`;
-    fileResultsWrapper.style.display = "none";
+    loadStatus.innerHTML = `<span class="is-error">${esc(message)}</span>`;
+    fileResultsWrapper.hidden = true;
 }
 
 /**
@@ -214,17 +215,17 @@ function showError(message) {
  */
 function renderFileResults(results) {
     if (!results || !results.length) {
-        fileResultsWrapper.style.display = "none";
+        fileResultsWrapper.hidden = true;
         return;
     }
-    fileResultsWrapper.style.display = "";
+    fileResultsWrapper.hidden = false;
     fileResultsBody.innerHTML = results.map((r, i) => {
-        const statusCls = r.status === "OK" ? "text-success" : "text-danger fw-bold";
+        const statusCls = r.status === "OK" ? "is-ok" : "is-error";
         return `<tr>
-            <td>${i + 1}</td>
+            <td class="num muted">${i + 1}</td>
             <td>${esc(r.file)}</td>
             <td class="${statusCls}">${esc(r.status)}</td>
-            <td>${r.cases != null ? r.cases : "-"}</td>
+            <td class="num">${r.cases != null ? r.cases : "—"}</td>
             <td>${r.error ? esc(r.error) : ""}</td>
         </tr>`;
     }).join("");

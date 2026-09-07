@@ -45,24 +45,30 @@ test-case-management/
 │   ├── test_api_sharepoint.py
 │   └── test_generate_samples.py
 ├── templates/
-│   └── index.html          # Bootstrap 5 UI, 3 tab: Summary / Daily / Detail
+│   └── index.html          # UI 3 tab: Summary / Daily / Detail
 └── static/
-    ├── css/style.css
+    ├── css/
+    │   ├── tokens.css      # design token: màu, chữ, khoảng cách, dark mode
+    │   └── app.css         # component: ledger, status band, drawer, pager
     └── js/                 # ES modules, nạp qua <script type="module">
         ├── main.js         # entry point: wiring + chuyển tab
         ├── dom.js          # $, $$, esc
         ├── api.js          # mọi lời gọi fetch tới /api/*
+        ├── theme.js        # sáng/tối, đọc token CSS ra màu cụ thể
+        ├── setupDrawer.js  # ngăn Setup + dòng tóm tắt nguồn trên thanh trên
         ├── sourcePanel.js  # chọn folder/file, Load & Reload, localStorage
         ├── reportPanel.js  # đăng nhập SharePoint + nút Publish
         ├── taxonomy.js     # status từ /api/statuses + scaffolding bảng
+        ├── groupedTable.js # bảng gộp nhóm, đóng/mở, dòng cha cộng dồn
         ├── sorting.js      # sort theo cột (asc -> desc -> bỏ sort)
         ├── filters.js      # uniqueOf, populateSelect
-        ├── pagination.js   # phân trang
-        ├── charts.js       # Chart.js (doughnut + bar)
+        ├── pagination.js   # phân trang (theo dòng hoặc theo nhóm)
+        ├── charts.js       # Chart.js, màu lấy từ tone của taxonomy
         └── views/
-            ├── summary.js  # gộp theo file & device
-            ├── daily.js    # tiến độ theo ngày
-            └── detail.js   # stat card, filter, bảng, phân trang
+            ├── summary.js  # gộp theo file, mở ra thành device
+            ├── daily.js    # tiến độ theo ngày, gộp theo ngày
+            ├── productivity.js # năng suất theo thành viên
+            └── detail.js   # stat, filter, tìm kiếm, bảng, phân trang
 ```
 
 ## Chạy
@@ -155,8 +161,9 @@ Mỗi status gồm:
 | `key` | Tên cột trong `/api/summary`, `/api/daily` |
 | `label` | Nhãn hiển thị trên UI |
 | `match` | Các giá trị Result ánh xạ vào status này (không phân biệt hoa thường) |
-| `badge` | Class Bootstrap cho badge |
-| `text` | Class Bootstrap cho màu chữ ở bảng Summary / Daily. Bỏ trống (`""`) = màu mặc định; không khai báo = suy ra từ `badge` |
+| `tone` | Màu của status: `success` / `danger` / `warn` / `neutral` / `muted`. Dùng chung cho badge, số trong bảng và biểu đồ. Không khai báo = suy ra từ `badge` |
+| `badge` | (cũ) Class Bootstrap. UI không còn đọc trường này; giữ lại để config cũ vẫn suy ra được `tone` |
+| `text` | (cũ) Class Bootstrap cho màu chữ. UI không còn đọc trường này |
 | `empty` | Đúng 1 status đánh dấu `true` — dùng cho ô Result rỗng |
 | `fallback` | Đúng 1 status đánh dấu `true` — nhận mọi giá trị lạ |
 | `executed` | Đánh dấu `true` = coi như đã thực hiện; chỉ các status này được tính vào năng suất |
@@ -165,6 +172,11 @@ Mỗi status gồm:
 
 Nhờ có `fallback`, giá trị lạ không bị bỏ sót: `total` của mỗi dòng luôn bằng tổng các
 cột status.
+
+Màu cụ thể của mỗi `tone` nằm trong `static/css/tokens.css`, không nằm trong file JSON
+này — đổi bảng màu không phải sửa taxonomy, và ngược lại. Nhiều status dùng chung một
+`tone` là bình thường (OK và NG-OK đều là kết quả tốt); biểu đồ tự tách chúng ra bằng
+cách làm đậm dần theo thứ tự trong taxonomy.
 
 ### Năng suất theo thành viên
 
