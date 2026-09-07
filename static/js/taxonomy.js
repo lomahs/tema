@@ -134,15 +134,20 @@ export function sumRows(rows) {
  * measurement.
  *
  * @param {Object} row A row (or a totals object) keyed by status.
+ * @param {Object} [opts]
+ * @param {boolean} [opts.blankZeros] Render an empty cell rather than `0`. Set
+ *   on data rows, where a grid of zeros drowns out the figures that matter, and
+ *   left off for roll-up and total rows, where a zero is a real answer.
  * @returns {string} HTML.
  */
-export function statusCells(row) {
+export function statusCells(row, { blankZeros = false } = {}) {
+    const show = (v) => (v ? v : (blankZeros ? "" : 0));
     const cells = statuses.map((s) => {
         const v = row[s.key] || 0;
         const zero = v ? "" : " zero";
-        return `<td class="num band${zero}" data-tone="${esc(toneFor(s.key))}">${v}</td>`;
+        return `<td class="num band${zero}" data-tone="${esc(toneFor(s.key))}">${show(v)}</td>`;
     });
-    return `<td class="num band band--first">${row.total || 0}</td>` + cells.join("");
+    return `<td class="num band band--first">${show(row.total || 0)}</td>` + cells.join("");
 }
 
 /**

@@ -1,6 +1,10 @@
 /**
- * Daily view: progress grouped by date, with each date rolling up the
- * (file, device, PIC) rows beneath it.
+ * Daily view: progress grouped by date and then by file, with each level
+ * rolling up the (device, PIC) rows beneath it.
+ *
+ * The second level exists because a file otherwise repeats on every row of a
+ * date — a day with four files across two devices and three testers listed the
+ * same workbook name a dozen times.
  *
  * Paging here counts **date groups**, not rows — a page that cut a date in half
  * would make the roll-up above it a lie. `pagination.js` needs no change for
@@ -18,7 +22,7 @@ import { getStatuses, statusCells, statusHeadCells, sumRows } from "../taxonomy.
 /** Dates per page. A date is a group, however many rows it holds. */
 const PAGE_SIZE = 10;
 
-const GROUP_BY = ["date"];
+const GROUP_BY = ["date", "file"];
 
 /** Most dates are history; the one being worked on is the one worth opening. */
 const DEFAULT_EXPANDED = false;
@@ -97,11 +101,16 @@ export function initDaily(data) {
     dailySort.asc = DEFAULT_SORT.asc;
     paintSortIndicators("#dailyHead th.sortable", dailySort);
 
-    // Everything closed except the latest date: a log of thirty days should
-    // open on the day you are actually working on.
+    // Everything closed except the latest date, whose files are opened too —
+    // a log of thirty days should land you on the day you are working on with
+    // its rows already visible, not behind two more clicks.
     expanded.clear();
     const latest = data.reduce((max, r) => (r.date > max ? r.date : max), "");
-    if (latest) expanded.add(groupPath(latest));
+    if (latest) {
+        expanded.add(groupPath(latest));
+        new Set(data.filter((r) => r.date === latest).map((r) => r.file))
+            .forEach((file) => expanded.add(groupPath(latest, file)));
+    }
 
     populateSelect("#dailyFilterFile", uniqueOf(data, "file"));
     populateSelect("#dailyFilterDevice", uniqueOf(data, "device"));
@@ -170,9 +179,10 @@ function renderDailyBody() {
         rows,
         groupBy: GROUP_BY,
         aggregate: sumRows,
-        renderValues: statusCells,
-        renderLabelCells: (r) => `<td></td>`
-            + `<td>${esc(r.file)}</td><td>${esc(r.device)}</td><td>${esc(r.pic)}</td>`,
+        renderValues: (r, i) => statusCells(r, { blankZeros: i !== -1 }),
+        renderLabelCells: (r) => `<td></td><td></td>`
+            + `<td class="cell-label" style="--depth:2">${esc(r.device)}</td>`
+            + `<td>${esc(r.pic)}</td>`,
         labelCols: 4,
         totalCols: totalCols(),
         expanded,
@@ -187,6 +197,8 @@ function renderDailyBody() {
     const totals = sumRows(dailyRows);
     $("#dailyFoot").innerHTML =
         `<tr><td colspan="4">Total</td>${statusCells(totals)}</tr>`;
+    $("#dailyCount").textContent = `${dates.length} day${dates.length === 1 ? "" : "s"}, `
+        + `${dailyRows.length} row${dailyRows.length === 1 ? "" : "s"}`;
 
     renderPagination({
         container: "#dailyPagination",

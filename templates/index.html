@@ -43,8 +43,7 @@
         <div class="toolbar">
             <strong>Status by file and device</strong>
             <div class="toolbar-end">
-                <button class="btn btn-quiet" data-expand="summary" data-all="1">Expand all</button>
-                <button class="btn btn-quiet" data-expand="summary" data-all="0">Collapse all</button>
+                <span class="count" id="summaryCount"></span>
             </div>
         </div>
 
@@ -62,6 +61,22 @@
                 These carry a result that needs explaining but have neither a ticket ID
                 nor a note. Select one to open it in Detail.
             </p>
+            <div class="toolbar toolbar--inline">
+                <div class="field">
+                    <label for="issueGroupBy">Group by</label>
+                    <select id="issueGroupBy" class="select">
+                        <option value="file,sheet">File, sheet</option>
+                        <option value="file">File</option>
+                        <option value="file,device">File, device</option>
+                        <option value="">No grouping</option>
+                    </select>
+                </div>
+                <button class="btn btn-quiet" data-expand="issues" data-all="1">Expand all</button>
+                <button class="btn btn-quiet" data-expand="issues" data-all="0">Collapse all</button>
+                <div class="toolbar-end">
+                    <span class="count" id="issueCount"></span>
+                </div>
+            </div>
             <div class="scroll-x">
                 <table class="ledger">
                     <thead><tr>
@@ -99,6 +114,7 @@
             </div>
             <button class="btn" id="btnClearDailyFilters">Clear</button>
             <div class="toolbar-end">
+                <span class="count" id="dailyCount"></span>
                 <button class="btn btn-quiet" data-expand="daily" data-all="1">Expand all</button>
                 <button class="btn btn-quiet" data-expand="daily" data-all="0">Collapse all</button>
             </div>

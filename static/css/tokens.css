@@ -27,6 +27,11 @@
     --rule:           #d3d8cf;
     --rule-strong:    #b4bcb0;
 
+    /* Grouped rows are tinted by depth, darkest at the outermost level, so the
+       three tiers of the daily table read apart without counting indents. */
+    --level-0:        #dbe1d7;
+    --level-1:        #e8ebe4;
+
     /* --- ink --------------------------------------------------------------- */
     --ink:            #1c211c;
     --ink-soft:       #5b635a;
@@ -86,6 +91,8 @@
 
     --row-h:    28px;
     --topbar-h: 48px;
+    --band-w:   118px;  /* one width for every status column;
+                            wide enough that "Cancel (対象外)" stays on one line */
 
     /* The grid has corners. 2px on inputs only, so a focus ring reads as a
      * ring rather than as a rounded card. */
@@ -104,6 +111,9 @@
 
         --rule:         #2c332c;
         --rule-strong:  #3e463d;
+
+        --level-0:      #2b332a;
+        --level-1:      #212820;
 
         --ink:          #e4e8e0;
         --ink-soft:     #9aa396;
@@ -136,6 +146,9 @@
 
     --rule:         #2c332c;
     --rule-strong:  #3e463d;
+
+    --level-0:      #2b332a;
+    --level-1:      #212820;
 
     --ink:          #e4e8e0;
     --ink-soft:     #9aa396;

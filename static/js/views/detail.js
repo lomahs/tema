@@ -249,6 +249,22 @@ function renderChips() {
 }
 
 /**
+ * Whether a row is a section heading inside the spreadsheet rather than a case.
+ *
+ * These carry a title in the Case no column — "[Login - normal case]" — and
+ * nothing else. Scope being empty is what marks them, but that alone would also
+ * excuse a real case whose Scope was genuinely forgotten, so it is paired with
+ * "nothing has been recorded against this row". Flagging headings as errors
+ * trains people to ignore the flag.
+ *
+ * @param {Object} d A case row.
+ * @returns {boolean}
+ */
+function isSectionHeader(d) {
+    return !d.scope && !d.result && !d.test_date && !d.pic;
+}
+
+/**
  * Bootstrap-free class flagging a cell that should have been filled in.
  *
  * Three different rules apply:
@@ -263,6 +279,7 @@ function renderChips() {
  * @returns {string} `"flag"` or an empty string.
  */
 function cellCls(d, field) {
+    if (isSectionHeader(d)) return "";
     const v = d[field];
     if (["case_no", "file_name", "sheet", "device", "scope"].includes(field)) {
         return v ? "" : "flag";
@@ -279,6 +296,10 @@ function cellCls(d, field) {
 
 /**
  * One `<td>` for a field, carrying its validation highlight.
+ *
+ * A clipped cell also gets the full value as its tooltip — truncation must not
+ * be the same thing as losing the text.
+ *
  * @param {Object} d
  * @param {string} field
  * @param {string} [extra] Extra classes.
@@ -286,7 +307,9 @@ function cellCls(d, field) {
  */
 function td(d, field, extra = "") {
     const cls = [cellCls(d, field), extra].filter(Boolean).join(" ");
-    return `<td${cls ? ` class="${cls}"` : ""}>${esc(d[field])}</td>`;
+    const value = esc(d[field]);
+    const title = extra.includes("clip") && value ? ` title="${value}"` : "";
+    return `<td${cls ? ` class="${cls}"` : ""}${title}>${value}</td>`;
 }
 
 /** Every cell of one case row. */
@@ -296,14 +319,14 @@ function caseCells(d, i) {
         + td(d, "sheet")
         + td(d, "device")
         + `<td class="num">${d.row_num}</td>`
-        + td(d, "case_no", "mono")
+        + td(d, "case_no", "mono clip clip-sm")
         + td(d, "scope")
         + `<td class="${cellCls(d, "result")}">`
         + `<span class="badge" data-tone="${esc(toneFor(d.status))}">${esc(d.result)}</span></td>`
         + td(d, "test_date", "mono")
         + td(d, "pic")
         + td(d, "ticket_id", "mono")
-        + td(d, "note");
+        + td(d, "note", "clip");
 }
 
 /** The distinct top-level group values, in their sorted order. */

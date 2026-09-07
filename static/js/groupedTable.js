@@ -142,6 +142,9 @@ export function setAllGroups(expanded, rows, groupBy, labelOf, open) {
  *   the label columns, for a leaf.
  * @param {(row: Object) => string} [opts.renderLabelCells] The leading label
  *   cells for a leaf; must emit exactly `labelCols` of them.
+ * @param {(row: Object, index: number) => string} [opts.leafAttrs] Extra
+ *   attributes for a leaf `<tr>` — how a caller keeps its rows clickable when
+ *   they sit under group rows.
  * @param {number} [opts.labelCols] How many leading columns the label occupies.
  * @param {number} opts.totalCols Column count, for colspans.
  * @param {Set<string>} opts.expanded Expansion state, owned by the caller.
@@ -154,8 +157,9 @@ export function setAllGroups(expanded, rows, groupBy, labelOf, open) {
  */
 export function renderGroupedTable({
     container, rows, groupBy = [], labelOf, aggregate, renderValues,
-    renderLabelCells, labelCols = 1, totalCols, expanded, defaultExpanded = true,
-    mode = "values", summarise, onToggle, emptyMessage = "Nothing to show.",
+    renderLabelCells, leafAttrs, labelCols = 1, totalCols, expanded,
+    defaultExpanded = true, mode = "values", summarise, onToggle,
+    emptyMessage = "Nothing to show.",
 }) {
     const body = $(container);
     const label = labelOf || ((row, key) => row[key]);
@@ -183,7 +187,8 @@ export function renderGroupedTable({
             const labels = renderLabelCells
                 ? renderLabelCells(node.row)
                 : `<td class="cell-label"><span class="twisty twisty--leaf"></span>${esc(node.row[groupBy[0]])}</td>`;
-            html.push(`<tr>${labels}${renderValues(node.row, index++)}</tr>`);
+            const attrs = leafAttrs ? " " + leafAttrs(node.row, index) : "";
+            html.push(`<tr${attrs}>${labels}${renderValues(node.row, index++)}</tr>`);
             return;
         }
 

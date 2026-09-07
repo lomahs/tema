@@ -83,7 +83,8 @@ function renderProductivity() {
         <td>${esc(r.pic)}</td>
         ${statuses.map((s) => {
             const v = r[s.key] || 0;
-            return `<td class="num band${v ? "" : " zero"}" data-tone="${esc(toneFor(s.key))}">${v}</td>`;
+            return `<td class="num band${v ? "" : " zero"}" `
+                 + `data-tone="${esc(toneFor(s.key))}">${v || ""}</td>`;
         }).join("")}
         <td class="num">${r.executed}</td>
         <td class="num">${r.days}</td>

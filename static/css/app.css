@@ -165,7 +165,17 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
     border-bottom: 1px solid var(--rule);
 }
 
+.toolbar--inline {
+    position: static;       /* belongs to its section, not to the viewport */
+    padding-left: 0;
+    padding-right: 0;
+    border-bottom: 0;
+}
+
 .toolbar-end { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
+
+/* A row that opens a case elsewhere. */
+.ledger tbody tr[data-i] { cursor: pointer; }
 
 .count {
     color: var(--ink-soft);
@@ -221,7 +231,7 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 }
 
 .ledger {
-    width: 100%;
+    width: auto;            /* hug the columns; the band sets the rhythm */
     border-collapse: collapse;
     font-size: var(--fs-base);
 }
@@ -267,23 +277,57 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 .mono { font-family: var(--font-mono); }
 .muted { color: var(--ink-soft); }
 
+/* A single outlier — a spreadsheet section header sitting in the Case no
+   column, or one long note — should not set the width for the whole column.
+   The full text stays available as the cell's tooltip. */
+.clip { max-width: var(--clip-w, 200px); overflow: hidden; text-overflow: ellipsis; }
+.clip-sm { --clip-w: 150px; }
+
 /* --- the status band ------------------------------------------------------
  * The run of status columns recurs across Summary, Daily and Productivity: it
  * is this app's signature structure, so it reads as one unit. The eye gets two
  * zones — identity | measurement — instead of a dozen equal columns.
  */
 
-.ledger .band { background: var(--paper-sunk); }
+.ledger .band {
+    background: var(--paper-sunk);
+    /* Every measurement column is the same width, so the band reads as a grid
+       of comparable figures rather than columns sized by how long their label
+       happens to be — "Pending（保留）" is three times the width of "OK". */
+    width: var(--band-w);
+    text-align: center;
+}
 .ledger tbody tr:hover .band { background: var(--paper-hover); }
 .ledger .band--first { border-left: 1px solid var(--rule-strong); }
+
+/* A fixed width is only achievable if the long bilingual labels may wrap. */
+.ledger th.band { white-space: normal; vertical-align: middle; }
+.ledger th.band > button {
+    white-space: normal;
+    word-break: keep-all;   /* wrap at the space, never inside 対象外 */
+    line-height: 1.25;
+    padding-top: var(--sp-1);
+    padding-bottom: var(--sp-1);
+}
 
 /* --- grouped rows --------------------------------------------------------- */
 
 .ledger .cell-label { padding-left: calc(var(--sp-3) + var(--depth, 0) * 14px); }
 
+/* Each level gets its own ground, applied across the whole row — the status
+   band included — so a group row reads as one bar rather than as two halves.
+   Depth, indent and weight then all say the same thing. */
+.ledger tr[data-depth] > td { background: var(--level-bg); }
+.ledger tr[data-depth="0"] { --level-bg: var(--level-0); }
+.ledger tr[data-depth="1"] { --level-bg: var(--level-1); }
 .ledger tr[data-depth="0"] > td { font-weight: 600; }
-.ledger tr[data-depth="0"] > td:not(.band) { background: var(--paper-raised); }
-.ledger tbody tr[data-depth="0"]:hover > td:not(.band) { background: var(--paper-hover); }
+.ledger tr[data-depth="1"] > td { font-weight: 500; color: var(--ink); }
+
+/* A rule above every outermost group turns the table into blocks per date. */
+.ledger tbody tr[data-depth="0"] > td { border-top: 1px solid var(--rule-strong); }
+.ledger tbody tr[data-depth="0"]:first-child > td { border-top: 0; }
+
+.ledger tbody tr[data-depth]:hover > td { background: var(--paper-hover); }
 
 .twisty {
     appearance: none;
@@ -307,9 +351,13 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 
 .ledger th.sortable > button {
     appearance: none;
+    position: relative;
     width: 100%;
-    height: var(--row-h);
-    padding: 0 var(--sp-3);
+    min-height: var(--row-h);   /* grows when a bilingual label wraps */
+    height: 100%;
+    /* The right strip belongs to the sort glyph, which is positioned out of
+       flow — without reserving it, the glyph lands on top of a short label. */
+    padding: 0 18px 0 var(--sp-3);
     border: 0;
     background: none;
     color: inherit;
@@ -322,11 +370,18 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 }
 
 .ledger th.num.sortable > button { justify-content: flex-end; }
+.ledger th.band.sortable > button { justify-content: center; padding: 0 12px; }
 .ledger th.sortable > button:hover { color: var(--ink); }
 
-/* A persistent, low-contrast affordance — not a hover-only underline. */
+/* A persistent, low-contrast affordance — not a hover-only underline.
+   Positioned out of flow: inline, it pushes the label off centre and the
+   header stops lining up with the figure below it. */
 .ledger th.sortable > button::after {
     content: "\2195";
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
     color: var(--ink-faint);
     font-size: 9px;
 }
@@ -398,6 +453,8 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 .stats {
     display: flex;
     flex-wrap: wrap;
+    width: max-content;
+    max-width: 100%;
     gap: 0;
     border: 1px solid var(--rule);
     border-left: 0;
@@ -406,7 +463,8 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 }
 
 .stat {
-    flex: 1 1 92px;
+    flex: 0 0 auto;
+    min-width: 92px;
     padding: var(--sp-2) var(--sp-4);
     border-left: 1px solid var(--rule);
 }
