@@ -39,8 +39,25 @@ def test_a_status_expansion_becomes_one_column_per_status_in_taxonomy_order():
 
     sheet = ReportLayout.from_dict(MINIMAL).sheets[0]
 
-    assert [c.field for c in sheet.columns] == ["run_date", "file", *STATUS.keys]
-    assert [c.is_status for c in sheet.columns] == [False, False, *[True] * len(STATUS.keys)]
+    assert [c.field for c in sheet.columns] == ["run_date", "file", *STATUS.counted]
+    assert [c.is_status for c in sheet.columns] == [False, False, *[True] * len(STATUS.counted)]
+
+
+def test_an_excluded_status_gets_no_report_column():
+    """Which is what keeps the report's status columns adding up to its total.
+
+    It also means adding an excluded status never widens the published sheet, so
+    the workbook on SharePoint needs no hand-edited header.
+    """
+    from parser.status import STATUS
+
+    sheet = ReportLayout.from_dict(MINIMAL).sheets[0]
+    fields = [c.field for c in sheet.columns]
+
+    assert STATUS.excluded, "the shipped taxonomy is expected to exclude a status"
+    for key in STATUS.excluded:
+        assert key not in fields
+    assert sheet.width == 2 + len(STATUS.counted)
 
 
 def test_the_run_date_column_is_located_by_position():

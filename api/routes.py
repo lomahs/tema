@@ -8,6 +8,7 @@ import aggregate
 import config
 from api.filedialog import DialogError, pick_files, pick_folder
 from parser.excel_reader import load_from_folder, load_from_files
+from parser.scope import SCOPES
 from parser.status import STATUS
 from report.publisher import SheetMissing, publish_to_url
 from sharepoint.auth import GraphAuth, NotConfigured, NotSignedIn
@@ -162,15 +163,18 @@ def get_data():
     cases = []
     for c in _data["cases"]:
         row = c.to_dict()
-        row["status"] = STATUS.classify(c.result)
+        row["status"] = STATUS.classify_case(c)
         cases.append(row)
     return jsonify(cases)
 
 
 @api.route("/api/summary")
 def get_summary():
-    groups, missing_reason = aggregate.summary_rows(_data["cases"])
-    return jsonify({"groups": groups, "missing_reason": missing_reason})
+    groups, missing_reason = aggregate.summary_rows(_data["cases"], by_scope=True)
+    # The group definitions ride along so the view can title its tables and order
+    # them, including the ones that happen to be empty for this dataset.
+    return jsonify({"groups": groups, "missing_reason": missing_reason,
+                    "scopes": SCOPES.to_dict()["groups"]})
 
 
 @api.route("/api/daily")

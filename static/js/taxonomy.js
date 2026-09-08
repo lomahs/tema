@@ -22,6 +22,10 @@ let statuses = [];
 let needsReason = new Set();
 /** @type {Set<string>} status keys that count as work actually carried out */
 let executed = new Set();
+/** @type {Set<string>} status keys that are shown but left out of the total */
+let excluded = new Set();
+/** @type {Set<string>} status keys whose cases the detail view lists */
+let review = new Set();
 /** @type {Object<string, string>} status key -> tone */
 let toneOf = {};
 /** @type {Object<string, number>} status key -> its position among statuses sharing its tone */
@@ -33,12 +37,15 @@ let shadeOf = {};
  * Must run before {@link renderStatCards} or any view header render — those
  * read the status list to decide which columns to emit.
  *
- * @param {{statuses?: Status[], needs_reason?: string[], executed?: string[]}} taxonomy
+ * @param {{statuses?: Status[], needs_reason?: string[], executed?: string[],
+ *          excluded?: string[], review?: string[]}} taxonomy
  */
 export function setTaxonomy(taxonomy) {
     statuses = taxonomy.statuses || [];
     needsReason = new Set(taxonomy.needs_reason || []);
     executed = new Set(taxonomy.executed || []);
+    excluded = new Set(taxonomy.excluded || []);
+    review = new Set(taxonomy.review || []);
     toneOf = Object.fromEntries(statuses.map((s) => [s.key, s.tone || "neutral"]));
 
     // Several statuses legitimately share a tone — OK and NG-OK are both good
@@ -75,6 +82,28 @@ export function getExecutedStatuses() {
 }
 
 /**
+ * The statuses whose cases the detail view lists, in taxonomy order.
+ *
+ * Everything that is not a clean pass, not unstarted and not outside the plan —
+ * which is what Detail is for. Configured in `parser/result_status.json` by
+ * `"review": true`, so this module names no status itself.
+ *
+ * @returns {Status[]}
+ */
+export function getReviewStatuses() {
+    return statuses.filter((s) => review.has(s.key));
+}
+
+/**
+ * Whether a case with this status belongs in the detail view at all.
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isReview(key) {
+    return review.has(key);
+}
+
+/**
  * Semantic colour name for a status key.
  * @param {string} key
  * @returns {string} One of success / danger / warn / neutral / muted.
@@ -107,10 +136,36 @@ export function requiresReason(key) {
 }
 
 /**
+ * Whether a status is shown but deliberately left out of `total`.
+ *
+ * Out Of Scope is the shipped example: it owns a column so the count stays
+ * visible, but a case that was never in the plan must not inflate the figure
+ * progress is read against. The column is drawn set apart for that reason —
+ * a reader adding the band up by eye needs to see where the sum stops.
+ *
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isExcluded(key) {
+    return excluded.has(key);
+}
+
+/**
+ * How many of `counts` fall in statuses left out of the total.
+ * @param {Object<string, number>} counts Keyed by status key.
+ * @returns {number}
+ */
+export function excludedTotal(counts) {
+    return statuses.reduce(
+        (n, s) => n + (excluded.has(s.key) ? (counts[s.key] || 0) : 0), 0);
+}
+
+/**
  * Sum `total` plus one column per status across a set of rows.
  *
- * Because the API always emits every status key (unknown results land in the
- * configured fallback bucket), the status columns add up to `total`.
+ * `total` is summed from the rows' own totals rather than recomputed, so the
+ * footer inherits whatever the API decided a total means — including the
+ * statuses it leaves out. Excluded columns still sum, in their own column.
  *
  * @param {Object[]} rows Summary or daily rows.
  * @returns {Object<string, number>} `{total, <statusKey>: n, ...}`
@@ -145,7 +200,8 @@ export function statusCells(row, { blankZeros = false } = {}) {
     const cells = statuses.map((s) => {
         const v = row[s.key] || 0;
         const zero = v ? "" : " zero";
-        return `<td class="num band${zero}" data-tone="${esc(toneFor(s.key))}">${show(v)}</td>`;
+        const aside = isExcluded(s.key) ? " band--aside" : "";
+        return `<td class="num band${aside}${zero}" data-tone="${esc(toneFor(s.key))}">${show(v)}</td>`;
     });
     return `<td class="num band band--first">${show(row.total || 0)}</td>` + cells.join("");
 }
@@ -159,12 +215,21 @@ export function statusCells(row, { blankZeros = false } = {}) {
  */
 export function statusHeadCells(th) {
     return th("total", "Total", { cls: "num band band--first" })
-        + statuses.map((s) =>
-            th(s.key, s.label, { cls: "num band", tone: toneFor(s.key) })).join("");
+        + statuses.map((s) => th(s.key, s.label, {
+            cls: `num band${isExcluded(s.key) ? " band--aside" : ""}`,
+            tone: toneFor(s.key),
+        })).join("");
 }
 
 /**
- * Build the detail view's stat cards: Total, one per status, then Files.
+ * Build the detail view's stat cards: the review total, one per review status,
+ * then Files.
+ *
+ * Only the review statuses, because those are the only cases Detail holds — a
+ * card reading "OK 0" would be a permanent, meaningless zero. The first card is
+ * labelled "To review" rather than "Total" for the same reason: it counts the
+ * cases on this screen, which is deliberately not the Total that Summary
+ * reports, and two figures both called Total would read as a bug.
  *
  * Generated rather than written into the template because the status list is
  * configurable. {@link setTaxonomy} must have run first.
@@ -176,7 +241,7 @@ export function renderStatCards() {
             <div class="stat-value"${tone ? ` data-tone="${esc(tone)}"` : ""} id="${esc(id)}">0</div>
         </div>`;
 
-    $("#statsRow").innerHTML = cell("Total", "statTotal")
-        + statuses.map((s) => cell(s.label, `stat-${s.key}`, toneFor(s.key))).join("")
+    $("#statsRow").innerHTML = cell("To review", "statTotal")
+        + getReviewStatuses().map((s) => cell(s.label, `stat-${s.key}`, toneFor(s.key))).join("")
         + cell("Files", "statFiles");
 }

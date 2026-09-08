@@ -4,6 +4,7 @@ import pytest
 
 from api import routes
 from app import create_app
+from parser.scope import SCOPES
 from parser.status import STATUS
 from tests.conftest import config_row, write_workbook
 
@@ -37,6 +38,23 @@ def workbook_dir(tmp_path):
             # iPad
             (4, "H"): "保留", (4, "I"): "2026-08-05", (4, "J"): "kim", (4, "K"): "BUG-2",
             (5, "H"): "OK", (5, "I"): "2026-08-05", (5, "J"): "kim",
+        }},
+    )
+    return str(tmp_path)
+
+
+@pytest.fixture
+def out_of_scope_dir(tmp_path):
+    """Two cases reading 対象外, separated only by whether a PIC owns them."""
+    write_workbook(
+        tmp_path / "OOS.xlsx",
+        [config_row("Login", "iPhone", 4, 6, cols="A B C D E F G")],
+        {"Login": {
+            (4, "A"): "TC-1", (4, "C"): "OK", (4, "D"): "2026-08-05", (4, "E"): "lee",
+            # owned: a decision someone made, and still owing a reason
+            (5, "A"): "TC-2", (5, "C"): "対象外", (5, "D"): "2026-08-05", (5, "E"): "lee",
+            # unowned: never in the plan
+            (6, "A"): "TC-3", (6, "C"): "対象外", (6, "D"): "2026-08-05",
         }},
     )
     return str(tmp_path)
@@ -77,6 +95,8 @@ def test_statuses_endpoint_mirrors_the_config(client):
     assert [s["key"] for s in body["statuses"]] == STATUS.keys
     assert body["needs_reason"] == STATUS.needs_reason
     assert body["executed"] == STATUS.executed
+    assert body["excluded"] == STATUS.excluded
+    assert body["review"] == STATUS.review
     assert all({"key", "label", "badge", "text", "tone"} <= set(s) for s in body["statuses"])
 
 
@@ -177,7 +197,7 @@ def test_summary_totals_reconcile_including_unknown_results(client, workbook_dir
     assert body["groups"], "expected at least one group"
     for group in body["groups"]:
         assert set(STATUS.keys) <= set(group), "every status must be a column"
-        assert sum(group[key] for key in STATUS.keys) == group["total"]
+        assert sum(group[key] for key in STATUS.counted) == group["total"]
 
     iphone = next(g for g in body["groups"] if g["device"] == "iPhone")
     assert iphone["OK"] == 1 and iphone["NG"] == 2
@@ -214,7 +234,7 @@ def test_daily_rows_reconcile_and_skip_cases_without_a_date(client, workbook_dir
     rows = client.get("/api/daily").get_json()
 
     for row in rows:
-        assert sum(row[key] for key in STATUS.keys) == row["total"]
+        assert sum(row[key] for key in STATUS.counted) == row["total"]
     # TC-5 has no date at all, so it appears nowhere in the daily view.
     assert sum(r["total"] for r in rows) == 6
 
@@ -294,7 +314,11 @@ def test_empty_store_returns_empty_aggregates(client):
     assert client.get("/api/data").get_json() == []
     assert client.get("/api/daily").get_json() == []
     assert client.get("/api/productivity").get_json() == []
-    assert client.get("/api/summary").get_json() == {"groups": [], "missing_reason": []}
+    body = client.get("/api/summary").get_json()
+    assert body["groups"] == [] and body["missing_reason"] == []
+    # The scope groups describe the tables, not the data, so they are served
+    # even with nothing loaded — the view draws its empty state from them.
+    assert [g["key"] for g in body["scopes"]] == SCOPES.keys
 
 
 def test_missing_reason_rows_carry_their_status(client, workbook_dir):
@@ -310,3 +334,95 @@ def test_missing_reason_rows_carry_their_status(client, workbook_dir):
     by_case = {r["case_no"]: r["status"] for r in rows}
     assert by_case["TC-3"] == "NG"
     assert by_case["TC-4"] == "Other"
+
+
+# --- Out Of Scope, end to end ---------------------------------------------
+
+def test_an_unowned_cancel_is_reported_as_out_of_scope(client, out_of_scope_dir):
+    load(client, out_of_scope_dir)
+    by_case = {c["case_no"]: c["status"] for c in client.get("/api/data").get_json()}
+
+    assert by_case["TC-2"] == "Cancel"
+    assert by_case["TC-3"] == "OOS"
+
+
+def test_summary_shows_out_of_scope_without_counting_it(client, out_of_scope_dir):
+    load(client, out_of_scope_dir)
+    group = client.get("/api/summary").get_json()["groups"][0]
+
+    assert group["OOS"] == 1 and group["Cancel"] == 1
+    assert group["total"] == 2, "three cases loaded, one of them out of scope"
+    assert sum(group[key] for key in STATUS.counted) == group["total"]
+
+
+def test_an_unowned_cancel_is_not_a_missing_reason(client, out_of_scope_dir):
+    load(client, out_of_scope_dir)
+    flagged = {m["case_no"] for m in client.get("/api/summary").get_json()["missing_reason"]}
+
+    assert "TC-2" in flagged, "an owned Cancel still owes a ticket or a note"
+    assert "TC-3" not in flagged
+
+
+# --- Summary split by scope ------------------------------------------------
+
+@pytest.fixture
+def scoped_dir(tmp_path):
+    """One device carrying all three scope groups, including a blank Scope."""
+    write_workbook(
+        tmp_path / "Scoped.xlsx",
+        [config_row("Login", "iPhone", 4, 8, cols="A B C D E F G")],
+        {"Login": {
+            (4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK",
+            (4, "D"): "2026-08-05", (4, "E"): "lee",
+            (5, "A"): "TC-2", (5, "B"): "FPT (JM Support)", (5, "C"): "NG",
+            (5, "D"): "2026-08-05", (5, "E"): "lee", (5, "F"): "BUG-1",
+            (6, "A"): "TC-3", (6, "B"): "JP", (6, "C"): "OK",
+            (6, "D"): "2026-08-05", (6, "E"): "kim",
+            (7, "A"): "TC-4", (7, "B"): "Vendor", (7, "C"): "OK",
+            (7, "D"): "2026-08-05", (7, "E"): "kim",
+            # No Scope at all — a spreadsheet section heading.
+            (8, "A"): "[Login - normal case]",
+        }},
+    )
+    return str(tmp_path)
+
+
+def test_summary_rows_carry_the_scope_group_they_belong_to(client, scoped_dir):
+    load(client, scoped_dir)
+    rows = client.get("/api/summary").get_json()["groups"]
+
+    assert {r["scope"]: r["total"] for r in rows} == {"FPT": 2, "JP": 1, "Other": 2}
+
+
+def test_the_two_fpt_scopes_share_one_table(client, scoped_dir):
+    """FPT and FPT (JM Support) are one commitment, reported together."""
+    load(client, scoped_dir)
+    fpt = next(r for r in client.get("/api/summary").get_json()["groups"]
+               if r["scope"] == "FPT")
+
+    assert fpt["OK"] == 1 and fpt["NG"] == 1
+
+
+def test_the_scope_tables_account_for_every_loaded_case(client, scoped_dir):
+    load(client, scoped_dir)
+    body = client.get("/api/summary").get_json()
+
+    counted = sum(r["total"] for r in body["groups"])
+    excluded = sum(r[k] for r in body["groups"] for k in STATUS.excluded)
+    assert counted + excluded == len(client.get("/api/data").get_json())
+
+
+def test_the_scope_group_list_is_served_for_the_view_to_title_its_tables(client, scoped_dir):
+    load(client, scoped_dir)
+    body = client.get("/api/summary").get_json()
+
+    assert [g["key"] for g in body["scopes"]] == SCOPES.keys
+    assert all(g["label"] for g in body["scopes"])
+
+
+def test_missing_reason_survives_the_scope_split(client, scoped_dir):
+    """Kept in the payload though Summary no longer draws it."""
+    load(client, scoped_dir)
+    body = client.get("/api/summary").get_json()
+
+    assert "missing_reason" in body

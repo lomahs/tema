@@ -26,6 +26,7 @@ test-case-management/
 │   ├── models.py           # SheetConfig, TestCase (dataclass)
 │   ├── status.py           # StatusSet: result -> status
 │   ├── result_status.json  # cấu hình phân loại kết quả
+│   ├── scope_groups.json   # cấu hình nhóm Scope (Summary tách bảng)
 │   └── excel_reader.py     # đọc TOOL_DATA + test case từ .xlsx
 ├── tools/
 │   ├── generate_samples.py # sinh file .xlsx mẫu
@@ -91,8 +92,8 @@ python -m tools.generate_samples --out samples/generated
 | Key | Mô tả |
 |-----|-------|
 | `file_count` | Số file .xlsx sinh ra |
-| `sheets_per_file` | Số sheet test case trong mỗi file |
-| `devices_per_sheet` | Số device trong mỗi sheet |
+| `sheets_per_file` | Số sheet tối đa mỗi file — số thực tế random từ 1 đến giá trị này |
+| `devices_per_sheet` | Số device tối đa mỗi sheet — số thực tế random từ 1 đến giá trị này (random lại cho từng sheet) |
 | `cases_per_sheet` | `{min, max}` — số test case mỗi sheet (random trong khoảng) |
 | `pic_names` | Danh sách tên PIC |
 | `seed` | Cố định seed để sinh lại y hệt (`null` = ngẫu nhiên) |
@@ -100,6 +101,7 @@ python -m tools.generate_samples --out samples/generated
 | `scopes` | Giá trị cột Scope — mặc định `FPT`, `FPT (JM Support)`, `JP` |
 | `result_weights` | Tỉ trọng các Result: `OK`, `NG`, `NG-OK`, `保留`, `対象外`, `""` (rỗng) |
 | `missing_reason_rate` | Tỉ lệ dòng NG/NG-OK/保留/対象外 **thiếu** Ticket ID lẫn Note |
+| `no_pic_rate` | Tỉ lệ dòng `対象外` bị bỏ trống PIC — tức sinh ra case **Out Of Scope** |
 | `group_row_rate` | Tỉ lệ chèn dòng tiêu đề nhóm (không phải test case) |
 | `date_range` | `[start, end]` — khoảng ngày cho cột Test Date |
 
@@ -138,7 +140,7 @@ lấy dữ liệu theo chữ cái cột Excel.
 | POST   | `/api/reload`  | Nạp lại từ source đã load trước đó |
 | GET    | `/api/data`    | Toàn bộ test case, kèm `status` đã phân loại |
 | GET    | `/api/statuses`| Danh sách status (key / label / badge / text) + `needs_reason` + `executed` + `issue` |
-| GET    | `/api/summary` | Gộp theo (file, device) + danh sách case thiếu lý do |
+| GET    | `/api/summary` | Gộp theo (nhóm Scope, file, device) + danh sách nhóm Scope + danh sách case thiếu lý do |
 | GET    | `/api/daily`   | Gộp theo (file, device, PIC, date) |
 | GET    | `/api/productivity` | Năng suất từng PIC: số case đã thực hiện / số ngày có làm việc |
 | GET    | `/api/sharepoint/status` | `not_configured` / `signed_out` / `pending` / `signed_in` |
@@ -154,6 +156,9 @@ từ đây, nên chỉ cần sửa một chỗ:
 `OK` → OK · `NG` → NG · `NG-OK` → NG-OK · `保留` → Pending · `対象外` → Cancel ·
 rỗng → NYS (not yet started) · còn lại → Other
 
+Riêng `対象外` **không điền PIC** → **Out Of Scope**, không phải Cancel. Xem
+[Out Of Scope](#out-of-scope-対象外-không-có-pic) bên dưới.
+
 Mỗi status gồm:
 
 | Key | Ý nghĩa |
@@ -168,10 +173,38 @@ Mỗi status gồm:
 | `fallback` | Đúng 1 status đánh dấu `true` — nhận mọi giá trị lạ |
 | `executed` | Đánh dấu `true` = coi như đã thực hiện; chỉ các status này được tính vào năng suất |
 | `issue` | Đánh dấu `true` = cần theo dõi; đúng các status này lên bảng Issues của báo cáo SharePoint (mặc định NG, Pending, Cancel) |
+| `derive` | `{"from": "<status>", "when": "<điều kiện>"}` — status này không đọc từ ô Result mà **chuyển hoá** từ một status khác khi điều kiện đúng. Điều kiện hợp lệ hiện chỉ có `no_pic` |
+| `excluded` | Đánh dấu `true` = vẫn có cột, nhưng **không cộng vào `total`** và không được có trong `needs_reason` |
+| `review` | Đánh dấu `true` = case thuộc status này sẽ hiển thị ở tab **Detail**. Không được đặt cùng lúc với `excluded` |
 | `needs_reason` | (cấp ngoài) Các status bắt buộc phải có Ticket ID hoặc Note |
 
-Nhờ có `fallback`, giá trị lạ không bị bỏ sót: `total` của mỗi dòng luôn bằng tổng các
-cột status.
+Nhờ có `fallback`, không giá trị nào bị bỏ sót: mỗi case luôn rơi vào đúng một cột.
+`total` của mỗi dòng bằng tổng các cột **không** bị `excluded`.
+
+### Out Of Scope (`対象外` không có PIC)
+
+Một case ghi `対象外` mà **bỏ trống PIC** không phải là một case bị huỷ có người chịu
+trách nhiệm — nó là case **nằm ngoài phạm vi test**. App tách hai loại này ra:
+
+| | `対象外` + có PIC | `対象外` + trống PIC |
+|---|---|---|
+| Status | `Cancel` | `Out Of Scope` |
+| Cột trên Summary / Daily | có | có (ngay sau `NYS`, ngăn bằng vạch nét đứt) |
+| Cộng vào `total` | có | **không** |
+| Bị flag Missing Reason | có (nếu thiếu cả Ticket ID lẫn Note) | **không** |
+| Lên danh sách Issue / sheet Issues | có | **không** |
+| Cột trong báo cáo SharePoint | có | **không** (xem bên dưới) |
+
+Vì `Out Of Scope` bị `excluded`, nó **không** sinh cột trong báo cáo SharePoint. Nhờ vậy
+`total` trong báo cáo vẫn đúng bằng tổng các cột status của báo cáo, và file trên
+SharePoint không phải chèn thêm cột nào.
+
+Luật này khai báo trong `result_status.json`, không nằm trong code:
+
+```json
+{"key": "OOS", "label": "Out Of Scope",
+ "derive": {"from": "Cancel", "when": "no_pic"}, "excluded": true, "tone": "muted"}
+```
 
 Màu cụ thể của mỗi `tone` nằm trong `static/css/tokens.css`, không nằm trong file JSON
 này — đổi bảng màu không phải sửa taxonomy, và ngược lại. Nhiều status dùng chung một
@@ -195,6 +228,7 @@ Dùng file cấu hình khác:
 
 ```bash
 RESULT_STATUS_CONFIG=/path/to/my_status.json python app.py
+SCOPE_GROUPS_CONFIG=/path/to/my_scopes.json python app.py
 ```
 
 ## Xuất báo cáo lên SharePoint
@@ -302,7 +336,9 @@ gì khai trong `report/report_layout.json`:
 - `columns`: theo thứ tự. Mỗi phần tử là `{"field": "..."}` hoặc `{"expand": "statuses"}`.
 - `{"expand": "statuses"}` nở thành một cột cho mỗi status **theo thứ tự taxonomy** — thêm
   status mới vào `result_status.json` là báo cáo tự có thêm cột. Chỉ dùng được cho
-  `summary` và `daily` (dòng `issues` là từng case, không phải nhóm đếm).
+  `summary` và `daily` (dòng `issues` là từng case, không phải nhóm đếm). Status có
+  `"excluded": true` **không** sinh cột, nên các cột status trong báo cáo luôn cộng đúng
+  bằng `total` của nó.
 - Mỗi sheet phải có **đúng một** cột `run_date` — đó là khoá chống trùng.
 
 Field theo từng dataset:
@@ -318,6 +354,53 @@ app dùng luôn table đó, nên định dạng và công thức tự giãn theo
 
 Sheet nào lọt vào Issues là do taxonomy quyết định: status có `"issue": true` trong
 `parser/result_status.json` (mặc định là NG, Pending, Cancel).
+
+## Nhóm Scope (Summary tách bảng)
+
+Định nghĩa trong `parser/scope_groups.json`. Tab Summary vẽ **một bảng cho mỗi nhóm**, vì
+phần việc FPT và phần việc JP là hai cam kết khác nhau — cộng chung lại không trả lời được
+câu hỏi nào.
+
+```json
+{
+  "groups": [
+    {"key": "FPT", "label": "FPT", "match": ["FPT", "FPT (JM Support)"]},
+    {"key": "JP",  "label": "JP",  "match": ["JP"]}
+  ],
+  "fallback": {"key": "Other", "label": "Other"}
+}
+```
+
+| Key | Ý nghĩa |
+|-----|---------|
+| `groups[].key` | Tên nhóm (dùng nội bộ, và là giá trị cột `scope` trong `/api/summary`) |
+| `groups[].label` | Tiêu đề hiển thị trên bảng |
+| `groups[].match` | Các giá trị Scope thuộc nhóm này (không phân biệt hoa thường, tự cắt khoảng trắng) |
+| `fallback` | **Bắt buộc.** Nhóm hứng mọi Scope không khớp — kể cả ô Scope trống |
+
+`fallback` luôn đứng cuối. Scope gõ sai, Scope chưa cấu hình, hay dòng tiêu đề nhóm trong
+file Excel (không có Scope) đều rơi vào đây, nên **tổng các bảng luôn bằng đúng số case đã
+load** — không có case nào âm thầm biến mất. Bảng nào không có case thì tự ẩn.
+
+Đổi env `SCOPE_GROUPS_CONFIG` để trỏ sang file khác, giống `RESULT_STATUS_CONFIG`.
+
+Báo cáo SharePoint **không** đổi: `summary_rows` chỉ tách theo scope khi được gọi với
+`by_scope=True` (chỉ `/api/summary` làm vậy). Sheet Summary trong báo cáo vẫn là một dòng cho
+mỗi (file, device), nên không phải thêm cột nào trên SharePoint.
+
+## Tab Detail: chỉ hiển thị case cần xử lý
+
+Detail **chỉ nạp** các case có status đánh dấu `"review": true` — mặc định là NG, NG-OK,
+Pending, Cancel. Case OK, NYS và Out Of Scope không xuất hiện ở đây: Detail là danh sách việc
+còn tồn, không phải nơi tra cứu toàn bộ.
+
+Vì vậy thẻ đầu tiên ở dải thống kê tên là **"To review"** chứ không phải "Total" — nó đếm số
+case trên màn hình này, khác với `Total` ở tab Summary (đếm toàn bộ case trong phạm vi).
+
+Bộ lọc **Result** là một dãy nút bật/tắt, **chọn được nhiều status cùng lúc** (ví dụ NG +
+Pending). Không bật nút nào = xem tất cả. Mỗi status đang bật hiện thành một chip riêng, tắt
+được từng cái. Bộ lọc này lọc theo **status** chứ không theo chữ trong ô Result, nên `保留`
+và `Pending` là một.
 
 ## Test
 

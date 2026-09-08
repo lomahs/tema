@@ -12,6 +12,14 @@ RESULT_STATUS_CONFIG = os.environ.get(
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
+# Which Scope values belong to which Summary table. Same idea as
+# RESULT_STATUS_CONFIG: the vocabulary is data, so renaming a scope or adding a
+# third table is a config edit, not a code change.
+SCOPE_GROUPS_CONFIG = os.environ.get(
+    "SCOPE_GROUPS_CONFIG",
+    os.path.join(_HERE, "parser", "scope_groups.json"),
+)
+
 # Which column of the SharePoint report workbook holds which value. Same idea as
 # RESULT_STATUS_CONFIG: point at your own file to match your report's shape.
 REPORT_LAYOUT_CONFIG = os.environ.get(

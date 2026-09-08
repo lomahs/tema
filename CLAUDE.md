@@ -49,8 +49,8 @@ files (`~$*.xlsx`) are skipped.
 **The status taxonomy is data, not code.** [parser/result_status.json](parser/result_status.json)
 maps raw Result strings → status keys, and `StatusSet` in [parser/status.py](parser/status.py)
 validates it at import time. Exactly one status must set `"empty": true` (blank cells → NYS) and
-exactly one `"fallback": true` (unknown values → Other) — the fallback is what makes each row's
-`total` equal the sum of its status columns, which several tests assert. `needs_reason` lists the
+exactly one `"fallback": true` (unknown values → Other) — the fallback is what makes every case
+land in exactly one column, which several tests assert. `needs_reason` lists the
 statuses that must carry a Ticket ID or a Note; `/api/summary` reports violators under
 `missing_reason`. `"executed": true` marks the statuses that count as work carried out —
 `/api/productivity` divides those cases by the days a PIC actually tested. Any number of statuses
@@ -65,8 +65,52 @@ Bootstrap `badge` string, so `badge` and `text` are still emitted but nothing in
 them. Several statuses may share a tone (OK and NG-OK are both good outcomes); charts separate
 them by stepping the shade in taxonomy order.
 
+**Some statuses are not readable off the Result cell.** `"derive": {"from": ..., "when": ...}`
+says a status *becomes* another one when something else about the row is true. Out Of Scope is
+the shipped case: `対象外` with no PIC was never in the plan, whereas `対象外` with a PIC is a
+decision someone made and still owes a reason. So `STATUS.classify(result)` — pure, result-string
+only — is no longer the whole story, and **every aggregate calls `STATUS.classify_case(case)`
+instead**; `classify` survives for the config and the sample generator. `DERIVE_CONDITIONS` in
+`parser/status.py` is the closed set of conditions the JSON may name (`no_pic` today). Derivation
+is one step by construction: a derived status may not itself be derived from, may not carry
+`match` / `empty` / `fallback`, and two statuses may not claim the same source. Adding a second
+condition means one entry in that table, not a new branch in the aggregates.
+
+**`"excluded": true` breaks the total on purpose.** An excluded status keeps its column — the
+count has to stay visible — but is left out of `total`, so a case outside the plan cannot inflate
+the denominator progress is read against. The invariant is therefore *not* "total equals the sum
+of every status column" but the narrower **"total equals the sum of `STATUS.counted`"**; that is
+what `_counted_total` in `aggregate.py` computes and what the reconcile tests assert. Two things
+follow, and both are enforced rather than left to the config: `needs_reason` may not name an
+excluded status (a case outside the plan owes nobody an explanation), and `{"expand": "statuses"}`
+expands over `counted`, so an excluded status gets **no report column** — which is what keeps the
+published sheet adding up to its own total and its width unchanged. In the UI the column is drawn
+with `band--aside`, a dashed rule marking where the sum stops.
+
+**`"review": true` is what the Detail view holds.** Detail is the list of work outstanding, so it
+loads *only* those statuses (NG / NG-OK / Pending / Cancel) and drops everything else at
+`initDetail`. That is a deliberate restriction, not a default filter — which is why its stat strip
+is labelled **"To review"** and not "Total": it counts this screen, and Summary's Total counts the
+plan. Two figures both called Total would read as a bug. A status may not be both `excluded` and
+`review` — a case outside the plan is not work to review — and the validator refuses it.
+
 Adding or renaming a status means editing only that JSON. Backend, `/api/statuses`, the UI and the
 sample generator all read from it — never hard-code status keys in Python or JS.
+
+**Scope groups are data too.** [parser/scope_groups.json](parser/scope_groups.json) says which
+Scope strings belong to which Summary table, validated at import by `ScopeSet` in
+[parser/scope.py](parser/scope.py) exactly the way `StatusSet` validates the taxonomy. FPT work
+and JP work are separate commitments, so Summary draws one table per group rather than one table
+adding them together. The `fallback` group is mandatory and always sorts last: a typo'd scope, or
+the blank Scope of a spreadsheet section heading, lands there rather than vanishing, so **the
+tables always add up to everything loaded**. `views/summary.js` names no scope itself — it draws a
+block per group from the `scopes` list `/api/summary` serves alongside the rows.
+
+`summary_rows(cases, by_scope=False)` is one function serving two granularities. `/api/summary`
+passes `by_scope=True` and each row gains a `scope` key; the report publisher does not, so its
+sheet keeps one row per (file, device) and the SharePoint workbook needs no new column. They
+cannot drift: the scope rows of a file add up to its unscoped row, which `tests/test_aggregate.py`
+asserts directly.
 
 **No CSS framework.** The UI is hand-written CSS in two files:
 [static/css/tokens.css](static/css/tokens.css) holds every colour, type and spacing token
@@ -102,10 +146,14 @@ that must survive a click belongs in a JS array, not in an attribute.
 
 Behavior worth preserving when touching the UI:
 - `refreshViews()` in `main.js` must call `setTaxonomy()` before any header/card render.
-- **Every** sortable header is now generated — `renderSummaryHead`, `renderDailyHead`,
-  `renderProductivityHead` and `renderDetailHead` each replace their `<th>`s and so each calls
-  `makeSortable` itself. None is bound at init any more. Binding one twice sorts twice per
-  click and looks like nothing happened.
+- **Every** sortable header is now generated — `renderDailyHead`, `renderProductivityHead` and
+  `renderDetailHead` each replace their `<th>`s and so each calls `makeSortable` itself. None is
+  bound at init any more. Binding one twice sorts twice per click and looks like nothing happened.
+  Summary is the exception in shape only: it has no `renderSummaryHead`, because it draws one
+  table per scope group and cannot know how many headers it needs until the data arrives —
+  `renderSummary` builds heads and bodies together and binds each head as it goes. Its sort state
+  is shared across the tables and a click re-renders all of them, or two tables would show two
+  different orders at once.
 - Sorting a grouped table goes through `sortGrouped`, which orders the *groups* by their
   roll-up and the rows within each group. Sorting by "NG descending" must mean the worst file
   first, not the file that happens to own the worst row.
@@ -130,8 +178,10 @@ Behavior worth preserving when touching the UI:
   loaded would clear the day's rows and write none back, which the endpoint also refuses.
 - `setupDrawer.js` owns chrome only. It opens itself when nothing is loaded and closes on a
   successful load; `sourcePanel.js` and `reportPanel.js` do not know it exists.
-- `views/summary.js` must not import `views/detail.js`. Jumping from a missing-reason row into
-  Detail goes through the `onJumpToCase` callback `main.js` passes in.
+- `views/summary.js` must not import `views/detail.js`. It has no reason to now — the
+  missing-reason list that used to jump into Detail has been removed from the screen, along with
+  `initSummaryView`, `showCase` and the `onJumpToCase` callback. `/api/summary` still returns
+  `missing_reason`; nothing draws it.
 
 **Aggregation is shared, not owned by the routes.** [aggregate.py](aggregate.py) holds
 `summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` as plain functions over

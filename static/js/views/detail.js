@@ -1,7 +1,15 @@
 /**
  * Detail view: stat figures, filters, the case table, and the charts.
  *
- * Owns the full case list and the derived filtered / grouped / paged state.
+ * Holds only the cases worth reviewing — NG, NG-OK, Pending and Cancel, or
+ * whatever `"review": true` names in `parser/result_status.json`. A clean pass,
+ * an unstarted case and an out-of-scope one need nobody's attention, and this
+ * screen exists to work through the ones that do. That means the figures here
+ * deliberately do **not** match Summary's: the card is labelled "To review",
+ * not "Total".
+ *
+ * Owns the reviewable case list and the derived filtered / grouped / paged
+ * state, plus the set of statuses the Result toggles have selected.
  *
  * Grouping is optional here, unlike Summary and Daily. A flat list of cases is
  * the right default — you often want to scan or sort across every file at once
@@ -15,7 +23,7 @@ import { populateSelect, uniqueOf } from "../filters.js";
 import { renderGroupedTable, toggleGroup } from "../groupedTable.js";
 import { renderPagination } from "../pagination.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortGrouped, sortRows } from "../sorting.js";
-import { getStatuses, requiresReason, toneFor } from "../taxonomy.js";
+import { getReviewStatuses, isExcluded, isReview, requiresReason, toneFor } from "../taxonomy.js";
 
 const PAGE_SIZE = 50;
 
@@ -24,8 +32,10 @@ const GROUP_PAGE_SIZE = 8;
 
 const DEFAULT_EXPANDED = true;
 
-/** @type {Object[]} every case from /api/data */
+/** @type {Object[]} the reviewable cases from /api/data */
 let allData = [];
+/** @type {Set<string>} status keys the Result toggles have on; empty means all */
+const chosenStatuses = new Set();
 /** @type {Object[]} `allData` after filters and sorting */
 let filtered = [];
 let currentPage = 1;
@@ -52,12 +62,17 @@ const COLUMNS = [
     { col: "note", label: "Note" },
 ];
 
-/** Selects and inputs that narrow the list, with the label used on their chip. */
+/**
+ * Single-choice selects that narrow the list, with the label used on their chip.
+ *
+ * Result is not among them: it narrows by *status* rather than by the raw text
+ * of the cell, and it takes several values at once, so it is handled on its own
+ * throughout this module.
+ */
 const FILTERS = [
     { id: "filterFile", field: "file_name", label: "File" },
     { id: "filterDevice", field: "device", label: "Device" },
     { id: "filterScope", field: "scope", label: "Scope" },
-    { id: "filterResult", field: "result", label: "Result" },
     { id: "filterPIC", field: "pic", label: "PIC" },
 ];
 const DATE_FILTERS = [
@@ -79,6 +94,17 @@ export function initDetailView() {
     [...FILTERS, ...DATE_FILTERS].forEach(({ id }) =>
         $("#" + id).addEventListener("change", rerender));
     $("#filterSearch").addEventListener("input", rerender);
+
+    // One listener on the group rather than one per button, so the toggles can
+    // be redrawn on every taxonomy load without rebinding anything.
+    $("#filterResult").addEventListener("click", (e) => {
+        const key = e.target.closest("button[data-status]")?.dataset.status;
+        if (!key) return;
+        if (chosenStatuses.has(key)) chosenStatuses.delete(key);
+        else chosenStatuses.add(key);
+        paintResultToggles();
+        rerender();
+    });
     $("#detailGroupBy").addEventListener("change", rerender);
 
     $("#btnClearFilters").addEventListener("click", () => {
@@ -101,6 +127,30 @@ export function initDetailView() {
 function clearFilters() {
     [...FILTERS, ...DATE_FILTERS].forEach(({ id }) => { $("#" + id).value = ""; });
     $("#filterSearch").value = "";
+    chosenStatuses.clear();
+    paintResultToggles();
+}
+
+/**
+ * Draw one toggle per review status.
+ *
+ * Rebuilt from the taxonomy rather than written into the template, and called
+ * again whenever the selection changes so `aria-pressed` stays truthful — a
+ * toggle group that lies to a screen reader is worse than a plain select.
+ */
+export function renderResultToggles() {
+    $("#filterResult").innerHTML = getReviewStatuses().map((st) =>
+        `<button type="button" class="toggle" data-status="${esc(st.key)}"`
+        + ` data-tone="${esc(toneFor(st.key))}" aria-pressed="false">${esc(st.label)}</button>`
+    ).join("");
+    paintResultToggles();
+}
+
+/** Reflect `chosenStatuses` onto the buttons. */
+function paintResultToggles() {
+    $("#filterResult").querySelectorAll("button[data-status]").forEach((b) => {
+        b.setAttribute("aria-pressed", String(chosenStatuses.has(b.dataset.status)));
+    });
 }
 
 /**
@@ -122,28 +172,15 @@ export function renderDetailHead() {
  * @param {Object[]} cases `/api/data` body, each row carrying a `status` key.
  */
 export function initDetail(cases) {
-    allData = cases;
+    // The restriction is applied once, here, rather than as a default filter:
+    // this view is the list of work outstanding, and the dropdowns below should
+    // offer the files and PICs that actually have some.
+    allData = cases.filter((d) => isReview(d.status));
     expanded.clear();
     populateSelect("#filterFile", uniqueOf(allData, "file_name"));
     populateSelect("#filterDevice", uniqueOf(allData, "device"));
     populateSelect("#filterScope", uniqueOf(allData, "scope"));
-    populateSelect("#filterResult", uniqueOf(allData, "result"));
     populateSelect("#filterPIC", uniqueOf(allData, "pic"));
-    applyFilters();
-}
-
-/**
- * Focus the detail view on one case, coming from the summary view's list of
- * cases owing a reason.
- *
- * @param {{file: string, case_no: string}} c
- */
-export function showCase(c) {
-    clearFilters();
-    $("#detailGroupBy").value = "";
-    $("#filterFile").value = c.file || "";
-    $("#filterSearch").value = c.case_no || "";
-    currentPage = 1;
     applyFilters();
 }
 
@@ -168,6 +205,9 @@ function applyFilters() {
         for (const { id, field } of FILTERS) {
             if (values[id] && d[field] !== values[id]) return false;
         }
+        // No toggle on means "every result", not "none" — an empty selection is
+        // the unfiltered state, the same as a select sitting on its placeholder.
+        if (chosenStatuses.size && !chosenStatuses.has(d.status)) return false;
         const from = values.filterDateFrom;
         const to = values.filterDateTo;
         if (from && (!d.test_date || d.test_date < from)) return false;
@@ -205,7 +245,7 @@ function matchesSearch(d, q) {
 /** Update the stat figures and the "n / m cases" count. */
 function renderStats() {
     const counts = {};
-    getStatuses().forEach((s) => { counts[s.key] = 0; });
+    getReviewStatuses().forEach((s) => { counts[s.key] = 0; });
     filtered.forEach((d) => {
         if (counts[d.status] !== undefined) counts[d.status] += 1;
     });
@@ -214,8 +254,11 @@ function renderStats() {
         const el = document.getElementById(id);
         if (el) el.textContent = value;
     };
+    // Every case here is a review case, so the row count *is* the figure. It is
+    // labelled "To review" rather than "Total" precisely because it is not the
+    // Total on the Summary tab, which counts the whole plan.
     setStat("statTotal", filtered.length);
-    getStatuses().forEach((s) => setStat(`stat-${s.key}`, counts[s.key]));
+    getReviewStatuses().forEach((s) => setStat(`stat-${s.key}`, counts[s.key]));
     setStat("statFiles", new Set(filtered.map((d) => d.file_name)).size);
 
     $("#filteredCount").textContent = filtered.length === allData.length
@@ -236,6 +279,14 @@ function renderChips() {
             + `<button type="button" data-clear="${esc(id)}" aria-label="Clear ${esc(label)} filter">✕</button></span>`);
     };
     FILTERS.forEach(({ id, label }) => push(id, label, $("#" + id).value));
+    // One chip per chosen status rather than one listing them all, so any single
+    // one can be dropped without retyping the rest.
+    getReviewStatuses()
+        .filter((st) => chosenStatuses.has(st.key))
+        .forEach((st) => chips.push(
+            `<span class="chip">Result: ${esc(st.label)}`
+            + `<button type="button" data-status="${esc(st.key)}"`
+            + ` aria-label="Clear ${esc(st.label)} filter">✕</button></span>`));
     DATE_FILTERS.forEach(({ id, label }) => push(id, label, $("#" + id).value));
     push("filterSearch", "Search", $("#filterSearch").value.trim());
 
@@ -243,6 +294,13 @@ function renderChips() {
     $("#detailChips").querySelectorAll("button[data-clear]").forEach((b) =>
         b.addEventListener("click", () => {
             $("#" + b.dataset.clear).value = "";
+            currentPage = 1;
+            applyFilters();
+        }));
+    $("#detailChips").querySelectorAll("button[data-status]").forEach((b) =>
+        b.addEventListener("click", () => {
+            chosenStatuses.delete(b.dataset.status);
+            paintResultToggles();
             currentPage = 1;
             applyFilters();
         }));
@@ -270,7 +328,10 @@ function isSectionHeader(d) {
  * Three different rules apply:
  * - identity fields are always mandatory;
  * - result/date/PIC are only expected once *any* of the three is filled, so an
- *   untested case is not flagged, but a half-recorded one is;
+ *   untested case is not flagged, but a half-recorded one is — unless the case
+ *   is out of the plan, where the blank is the whole point rather than an
+ *   omission (an Out Of Scope case is precisely one that names no PIC, so
+ *   flagging that cell would mark every one of them as a mistake);
  * - ticket id and note are required together (either satisfies) for the
  *   statuses the config marks as needing a reason.
  *
@@ -285,6 +346,7 @@ function cellCls(d, field) {
         return v ? "" : "flag";
     }
     if (["result", "test_date", "pic"].includes(field)) {
+        if (isExcluded(d.status)) return "";
         const has = [d.result, d.test_date, d.pic].filter(Boolean).length;
         return has > 0 && !v ? "flag" : "";
     }

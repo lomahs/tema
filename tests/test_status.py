@@ -125,6 +125,28 @@ def test_statuses_sharing_a_badge_can_differ_in_text_colour():
     (lambda c: c["statuses"].append({"key": "Extra", "match": ["PASS"]}), "matched by both"),
     (lambda c: c.__setitem__("needs_reason", ["Nope"]), "unknown status"),
     (lambda c: c.__setitem__("statuses", []), "non-empty list"),
+    (lambda c: c["statuses"].append(
+        {"key": "Extra", "derive": {"from": "Nope", "when": "no_pic"}}), "unknown status"),
+    (lambda c: c["statuses"].append(
+        {"key": "Extra", "derive": {"from": "OK", "when": "no_moon"}}), "unknown condition"),
+    (lambda c: c["statuses"].append(
+        {"key": "Extra", "derive": {"from": "OK"}}), "unknown condition"),
+    (lambda c: c["statuses"].append(
+        {"key": "Extra", "derive": {"when": "no_pic"}}), "needs a 'from'"),
+    (lambda c: c["statuses"].append(
+        {"key": "Extra", "derive": "OK"}), "not an object"),
+    (lambda c: c["statuses"].append({"key": "Extra", "match": ["SKIP"],
+                                     "derive": {"from": "OK", "when": "no_pic"}}), "cannot also set"),
+    (lambda c: c["statuses"].extend([
+        {"key": "Mid", "derive": {"from": "OK", "when": "no_pic"}},
+        {"key": "End", "derive": {"from": "Mid", "when": "no_pic"}}]), "itself derived"),
+    (lambda c: c["statuses"].extend([
+        {"key": "One", "derive": {"from": "OK", "when": "no_pic"}},
+        {"key": "Two", "derive": {"from": "OK", "when": "no_pic"}}]), "both derive from"),
+    (lambda c: (c["statuses"].append({"key": "Skip", "excluded": True}),
+                c.__setitem__("needs_reason", ["Skip"])), "owes nobody an explanation"),
+    (lambda c: c["statuses"].append(
+        {"key": "Skip", "excluded": True, "review": True}), "not work to review"),
 ])
 def test_invalid_configs_are_rejected(mutate, message):
     cfg = json.loads(json.dumps(MINIMAL))
@@ -157,7 +179,7 @@ def test_the_shipped_taxonomy_names_a_tone_for_every_status():
     tone = {s.key: s.tone for s in STATUS.statuses}
     assert tone == {"OK": "success", "NG": "danger", "NG-OK": "warn",
                     "Pending": "warn", "Cancel": "neutral", "NYS": "neutral",
-                    "Other": "muted"}
+                    "OOS": "muted", "Other": "muted"}
 
 
 def test_an_explicit_tone_wins_over_the_badge():
@@ -186,3 +208,101 @@ def test_tone_defaults_to_neutral_without_a_badge():
 
 def test_tone_is_served_to_the_ui():
     assert all("tone" in s for s in STATUS.to_dict()["statuses"])
+
+
+# --- Derived statuses ------------------------------------------------------
+# A status the Result cell alone cannot name. `classify` answers "what does this
+# text mean"; `classify_case` answers "what is this row", and only the second can
+# see that a Cancel naming no PIC was never in the plan.
+
+def _case(result, pic=None):
+    from parser import models
+    return models.TestCase(file_name="TC.xlsx", sheet="Login", device="iPhone",
+                           result=result, pic=pic)
+
+
+def test_a_cancelled_case_with_no_pic_is_out_of_scope():
+    assert STATUS.classify_case(_case("対象外", pic=None)) == "OOS"
+
+
+def test_a_cancelled_case_with_a_pic_stays_cancelled():
+    """The PIC is what separates a decision someone made from a case nobody owns."""
+    assert STATUS.classify_case(_case("対象外", pic="lee")) == "Cancel"
+
+
+def test_only_the_derived_status_reacts_to_a_missing_pic():
+    for result in ("OK", "NG", "NG-OK", "保留", "TBD", None):
+        assert STATUS.classify_case(_case(result, pic=None)) == STATUS.classify(result)
+
+
+def test_classify_still_reads_the_result_cell_alone():
+    """`classify` must stay pure: the sample generator and the config rely on it."""
+    assert STATUS.classify("対象外") == "Cancel"
+
+
+def test_the_excluded_statuses_are_the_complement_of_the_counted_ones():
+    assert STATUS.excluded == ["OOS"]
+    assert set(STATUS.counted).isdisjoint(STATUS.excluded)
+    assert set(STATUS.counted) | set(STATUS.excluded) == set(STATUS.keys)
+
+
+def test_counted_keeps_taxonomy_order():
+    assert STATUS.counted == [k for k in STATUS.keys if k not in STATUS.excluded]
+
+
+def test_an_excluded_status_still_gets_a_zero_count():
+    """It owns a column, so it must never be missing from a row."""
+    assert set(STATUS.zero_counts()) == set(STATUS.keys)
+    assert STATUS.zero_counts()["OOS"] == 0
+
+
+def test_an_excluded_status_is_never_asked_for_a_reason():
+    assert "OOS" not in STATUS.needs_reason
+
+
+def test_has_derivation_names_the_statuses_that_can_still_change():
+    assert STATUS.has_derivation("Cancel")
+    assert not STATUS.has_derivation("OOS")
+    assert not STATUS.has_derivation("NG")
+
+
+def test_the_taxonomy_is_published_with_its_excluded_statuses():
+    assert STATUS.to_dict()["excluded"] == ["OOS"]
+
+
+def test_a_config_without_derivations_classifies_a_case_by_its_result_alone():
+    plain = StatusSet.from_dict(MINIMAL)
+    assert plain.excluded == []
+    assert plain.counted == plain.keys
+    assert plain.classify_case(_case("OK", pic=None)) == "OK"
+
+
+# --- Review statuses -------------------------------------------------------
+# What the Detail view lists: everything that is not a clean pass, not
+# unstarted and not outside the plan.
+
+def test_the_review_statuses_are_the_ones_worth_looking_at():
+    assert STATUS.review == ["NG", "NG-OK", "Pending", "Cancel"]
+
+
+def test_a_clean_pass_and_an_unstarted_case_are_not_for_review():
+    for key in ("OK", "NYS"):
+        assert key not in STATUS.review
+
+
+def test_an_out_of_scope_case_is_not_for_review():
+    """It is not work outstanding, so it is not work to review."""
+    assert "OOS" not in STATUS.review
+    assert set(STATUS.review).isdisjoint(STATUS.excluded)
+
+
+def test_review_keeps_taxonomy_order():
+    assert STATUS.review == [k for k in STATUS.keys if k in set(STATUS.review)]
+
+
+def test_the_taxonomy_is_published_with_its_review_statuses():
+    assert STATUS.to_dict()["review"] == STATUS.review
+
+
+def test_a_config_naming_no_review_statuses_is_allowed():
+    assert StatusSet.from_dict(MINIMAL).review == []

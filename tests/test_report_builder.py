@@ -42,7 +42,7 @@ def test_status_columns_carry_the_counts_in_taxonomy_order():
 
     rows = build_rows([{"file": "TC.xlsx", **counts}], layout, run_date="2026-09-06")
 
-    assert rows[0][1:] == [counts[key] for key in STATUS.keys]
+    assert rows[0][1:] == [counts[key] for key in STATUS.counted]
 
 
 def test_a_missing_status_count_is_written_as_zero_not_blank():

@@ -7,14 +7,16 @@ taxonomy stays the single place where the vocabulary is defined.
 """
 from collections import Counter, defaultdict
 
+from parser.scope import SCOPES
 from parser.status import STATUS
 
 
 def _group_counts(cases, key_fn):
     """Bucket cases by `key_fn` and count each bucket by status key.
 
-    Yields (key, group, counts) with every status key present in `counts`, so a
-    group's `total` always equals the sum of its status columns.
+    Yields (key, group, counts) with every status key present in `counts`, so no
+    row is ever missing a column. Cases are classified with `classify_case`, not
+    `classify`, because some statuses are only recognisable from the whole row.
     """
     buckets = defaultdict(list)
     for c in cases:
@@ -25,12 +27,35 @@ def _group_counts(cases, key_fn):
 
     for key, group in sorted(buckets.items()):
         counts = STATUS.zero_counts()
-        counts.update(Counter(STATUS.classify(c.result) for c in group))
+        counts.update(Counter(STATUS.classify_case(c) for c in group))
         yield key, group, counts
 
 
-def summary_rows(cases):
+def _counted_total(counts):
+    """A group's total: the statuses in the plan, and only those.
+
+    Not `len(group)`. Statuses the taxonomy marks `excluded` still get a column
+    so their count is visible, but a case outside the plan must not inflate the
+    denominator progress is read against. So the invariant is not "total equals
+    the sum of every status column" but the narrower "total equals the sum of
+    the *counted* ones" — which is also why the report, whose columns are the
+    counted statuses, still adds up exactly.
+    """
+    return sum(counts[key] for key in STATUS.counted)
+
+
+def summary_rows(cases, by_scope=False):
     """Per file and device: the status breakdown, plus the cases owing a reason.
+
+    Args:
+        cases: The loaded `TestCase` list.
+        by_scope: Split each (file, device) further by scope group, adding a
+            `scope` key to every row. The Summary view reports FPT and JP work
+            as separate tables and asks for this; the report publisher does not,
+            and its sheet keeps the coarser one row per (file, device). Both come
+            from this one function so the two can only ever differ in
+            granularity — the scope rows of a file still add up to its
+            unscoped row.
 
     Returns:
         A `(groups, missing_reason)` tuple. `missing_reason` lists cases whose
@@ -41,13 +66,23 @@ def summary_rows(cases):
     missing_reason = []
     needs_reason = set(STATUS.needs_reason)
 
-    for (file_name, device), group, counts in _group_counts(
-        cases, lambda c: (c.file_name, c.device)
-    ):
-        groups.append({"file": file_name, "device": device, "total": len(group), **counts})
+    def key_fn(c):
+        if by_scope:
+            return (SCOPES.classify(c.scope), c.file_name, c.device)
+        return (c.file_name, c.device)
+
+    for key, group, counts in _group_counts(cases, key_fn):
+        scope, file_name, device = key if by_scope else (None, *key)
+        row = {"file": file_name, "device": device,
+               "total": _counted_total(counts), **counts}
+        if by_scope:
+            # Ahead of the counts, so a row reads scope -> file -> device -> the
+            # band, the same left-to-right order the tables are drawn in.
+            row = {"scope": scope, **row}
+        groups.append(row)
 
         for c in group:
-            status = STATUS.classify(c.result)
+            status = STATUS.classify_case(c)
             if status not in needs_reason:
                 continue
             if c.ticket_id or c.note:
@@ -79,7 +114,7 @@ def daily_rows(cases):
 
     return [
         {"file": file_name, "device": device, "pic": pic, "date": date,
-         "total": len(group), **counts}
+         "total": _counted_total(counts), **counts}
         for (file_name, device, pic, date), group, counts in _group_counts(cases, key_fn)
     ]
 
@@ -106,7 +141,7 @@ def productivity_rows(cases):
         counts = {key: 0 for key in executed_keys}
         days = set()
         for c in group:
-            key = STATUS.classify(c.result)
+            key = STATUS.classify_case(c)
             if key in counts:
                 counts[key] += 1
                 days.add(c.test_date)
@@ -134,7 +169,7 @@ def issue_rows(cases):
     wanted = set(STATUS.issue)
     rows = []
     for c in cases:
-        status = STATUS.classify(c.result)
+        status = STATUS.classify_case(c)
         if status not in wanted:
             continue
         rows.append({

@@ -127,7 +127,11 @@ body {
 
 .field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
-.field > label {
+/* A group of toggles has no single control to point at, so it is captioned by a
+   `<span class="label">` wired up with aria-labelledby rather than a `<label>`.
+   Both get the same treatment: the caption above a field looks the same
+   whichever element carries it. */
+.field > label, .field > .label {
     color: var(--ink-soft);
     font-size: var(--fs-xs);
 }
@@ -165,13 +169,6 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
     border-bottom: 1px solid var(--rule);
 }
 
-.toolbar--inline {
-    position: static;       /* belongs to its section, not to the viewport */
-    padding-left: 0;
-    padding-right: 0;
-    border-bottom: 0;
-}
-
 .toolbar-end { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
 
 /* A row that opens a case elsewhere. */
@@ -200,6 +197,54 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
     color: var(--ink-soft); cursor: pointer; font: inherit; line-height: 1;
 }
 .chip button:hover { color: var(--ink); }
+
+/* --- toggle group --------------------------------------------------------- */
+/* Several results at once is the normal question on the Detail tab, so Result
+   is a row of toggles rather than a select. Built like `.tabs`: hairline-ruled
+   cells, and the chosen one is an inverted ink block — selection is never a
+   hue here, because on this screen a hue always means a status. */
+
+.toggles {
+    display: flex;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+}
+
+.toggle {
+    appearance: none;
+    border: 0;
+    padding: var(--sp-1) var(--sp-3);
+    background: var(--paper);
+    color: var(--tone-neutral);
+    font: inherit;
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+/* Unpressed, a toggle carries its status' tone: the reader is picking results,
+   so the words should look like the badges and columns they will filter to. */
+.toggle[data-tone="success"] { color: var(--tone-success); }
+.toggle[data-tone="danger"]  { color: var(--tone-danger); }
+.toggle[data-tone="warn"]    { color: var(--tone-warn); }
+.toggle[data-tone="neutral"] { color: var(--tone-neutral); }
+.toggle[data-tone="muted"]   { color: var(--tone-muted); }
+
+.toggle:hover { background: var(--paper-hover); }
+
+.toggle[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--ink-invert);
+}
+
+/* --- summary scope blocks ------------------------------------------------- */
+/* One table per scope group. The gap is what separates them; they are not
+   boxed, because the ledger is ruled and never framed. */
+
+.scope-block + .scope-block { margin-top: var(--sp-6); }
+
+.empty-note { color: var(--ink-soft); font-size: var(--fs-sm); padding: var(--sp-5) 0; }
 
 /* --- the ledger ----------------------------------------------------------- */
 
@@ -299,6 +344,11 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 }
 .ledger tbody tr:hover .band { background: var(--paper-hover); }
 .ledger .band--first { border-left: 1px solid var(--rule-strong); }
+
+/* A column that is shown but sits outside the Total — Out Of Scope. The dashed
+   rule is the whole point: a reader adding the band up by eye has to be able to
+   see where the sum stops, or the row looks like it simply fails to add up. */
+.ledger .band--aside { border-left: 1px dashed var(--rule-strong); }
 
 /* A fixed width is only achievable if the long bilingual labels may wrap. */
 .ledger th.band { white-space: normal; vertical-align: middle; }

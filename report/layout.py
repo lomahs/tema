@@ -174,7 +174,11 @@ def _parse_column(col, where: str, dataset: str, known: list[str], status_set) -
                 f"{where} cannot expand statuses on dataset '{dataset}': "
                 f"its rows are individual cases, not status buckets"
             )
-        return [Column(key, is_status=True) for key in status_set.keys]
+        # `counted`, not `keys`: a status the taxonomy excludes from the total
+        # gets no report column, which keeps the sheet's status columns adding
+        # up to its `total` and keeps the workbook's width unchanged when the
+        # taxonomy grows an excluded status.
+        return [Column(key, is_status=True) for key in status_set.counted]
 
     field = col["field"]
     if field not in known:

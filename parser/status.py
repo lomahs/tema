@@ -55,6 +55,23 @@ def _default_tone(badge: str) -> str:
     return DEFAULT_TONE
 
 
+#: Conditions a derived status may be gated on. A derived status is not reached
+#: by matching the Result cell at all: it is the status its source becomes once
+#: something *else* about the case is true. Out Of Scope is the shipped example
+#: — a case marked Cancel that names no PIC was never in the plan to begin with.
+#: Keep this table small; each entry is a promise the config file can rely on.
+DERIVE_CONDITIONS = {
+    "no_pic": lambda case: not case.pic,
+}
+
+
+@dataclass(frozen=True)
+class Derivation:
+    """The rule turning one status key into another when a condition holds."""
+    key: str
+    when: str
+
+
 @dataclass(frozen=True)
 class Status:
     key: str
@@ -73,7 +90,8 @@ class StatusSet:
 
     def __init__(self, statuses: list[Status], lookup: dict[str, str],
                  empty_key: str, fallback_key: str, needs_reason: list[str],
-                 executed: list[str], issue: list[str]):
+                 executed: list[str], issue: list[str], excluded: list[str],
+                 derived: dict[str, "Derivation"], review: list[str]):
         self.statuses = statuses
         self.keys = [s.key for s in statuses]
         self.needs_reason = needs_reason
@@ -84,9 +102,24 @@ class StatusSet:
         #: Issues sheet lists exactly these, so "which results are problems" is
         #: answered by the config rather than by a hard-coded list of keys.
         self.issue = issue
+        #: Statuses that sit outside the plan, in taxonomy order. They still get
+        #: a column so the count is visible, but they are left out of a group's
+        #: `total` — an out-of-scope case must not inflate the denominator that
+        #: progress is read against.
+        self.excluded = excluded
+        #: The complement of `excluded`. This — not `keys` — is what a row's
+        #: `total` sums over and what the report expands into columns, which is
+        #: why the report's status columns still add up to its total.
+        self.counted = [key for key in self.keys if key not in set(excluded)]
+        #: Statuses whose cases the Detail view lists, in taxonomy order —
+        #: everything that is not a clean pass, not unstarted and not outside
+        #: the plan. Detail exists to work through these, so a case that needs
+        #: nobody's attention would only be noise there.
+        self.review = review
         self._lookup = lookup
         self._empty_key = empty_key
         self._fallback_key = fallback_key
+        self._derived = derived
 
     @classmethod
     def load(cls, path: str = DEFAULT_CONFIG_PATH) -> "StatusSet":
@@ -103,6 +136,9 @@ class StatusSet:
         statuses: list[Status] = []
         lookup: dict[str, str] = {}
         empty_keys, fallback_keys, executed_keys, issue_keys = [], [], [], []
+        excluded_keys: list[str] = []
+        review_keys: list[str] = []
+        derive_specs: list[tuple[str, str, str]] = []
 
         for i, entry in enumerate(entries):
             if not isinstance(entry, dict):
@@ -155,6 +191,30 @@ class StatusSet:
                 executed_keys.append(key)
             if entry.get("issue"):
                 issue_keys.append(key)
+            if entry.get("excluded"):
+                excluded_keys.append(key)
+            if entry.get("review"):
+                review_keys.append(key)
+
+            derive = entry.get("derive")
+            if derive is not None:
+                if not isinstance(derive, dict):
+                    raise ValueError(f"{source}: status '{key}' has a 'derive' that is not an object")
+                if entry.get("match") or entry.get("empty") or entry.get("fallback"):
+                    raise ValueError(
+                        f"{source}: derived status '{key}' cannot also set 'match', 'empty' "
+                        f"or 'fallback' — it is never read off a result cell"
+                    )
+                when = derive.get("when")
+                if when not in DERIVE_CONDITIONS:
+                    raise ValueError(
+                        f"{source}: status '{key}' derives on unknown condition {when!r}; "
+                        f"expected one of {', '.join(sorted(DERIVE_CONDITIONS))}"
+                    )
+                origin = derive.get("from")
+                if not isinstance(origin, str) or not origin.strip():
+                    raise ValueError(f"{source}: derived status '{key}' needs a 'from' status key")
+                derive_specs.append((key, origin.strip(), when))
 
         if len(empty_keys) != 1:
             raise ValueError(
@@ -165,16 +225,50 @@ class StatusSet:
                 f"{source}: exactly one status must set \"fallback\": true, got {fallback_keys}"
             )
 
+        known = {s.key for s in statuses}
+
+        # Keyed by *source*, because that is the direction `classify_case` looks
+        # the rule up: it has a classified key in hand and asks what that key
+        # becomes. Chaining is refused so the lookup stays one step, not a walk.
+        derived: dict[str, Derivation] = {}
+        derived_keys = {key for key, _, _ in derive_specs}
+        for key, origin, when in derive_specs:
+            if origin not in known:
+                raise ValueError(f"{source}: status '{key}' derives from unknown status '{origin}'")
+            if origin in derived_keys:
+                raise ValueError(
+                    f"{source}: status '{key}' derives from '{origin}', which is itself derived; "
+                    f"a status may only be one step away from a result"
+                )
+            if origin in derived:
+                raise ValueError(
+                    f"{source}: statuses '{derived[origin].key}' and '{key}' both derive from '{origin}'"
+                )
+            derived[origin] = Derivation(key=key, when=when)
+
         needs_reason = raw.get("needs_reason") or []
         if not isinstance(needs_reason, list):
             raise ValueError(f"{source}: 'needs_reason' must be a list of status keys")
-        known = {s.key for s in statuses}
         unknown = [k for k in needs_reason if k not in known]
         if unknown:
             raise ValueError(f"{source}: 'needs_reason' names unknown status(es) {unknown}")
+        excluded_in_reason = [k for k in needs_reason if k in set(excluded_keys)]
+        if excluded_in_reason:
+            raise ValueError(
+                f"{source}: 'needs_reason' names excluded status(es) {excluded_in_reason}; "
+                f"a case outside the plan owes nobody an explanation"
+            )
+
+        excluded_in_review = [k for k in review_keys if k in set(excluded_keys)]
+        if excluded_in_review:
+            raise ValueError(
+                f"{source}: status(es) {excluded_in_review} are both 'excluded' and 'review'; "
+                f"a case outside the plan is not work to review"
+            )
 
         return cls(statuses, lookup, empty_keys[0], fallback_keys[0],
-                   list(needs_reason), executed_keys, issue_keys)
+                   list(needs_reason), executed_keys, issue_keys, excluded_keys, derived,
+                   review_keys)
 
     def classify(self, result) -> str:
         """Map a raw result cell onto a status key."""
@@ -184,6 +278,25 @@ class StatusSet:
         if not text:
             return self._empty_key
         return self._lookup.get(text.casefold(), self._fallback_key)
+
+    def classify_case(self, case) -> str:
+        """Map a whole case onto a status key.
+
+        `classify` only ever sees the Result cell, which is not enough for every
+        status: Out Of Scope is a Cancel that names no PIC, so the same result
+        text lands in different buckets depending on the rest of the row. This
+        is therefore the function the aggregates call — `classify` remains the
+        pure result-string mapping the sample generator and the config need.
+        """
+        key = self.classify(case.result)
+        rule = self._derived.get(key)
+        if rule and DERIVE_CONDITIONS[rule.when](case):
+            return rule.key
+        return key
+
+    def has_derivation(self, key: str) -> bool:
+        """Whether a case classified as `key` can still turn into another status."""
+        return key in self._derived
 
     def zero_counts(self) -> dict[str, int]:
         """A counts dict with every status key present, so totals always reconcile."""
@@ -195,6 +308,8 @@ class StatusSet:
             "needs_reason": list(self.needs_reason),
             "executed": list(self.executed),
             "issue": list(self.issue),
+            "excluded": list(self.excluded),
+            "review": list(self.review),
         }
 
 

@@ -12,10 +12,10 @@ import { closeDrawer, initSetupDrawer, setSourceSummary } from "./setupDrawer.js
 import { initSourcePanel } from "./sourcePanel.js";
 import { initReportPanel, setReportEnabled } from "./reportPanel.js";
 import { renderStatCards, setTaxonomy } from "./taxonomy.js";
-import { initSummaryView, renderSummary, renderSummaryHead } from "./views/summary.js";
+import { renderSummary } from "./views/summary.js";
 import { initDaily, initDailyView, renderDailyHead } from "./views/daily.js";
 import { initProductivity, renderProductivityHead } from "./views/productivity.js";
-import { initDetail, initDetailView, renderDetailHead, showCase } from "./views/detail.js";
+import { initDetail, initDetailView, renderDetailHead, renderResultToggles } from "./views/detail.js";
 
 const VIEWS = ["summary", "daily", "detail"];
 
@@ -41,8 +41,10 @@ function initViewTabs() {
  * Pull every endpoint and redraw all three views.
  *
  * Order matters: the taxonomy defines the status columns, so it is applied
- * before the stat cards and the four generated table headers, and the headers
- * are built before the bodies that fill them.
+ * before the stat cards and the generated table headers, and the headers are
+ * built before the bodies that fill them. Summary is the exception — it draws
+ * one table per scope group, so it cannot know its headers until it has the
+ * data, and `renderSummary` builds both together.
  *
  * @param {Object} loadResult The `/api/load` or `/api/reload` response.
  */
@@ -51,10 +53,10 @@ async function refreshViews(loadResult) {
 
     setTaxonomy(taxonomy);
     renderStatCards();
-    renderSummaryHead();
     renderDailyHead();
     renderProductivityHead();
     renderDetailHead();
+    renderResultToggles();
 
     initDetail(cases);
     renderSummary(summary);
@@ -71,25 +73,11 @@ async function refreshViews(loadResult) {
     closeDrawer();
 }
 
-/**
- * Open one case in the detail view.
- *
- * Passed to the summary view as a callback rather than imported by it, so
- * `views/summary.js` keeps knowing nothing about `views/detail.js`.
- *
- * @param {Object} c A missing-reason case.
- */
-function jumpToCase(c) {
-    showView("detail");
-    showCase(c);
-}
-
 initTheme();
 onThemeChange(refreshChartTheme);
 initSetupDrawer();
 initSourcePanel({ onLoaded: refreshViews });
 initReportPanel();
-initSummaryView({ onJumpToCase: jumpToCase });
 initDetailView();
 initDailyView();
 initViewTabs();

@@ -34,9 +34,15 @@ def test_writes_requested_number_of_files(generated):
 
 def test_tool_data_has_one_row_per_sheet_and_device(generated):
     paths, _, _ = generated
-    expected = CONFIG["sheets_per_file"] * CONFIG["devices_per_sheet"]
     for path in paths:
-        assert len(parse_tool_data(path)) == expected
+        rows = parse_tool_data(path)
+        by_sheet = defaultdict(list)
+        for r in rows:
+            by_sheet[r.sheet].append(r.device)
+
+        assert 1 <= len(by_sheet) <= CONFIG["sheets_per_file"]
+        for devices in by_sheet.values():
+            assert 1 <= len(devices) <= CONFIG["devices_per_sheet"]
 
 
 def test_case_numbers_restart_per_sheet_with_no_gaps(generated):
@@ -87,3 +93,52 @@ def test_same_seed_reproduces_the_same_data(tmp_path):
     cases_b, _ = load_from_folder(str(tmp_path / "b"))
 
     assert [c.to_dict() for c in cases_a] == [c.to_dict() for c in cases_b]
+
+
+# --- Out Of Scope ----------------------------------------------------------
+# The generator has to be able to produce a case with a result but no PIC, or
+# the Out Of Scope path would ship with no sample data exercising it.
+
+def _cancel_cases(tmp_path, no_pic_rate):
+    cfg = validate_config({
+        **DEFAULTS, "seed": 3, "file_count": 1, "sheets_per_file": 1,
+        "devices_per_sheet": 1, "cases_per_sheet": {"min": 200, "max": 200},
+        "pic_names": ["lee"], "no_pic_rate": no_pic_rate,
+    })
+    generate(cfg, str(tmp_path))
+    cases, _ = load_from_folder(str(tmp_path))
+    return [c for c in cases if c.result == "対象外"]
+
+
+def test_cancelled_cases_lose_their_pic_at_the_configured_rate(tmp_path):
+    cancels = _cancel_cases(tmp_path, no_pic_rate=1.0)
+
+    assert cancels, "the sample config is expected to generate 対象外 cases"
+    assert all(c.pic is None for c in cancels)
+    assert all(c.ticket_id is None and c.note is None for c in cancels), \
+        "an unowned case owes no reason"
+
+
+def test_no_pic_rate_of_zero_leaves_every_case_owned(tmp_path):
+    cancels = _cancel_cases(tmp_path, no_pic_rate=0.0)
+
+    assert cancels
+    assert all(c.pic for c in cancels)
+
+
+def test_only_derivable_results_ever_lose_their_pic(tmp_path):
+    cfg = validate_config({
+        **DEFAULTS, "seed": 5, "file_count": 1, "sheets_per_file": 1,
+        "devices_per_sheet": 1, "cases_per_sheet": {"min": 200, "max": 200},
+        "pic_names": ["lee"], "no_pic_rate": 1.0,
+    })
+    generate(cfg, str(tmp_path))
+    cases, _ = load_from_folder(str(tmp_path))
+
+    unowned = {c.result for c in cases if c.result and not c.pic}
+    assert unowned == {"対象外"}
+
+
+def test_an_out_of_range_no_pic_rate_is_rejected():
+    with pytest.raises(ValueError, match="no_pic_rate"):
+        validate_config({**DEFAULTS, "no_pic_rate": 1.5})

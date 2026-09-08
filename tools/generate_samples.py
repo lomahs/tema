@@ -52,6 +52,7 @@ DEFAULTS = {
     "scopes": ["FPT", "FPT (JM Support)", "JP"],
     "result_weights": {"OK": 50, "NG": 12, "NG-OK": 8, "保留": 5, "対象外": 5, "": 20},
     "missing_reason_rate": 0.25,
+    "no_pic_rate": 0.3,
     "group_row_rate": 0.1,
     "date_range": ["2026-08-01", "2026-08-31"],
 }
@@ -115,7 +116,7 @@ def validate_config(cfg: dict) -> dict:
     if not weights or sum(weights.values()) <= 0:
         raise ValueError("'result_weights' must have at least one positive weight")
 
-    for key in ("missing_reason_rate", "group_row_rate"):
+    for key in ("missing_reason_rate", "group_row_rate", "no_pic_rate"):
         rate = float(cfg[key])
         if not 0.0 <= rate <= 1.0:
             raise ValueError(f"'{key}' must be between 0 and 1, got {rate}")
@@ -157,10 +158,20 @@ def _device_cells(rng: random.Random, cfg: dict) -> list:
         return [None] * BLOCK_WIDTH
 
     test_date = _random_date(rng, cfg["date_range"])
+
+    # The PIC is decided first, because for some results it is the PIC that
+    # decides the status: a case the taxonomy can still derive from — Cancel is
+    # the shipped one — becomes Out Of Scope once nobody owns it. Asking
+    # `has_derivation` rather than testing for 対象外 keeps this generator from
+    # knowing any status key, the same way the rest of the app does not.
     pic = rng.choice(cfg["pic_names"])
+    if STATUS.has_derivation(STATUS.classify(result)) and rng.random() < cfg["no_pic_rate"]:
+        pic = None
 
     ticket_id = note = None
-    if _needs_reason(result) and rng.random() >= cfg["missing_reason_rate"]:
+    # An unowned case owes no reason, so it gets neither a ticket nor a note —
+    # otherwise the generated data would never exercise the case the rule is for.
+    if pic and _needs_reason(result) and rng.random() >= cfg["missing_reason_rate"]:
         if rng.random() < 0.7:
             ticket_id = f"BUG-{rng.randrange(1000, 9999)}"
         else:
@@ -208,20 +219,32 @@ def build_sheet(wb: Workbook, sheet_name: str, devices: list[str],
     return row - 1
 
 
-def build_workbook(cfg: dict, rng: random.Random) -> tuple[Workbook, int]:
-    """Build one workbook. Returns (workbook, total data rows across sheets)."""
+def build_workbook(cfg: dict, rng: random.Random) -> tuple[Workbook, int, int, int]:
+    """Build one workbook.
+
+    `sheets_per_file` and `devices_per_sheet` are upper bounds: the actual
+    sheet count is drawn once per file, and the device count is drawn again
+    for each sheet, both uniformly from 1 to the configured value.
+
+    Returns:
+        (workbook, total data rows across sheets, sheet count, total device blocks).
+    """
     wb = Workbook()
     tool_data = wb.active
     tool_data.title = TOOL_DATA_SHEET
     tool_data.append(TOOL_DATA_COLUMNS)
 
-    sheet_names = _unique_names(cfg["sheet_names"], cfg["sheets_per_file"])
-    devices = _unique_names(cfg["device_names"], cfg["devices_per_sheet"])
+    sheet_count = rng.randint(1, cfg["sheets_per_file"])
+    sheet_names = _unique_names(cfg["sheet_names"], sheet_count)
 
     total_rows = 0
+    total_devices = 0
     for sheet_name in sheet_names:
+        device_count = rng.randint(1, cfg["devices_per_sheet"])
+        devices = _unique_names(cfg["device_names"], device_count)
         end_row = build_sheet(wb, sheet_name, devices, rng, cfg)
         total_rows += end_row - DATA_START_ROW + 1
+        total_devices += device_count
         for i, device in enumerate(devices):
             col = _block_start_col(i)
             tool_data.append([
@@ -229,7 +252,7 @@ def build_workbook(cfg: dict, rng: random.Random) -> tuple[Workbook, int]:
                 "A", "B",
                 *(get_column_letter(col + j) for j in range(BLOCK_WIDTH)),
             ])
-    return wb, total_rows
+    return wb, total_rows, sheet_count, total_devices
 
 
 def generate(cfg: dict, out_dir: str) -> list[str]:
@@ -247,13 +270,13 @@ def generate(cfg: dict, out_dir: str) -> list[str]:
 
     paths = []
     for index in range(1, cfg["file_count"] + 1):
-        wb, total_rows = build_workbook(cfg, rng)
+        wb, total_rows, sheet_count, total_devices = build_workbook(cfg, rng)
         name = f"{cfg['file_prefix']}_{index:0{width}d}.xlsx"
         path = os.path.join(out_dir, name)
         wb.save(path)
         paths.append(path)
-        log.info("%s  %d sheet(s), %d device(s), %d row(s) x device",
-                 name, cfg["sheets_per_file"], cfg["devices_per_sheet"], total_rows)
+        log.info("%s  %d sheet(s), %d device block(s), %d row(s) x device",
+                 name, sheet_count, total_devices, total_rows)
     return paths
 
 

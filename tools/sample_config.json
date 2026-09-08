@@ -1,24 +1,24 @@
 {
-  "seed": 42,
-  "file_count": 3,
+  "seed": null,
+  "file_count": 10,
   "sheets_per_file": 3,
-  "devices_per_sheet": 2,
-  "cases_per_sheet": { "min": 20, "max": 40 },
-  "pic_names": ["lee", "kim", "tanaka", "minh", "baro"],
-
+  "devices_per_sheet": 3,
+  "cases_per_sheet": { "min": 20, "max": 2000 },
+  "pic_names": ["Bao", "Tuan", "Nguyet", "Hieu"],
   "file_prefix": "TC_Sample",
   "sheet_names": ["Login", "Payment", "Search", "Settings", "Profile", "Sync"],
-  "device_names": ["iPhone", "iPad", "Android", "TabletA"],
+  "device_names": ["iPhone", "iPad"],
   "scopes": ["FPT", "FPT (JM Support)", "JP"],
   "result_weights": {
-    "OK": 50,
-    "NG": 12,
-    "NG-OK": 8,
-    "保留": 5,
-    "対象外": 5,
-    "": 20
+    "OK": 100,
+    "NG": 1,
+    "NG-OK": 5,
+    "保留": 2,
+    "対象外": 3,
+    "": 30
   },
-  "missing_reason_rate": 0.25,
+  "missing_reason_rate": 0.1,
+  "no_pic_rate": 0.3,
   "group_row_rate": 0.1,
-  "date_range": ["2026-08-01", "2026-08-31"]
+  "date_range": ["2026-09-05", "2026-09-08"]
 }
