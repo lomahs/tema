@@ -27,6 +27,14 @@ REPORT_LAYOUT_CONFIG = os.environ.get(
     os.path.join(_HERE, "report", "report_layout.json"),
 )
 
+# The labels TOOL_DATA detection looks for when reading a sheet's layout. Point
+# at your own file if your test case sheets are headed differently ("Status"
+# rather than "結果", and so on).
+SHEET_LABELS_CONFIG = os.environ.get(
+    "SHEET_LABELS_CONFIG",
+    os.path.join(_HERE, "parser", "sheet_labels.json"),
+)
+
 # --- Microsoft Graph -------------------------------------------------------
 # Publishing the report needs an Azure app registration with "Allow public
 # client flows" enabled; see README.md. Without a client id the SharePoint

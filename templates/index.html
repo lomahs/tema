@@ -232,6 +232,38 @@
         </div>
     </section>
 
+    <section id="prepareSection" hidden>
+        <h3>Prepare the workbooks</h3>
+        <p class="section-note">
+            Acts on the source files themselves. Every button shows what it would do first;
+            nothing is written until you press Apply.
+        </p>
+        <div class="stack">
+            <div class="field">
+                <span class="label">Keep these results when clearing</span>
+                <div class="checks" id="keepStatuses"></div>
+            </div>
+            <div class="row">
+                <button id="btnDetectAll" type="button" class="btn">Check TOOL_DATA in all</button>
+                <button id="btnClearAll" type="button" class="btn">Clear results in all</button>
+            </div>
+            <div class="scroll-x" id="prepareFilesWrapper">
+                <table class="ledger">
+                    <thead><tr>
+                        <th>File</th><th>TOOL_DATA</th><th>Actions</th>
+                    </tr></thead>
+                    <tbody id="prepareFilesBody"></tbody>
+                </table>
+            </div>
+            <div class="status-line" id="prepareStatus"></div>
+            <div class="preview" id="preparePreview" hidden></div>
+            <div class="row" id="prepareApplyRow" hidden>
+                <button id="btnPrepareApply" type="button" class="btn btn-primary">Apply</button>
+                <button id="btnPrepareCancel" type="button" class="btn btn-quiet">Discard</button>
+            </div>
+        </div>
+    </section>
+
     <section>
         <h3>Where the report goes</h3>
         <div class="stack">

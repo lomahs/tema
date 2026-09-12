@@ -26,13 +26,22 @@ def config_row(sheet, device, start_row, end_row, cols=DEFAULT_COLS, **overrides
 
 
 def write_workbook(path, tool_data, cells):
-    """Build an .xlsx. `cells` maps sheet name -> {(row, "A"): value}."""
+    """Build an .xlsx. `cells` maps sheet name -> {(row, "A"): value}.
+
+    `tool_data=None` builds a workbook with no TOOL_DATA sheet at all — the
+    state a real test case workbook arrives in before anyone has described its
+    layout, and the one `prepare.tool_data` exists to fix.
+    """
     wb = Workbook()
-    td = wb.active
-    td.title = TOOL_DATA_SHEET
-    td.append(TOOL_DATA_COLUMNS)
-    for row in tool_data:
-        td.append([row.get(name) for name in TOOL_DATA_COLUMNS])
+    default = wb.active
+    if tool_data is None:
+        wb.remove(default)
+    else:
+        td = default
+        td.title = TOOL_DATA_SHEET
+        td.append(TOOL_DATA_COLUMNS)
+        for row in tool_data:
+            td.append([row.get(name) for name in TOOL_DATA_COLUMNS])
 
     for sheet_name, sheet_cells in cells.items():
         ws = wb.create_sheet(sheet_name)

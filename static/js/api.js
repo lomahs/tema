@@ -84,6 +84,67 @@ export async function fetchAll() {
 }
 
 /**
+ * The result taxonomy on its own.
+ *
+ * `fetchAll` also pulls it, but the prepare panel needs its status keys before
+ * anything has been loaded — the drawer opens on an empty app.
+ *
+ * @returns {Promise<Object>} The `/api/statuses` body.
+ */
+export async function getStatuses() {
+    const res = await fetch("/api/statuses");
+    return res.json();
+}
+
+/**
+ * The loaded source's workbooks, and whether each already describes itself.
+ * @returns {Promise<ApiResponse>} On success `json` is `{files: [{file, path,
+ *   has_tool_data, blocks, error?}]}`; on failure `{error}`.
+ */
+export async function getPrepareFiles() {
+    const res = await fetch("/api/prepare/files");
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * Detect the TOOL_DATA layout of each workbook, and optionally write it in.
+ *
+ * Previews unless `apply` is true — a workbook that already has a TOOL_DATA
+ * sheet comes back with a `diff` rather than a silent overwrite.
+ *
+ * @param {string[]} files Server-side paths, as `getPrepareFiles` reported them.
+ * @param {boolean} [apply] Write the detected sheet into the workbooks.
+ * @returns {Promise<ApiResponse>} On success `json` is `{results: [{file, path,
+ *   detected, unresolved, diff, written, error?}]}`; on failure `{error}`.
+ */
+export async function postPrepareToolData(files, apply = false) {
+    const res = await fetch("/api/prepare/tool-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ files, apply }),
+    });
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * Plan — or carry out — emptying each workbook's result cells.
+ *
+ * @param {string[]} files Server-side paths.
+ * @param {string[]} keep Status keys to carry into the next round.
+ * @param {boolean} [apply] Blank the planned cells instead of only reporting them.
+ * @returns {Promise<ApiResponse>} On success `json` is `{results: [{file, path,
+ *   plan, applied, error?}]}`; on failure `{error}`.
+ */
+export async function postPrepareClear(files, keep, apply = false) {
+    const res = await fetch("/api/prepare/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ files, keep, apply }),
+    });
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
  * Who is signed in to SharePoint, or how far a device login has got.
  * @returns {Promise<{state: string, account: ?string, user_code?: string,
  *   verification_uri?: string, error?: string}>} `state` is one of

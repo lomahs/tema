@@ -3,6 +3,24 @@ from dataclasses import dataclass, asdict
 from typing import Optional
 
 
+#: `TestCase` field -> the `SheetConfig` attribute holding its column letter.
+#:
+#: The two dataclasses below are two halves of one idea — where a value lives,
+#: and the value once read — so the mapping between them belongs here rather
+#: than in each module that walks a sheet. Both the reader and `prepare.clear`
+#: read rows by it, and reading a row two different ways is how a case ends up
+#: classified two different ways.
+CASE_COLUMNS = (
+    ("case_no", "test_no_col"),
+    ("scope", "scope_col"),
+    ("result", "result_col"),
+    ("test_date", "test_date_col"),
+    ("pic", "pic_col"),
+    ("ticket_id", "ticket_id_col"),
+    ("note", "note_col"),
+)
+
+
 @dataclass
 class SheetConfig:
     """One row of a workbook's TOOL_DATA sheet.
@@ -36,6 +54,10 @@ class SheetConfig:
     pic_col: str
     ticket_id_col: str
     note_col: str
+
+    def to_dict(self):
+        """Plain dict of every field, for JSON serialisation."""
+        return asdict(self)
 
 
 @dataclass

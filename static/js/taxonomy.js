@@ -150,15 +150,6 @@ export function isExcluded(key) {
     return excluded.has(key);
 }
 
-/**
- * How many of `counts` fall in statuses left out of the total.
- * @param {Object<string, number>} counts Keyed by status key.
- * @returns {number}
- */
-export function excludedTotal(counts) {
-    return statuses.reduce(
-        (n, s) => n + (excluded.has(s.key) ? (counts[s.key] || 0) : 0), 0);
-}
 
 /**
  * Sum `total` plus one column per status across a set of rows.

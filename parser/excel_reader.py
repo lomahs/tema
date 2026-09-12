@@ -8,7 +8,7 @@ from datetime import date, datetime
 import pandas as pd
 from openpyxl.utils import column_index_from_string
 
-from parser.models import SheetConfig, TestCase
+from parser.models import CASE_COLUMNS, SheetConfig, TestCase
 
 log = logging.getLogger(__name__)
 
@@ -31,17 +31,6 @@ LOCK_FILE_PREFIX = "~$"
 # Excel columns holding a date, but typed as text, come through as
 # "2026-08-01 00:00:00". Only applied to the test_date field.
 _MIDNIGHT_SUFFIX = re.compile(r"[ T]00:00:00(\.0+)?$")
-
-_COLUMN_FIELDS = [
-    ("case_no", "test_no_col"),
-    ("scope", "scope_col"),
-    ("result", "result_col"),
-    ("test_date", "test_date_col"),
-    ("pic", "pic_col"),
-    ("ticket_id", "ticket_id_col"),
-    ("note", "note_col"),
-]
-
 
 def _cell_text(row, name: str) -> str:
     """A TOOL_DATA cell as trimmed text. Blank cells arrive as NaN, which is
@@ -100,7 +89,7 @@ def _parse_config_row(row, excel_row: int) -> SheetConfig:
         device=_cell_text(row, "device"),
         start_row=start_row,
         end_row=end_row,
-        **{name: _require_column(row, name, excel_row) for _, name in _COLUMN_FIELDS},
+        **{name: _require_column(row, name, excel_row) for _, name in CASE_COLUMNS},
     )
 
 
@@ -162,9 +151,9 @@ def read_test_cases(df: pd.DataFrame, config: SheetConfig, file_name: str) -> li
     log.info("[%s] Reading sheet '%s' for device '%s' (rows %d-%d)",
              file_name, config.sheet, config.device, config.start_row, config.end_row)
 
-    col_map = {field: _col_idx(getattr(config, attr)) for field, attr in _COLUMN_FIELDS}
+    col_map = {field: _col_idx(getattr(config, attr)) for field, attr in CASE_COLUMNS}
     width = df.shape[1]
-    missing = [attr for field, attr in _COLUMN_FIELDS if col_map[field] >= width]
+    missing = [attr for field, attr in CASE_COLUMNS if col_map[field] >= width]
     if missing:
         log.warning("[%s] Sheet '%s' has only %d column(s); %s out of range",
                     file_name, config.sheet, width, ", ".join(missing))
@@ -235,6 +224,18 @@ def load_file(file_path: str) -> list[TestCase]:
     return cases
 
 
+def find_workbooks(folder_path: str) -> list[str]:
+    """Every .xlsx under `folder_path`, recursively, in a stable order.
+
+    Excel lock files (``~$name.xlsx``, left behind by an open workbook) are
+    left out. This is the one definition of "the workbooks in this folder" —
+    loading, the prepare endpoints and the CLIs all resolve a folder through
+    it, so a file one of them acts on is always one the others can see.
+    """
+    paths = sorted(glob.glob(os.path.join(folder_path, "**", "*.xlsx"), recursive=True))
+    return [p for p in paths if not os.path.basename(p).startswith(LOCK_FILE_PREFIX)]
+
+
 def load_files(file_paths: list[str]) -> tuple[list[TestCase], list[dict]]:
     """Load every path, isolating failures so one bad file doesn't sink the rest.
 
@@ -270,8 +271,7 @@ def load_from_folder(folder_path: str) -> tuple[list[TestCase], list[dict]]:
     Returns:
         `(cases, file_results)` — see `load_files` for the per-file result shape.
     """
-    pattern = os.path.join(folder_path, "**", "*.xlsx")
-    files = sorted(glob.glob(pattern, recursive=True))
+    files = find_workbooks(folder_path)
     log.info("Scanning folder '%s' (recursive): found %d .xlsx file(s)", folder_path, len(files))
     all_cases, file_results = load_files(files)
     log.info("Folder done: %d case(s) from %d file(s)", len(all_cases), len(file_results))

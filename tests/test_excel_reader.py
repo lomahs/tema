@@ -3,7 +3,10 @@ from datetime import datetime
 
 import pytest
 
-from parser.excel_reader import load_file, load_from_files, load_from_folder
+from parser.excel_reader import (
+    find_workbooks, load_file, load_from_files, load_from_folder,
+)
+from parser.models import SheetConfig
 from tests.conftest import config_row, write_workbook
 
 # One device block in A-G, a second in A,B + H-L.
@@ -170,3 +173,48 @@ def test_columns_beyond_the_sheet_width_read_as_none(make_workbook):
     case = load_file(path)[0]
     assert (case.ticket_id, case.note) == (None, None)
     assert case.result == "OK"
+
+
+# --- finding workbooks -----------------------------------------------------
+#
+# One definition of "every workbook under here", shared by loading, the prepare
+# endpoints and the CLIs — four places that each used to glob for themselves.
+
+def test_find_workbooks_lists_xlsx_files_in_order(tmp_path):
+    for name in ("b.xlsx", "a.xlsx"):
+        write_workbook(tmp_path / name, [config_row("Login", "iPhone", 4, 4)], {})
+
+    assert [os.path.basename(p) for p in find_workbooks(str(tmp_path))] == ["a.xlsx", "b.xlsx"]
+
+
+def test_find_workbooks_recurses_into_subfolders(tmp_path):
+    nested = tmp_path / "round2"
+    nested.mkdir()
+    write_workbook(nested / "deep.xlsx", [config_row("Login", "iPhone", 4, 4)], {})
+
+    assert [os.path.basename(p) for p in find_workbooks(str(tmp_path))] == ["deep.xlsx"]
+
+
+def test_find_workbooks_skips_excel_lock_files(tmp_path):
+    write_workbook(tmp_path / "TC.xlsx", [config_row("Login", "iPhone", 4, 4)], {})
+    write_workbook(tmp_path / "~$TC.xlsx", [config_row("Login", "iPhone", 4, 4)], {})
+
+    assert [os.path.basename(p) for p in find_workbooks(str(tmp_path))] == ["TC.xlsx"]
+
+
+def test_find_workbooks_ignores_files_that_are_not_workbooks(tmp_path):
+    write_workbook(tmp_path / "TC.xlsx", [config_row("Login", "iPhone", 4, 4)], {})
+    (tmp_path / "notes.txt").write_text("not a workbook")
+
+    assert [os.path.basename(p) for p in find_workbooks(str(tmp_path))] == ["TC.xlsx"]
+
+
+def test_sheet_config_round_trips_through_to_dict():
+    """The endpoints serialise configs; hand-listing 11 fields invites drift."""
+    cfg = SheetConfig(**config_row("Login", "iPhone", 4, 8, cols="A B C D E F G"))
+
+    assert cfg.to_dict() == {
+        "sheet": "Login", "device": "iPhone", "start_row": 4, "end_row": 8,
+        "test_no_col": "A", "scope_col": "B", "result_col": "C",
+        "test_date_col": "D", "pic_col": "E", "ticket_id_col": "F", "note_col": "G",
+    }

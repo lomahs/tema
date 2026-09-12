@@ -5,12 +5,13 @@
  * parsed and the Chart.js global is available before anything here executes.
  */
 import { $, $$ } from "./dom.js";
-import { fetchAll } from "./api.js";
+import { fetchAll, postReload } from "./api.js";
 import { refreshChartTheme, resizeCharts } from "./charts.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import { closeDrawer, initSetupDrawer, setSourceSummary } from "./setupDrawer.js";
 import { initSourcePanel } from "./sourcePanel.js";
 import { initReportPanel, setReportEnabled } from "./reportPanel.js";
+import { initPreparePanel, refreshPrepare } from "./preparePanel.js";
 import { renderStatCards, setTaxonomy } from "./taxonomy.js";
 import { renderSummary } from "./views/summary.js";
 import { initDaily, initDailyView, renderDailyHead } from "./views/daily.js";
@@ -47,8 +48,11 @@ function initViewTabs() {
  * data, and `renderSummary` builds both together.
  *
  * @param {Object} loadResult The `/api/load` or `/api/reload` response.
+ * @param {{close?: boolean}} [opts] `close: false` leaves the setup drawer
+ *   open — the prepare panel reloads from inside it, and pulling the drawer
+ *   away mid-workflow would lose the user's place.
  */
-async function refreshViews(loadResult) {
+async function refreshViews(loadResult, { close = true } = {}) {
     const { taxonomy, cases, summary, daily, productivity } = await fetchAll();
 
     setTaxonomy(taxonomy);
@@ -70,7 +74,24 @@ async function refreshViews(loadResult) {
     $("#emptyState").hidden = true;
     $("#viewTabs").hidden = false;
     showView("summary");
-    closeDrawer();
+
+    // The prepare panel works from the loaded source's file list, so it only
+    // has something to show once a load has succeeded.
+    await refreshPrepare();
+
+    if (close) closeDrawer();
+}
+
+/**
+ * Re-read the source after the prepare panel has written to the workbooks.
+ *
+ * Clearing a round's results is meant to empty the views, so this is not
+ * optional bookkeeping — without it the screen would keep showing results that
+ * are no longer in the files.
+ */
+async function reloadAfterPrepare() {
+    const { ok, json } = await postReload();
+    if (ok) await refreshViews(json, { close: false });
 }
 
 initTheme();
@@ -78,6 +99,7 @@ onThemeChange(refreshChartTheme);
 initSetupDrawer();
 initSourcePanel({ onLoaded: refreshViews });
 initReportPanel();
+initPreparePanel({ onApplied: reloadAfterPrepare });
 initDetailView();
 initDailyView();
 initViewTabs();

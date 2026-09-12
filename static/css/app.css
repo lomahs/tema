@@ -623,3 +623,59 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
     .source-summary { display: none; }
     .view, .toolbar { padding-left: var(--sp-3); padding-right: var(--sp-3); }
 }
+
+/* --- Preparing the workbooks ---------------------------------------------
+ *
+ * The two operations in the setup drawer that write to the source files. They
+ * borrow the ledger for the file list and add three things it has no vocabulary
+ * for: a row of status checkboxes, buttons small enough to sit inside a cell,
+ * and a preview block — the one place in the app that reports on something that
+ * has not happened yet.
+ */
+
+.checks { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+
+.check { display: inline-flex; align-items: center; gap: var(--sp-1); cursor: pointer; }
+.check input { accent-color: var(--ink); margin: 0; }
+
+/* Ticked reads as chosen; unticked steps back rather than disappearing, so the
+ * whole taxonomy stays legible as a set. */
+.check .badge { opacity: .4; transition: opacity 90ms ease-out; }
+.check input:checked + .badge { opacity: 1; }
+.check:hover .badge { opacity: .75; }
+.check input:checked:hover + .badge { opacity: 1; }
+
+.btn-sm { padding: 2px var(--sp-2); font-size: var(--fs-sm); height: 22px; }
+
+.ledger td.actions { white-space: nowrap; }
+.ledger td.actions .btn + .btn { margin-left: var(--sp-1); }
+
+/*
+ * The preview: what Apply would do, per workbook.
+ *
+ * Capped and scrollable for the same reason the tables are — a folder of forty
+ * workbooks must not push the Apply button off the bottom of the drawer.
+ */
+.preview {
+    max-height: 320px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border-top: 1px solid var(--rule);
+    font-size: var(--fs-sm);
+}
+
+.preview-block { padding: var(--sp-3) 0; border-bottom: 1px solid var(--rule); }
+.preview-block:last-child { border-bottom: 0; }
+
+.preview-file {
+    font-weight: 600;
+    margin-bottom: var(--sp-1);
+}
+
+.preview-line {
+    color: var(--ink-soft);
+    line-height: var(--lh-cjk);
+    padding-left: var(--sp-3);
+}
+.preview-line b { color: var(--ink); font-weight: 600; }
+.preview-line s { color: var(--ink-faint); }

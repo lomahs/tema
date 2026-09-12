@@ -23,15 +23,26 @@ test-case-management/
 │   ├── links.py            # URL SharePoint -> driveItem
 │   └── workbook.py         # sửa workbook tại chỗ qua Excel workbook API
 ├── parser/
-│   ├── models.py           # SheetConfig, TestCase (dataclass)
+│   ├── models.py           # SheetConfig, TestCase, CASE_COLUMNS (dataclass)
 │   ├── status.py           # StatusSet: result -> status
 │   ├── result_status.json  # cấu hình phân loại kết quả
+│   ├── scope.py            # ScopeSet: Scope -> nhóm bảng Summary
 │   ├── scope_groups.json   # cấu hình nhóm Scope (Summary tách bảng)
-│   └── excel_reader.py     # đọc TOOL_DATA + test case từ .xlsx
+│   ├── excel_reader.py     # đọc TOOL_DATA + test case từ .xlsx
+│   ├── sheet_labels.py     # SheetLabels: nhãn cột mà dò layout tìm
+│   ├── sheet_labels.json   # cấu hình nhãn ("結果", "確認日", "Pad"/"Phone"…)
+│   └── tool_data_builder.py # dò layout của sheet -> các dòng TOOL_DATA
+├── prepare/                # nơi duy nhất ghi vào chính file nguồn
+│   ├── workbook.py         # đọc sheet / kiểm tra có TOOL_DATA chưa
+│   ├── tool_data.py        # tạo, ghi và so sánh (diff) sheet TOOL_DATA
+│   ├── clear.py            # lập kế hoạch & xoá ô kết quả của vòng test cũ
+│   └── runner.py           # chạy 2 thao tác trên nhiều file, lỗi tính theo file
 ├── tools/
-│   ├── generate_samples.py # sinh file .xlsx mẫu
-│   ├── publish_report.py   # xuất báo cáo lên SharePoint từ dòng lệnh
-│   └── sample_config.json  # config mặc định cho generator
+│   ├── generate_samples.py   # sinh file .xlsx mẫu
+│   ├── generate_tool_data.py # dò & ghi TOOL_DATA từ dòng lệnh
+│   ├── clear_results.py      # xoá kết quả từ dòng lệnh
+│   ├── publish_report.py     # xuất báo cáo lên SharePoint từ dòng lệnh
+│   └── sample_config.json    # config mặc định cho generator
 ├── tests/
 │   ├── conftest.py             # helper dựng file .xlsx cho test
 │   ├── test_status.py
@@ -44,6 +55,9 @@ test-case-management/
 │   ├── test_publish_integration.py
 │   ├── test_sharepoint_*.py
 │   ├── test_api_sharepoint.py
+│   ├── test_api_prepare.py
+│   ├── test_prepare_clear.py
+│   ├── test_prepare_tool_data.py
 │   └── test_generate_samples.py
 ├── templates/
 │   └── index.html          # UI 3 tab: Summary / Daily / Detail

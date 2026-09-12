@@ -1,0 +1,16 @@
+{
+  "max_header_scan_rows": 100,
+  "device_row_window": 6,
+  "device_keywords": ["pad", "phone"],
+  "header": {
+    "test_no_col": ["No", "No."],
+    "scope_col": ["担当者"]
+  },
+  "result_columns": {
+    "result_col": ["結果", "Kết quả"],
+    "test_date_col": ["確認日", "Ngày confirm"],
+    "pic_col": ["確認者", "Người confirm"],
+    "ticket_id_col": ["チケット", "Ticket No.", "Ticket"],
+    "note_col": ["備考", "Note"]
+  }
+}

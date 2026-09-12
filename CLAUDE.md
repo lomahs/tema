@@ -44,7 +44,14 @@ positionally by column letter, never by header name.
 
 **Errors are per-file, not fatal.** `load_files` catches per workbook and reports
 `{"file", "status", "error"}` so one malformed TOOL_DATA row doesn't sink a batch. Excel lock
-files (`~$*.xlsx`) are skipped.
+files (`~$*.xlsx`) are skipped. `prepare/runner.py` follows the same rule for the same reason.
+
+**Two definitions exist so they can't be written twice.** `find_workbooks(folder)` in
+`excel_reader` is *the* answer to "every workbook under here" — loading, the prepare endpoints
+and both CLIs resolve a folder through it, so a file one of them acts on is always one the
+others can see, lock-file skipping included. `CASE_COLUMNS` in [parser/models.py](parser/models.py)
+is *the* `TestCase`→`SheetConfig` mapping; the reader and `prepare/clear.py` both walk rows by
+it, and reading a row two different ways is how a case ends up classified two different ways.
 
 **The status taxonomy is data, not code.** [parser/result_status.json](parser/result_status.json)
 maps raw Result strings → status keys, and `StatusSet` in [parser/status.py](parser/status.py)
@@ -176,8 +183,14 @@ Behavior worth preserving when touching the UI:
 - `reportPanel.js` mirrors `sourcePanel.js`: it owns where results *go* and knows nothing
   about the views. `refreshViews()` calls `setReportEnabled(true)` — publishing with nothing
   loaded would clear the day's rows and write none back, which the endpoint also refuses.
+- `preparePanel.js` is the third of those panels: it owns *changing the source files* and also
+  knows nothing about the views. It stays hidden until a load succeeds, because the file list it
+  works from is the loaded source's, and its keep checkboxes are built from `/api/statuses` —
+  never a status list written into the JS. Writing there means the workbooks no longer match
+  what is loaded, so `onApplied` re-reads the source; `refreshViews()` takes `{close: false}` on
+  that path, because pulling the drawer away mid-workflow would lose the user's place.
 - `setupDrawer.js` owns chrome only. It opens itself when nothing is loaded and closes on a
-  successful load; `sourcePanel.js` and `reportPanel.js` do not know it exists.
+  successful load; `sourcePanel.js`, `reportPanel.js` and `preparePanel.js` do not know it exists.
 - `views/summary.js` must not import `views/detail.js`. It has no reason to now — the
   missing-reason list that used to jump into Detail has been removed from the screen, along with
   `initSummaryView`, `showCase` and the `onJumpToCase` callback. `/api/summary` still returns
@@ -211,6 +224,40 @@ which sheet and column each value goes to, validated at import by `ReportLayout`
 `StatusSet` validates the taxonomy. `{"expand": "statuses"}` widens a sheet by one column per
 status in taxonomy order, and `"issue": true` in `result_status.json` decides what reaches the
 Issues sheet — so neither status keys nor column positions are ever hard-coded in Python or JS.
+
+**`prepare/` is the only code that writes to the source workbooks.** Everything else treats
+them as read-only. [prepare/tool_data.py](prepare/tool_data.py) gives a workbook the TOOL_DATA
+sheet the reader needs — `parser/tool_data_builder.py` works out the layout from the labels in
+[parser/sheet_labels.json](parser/sheet_labels.json), and this writes the result in —
+while [prepare/clear.py](prepare/clear.py) empties last round's result cells.
+[prepare/workbook.py](prepare/workbook.py) holds the one reader both need, and
+[prepare/runner.py](prepare/runner.py) is the layer above: it walks a list of workbooks,
+isolates the failures per file the way `load_files` does, and returns plain dicts. The three
+`/api/prepare/*` endpoints are `jsonify` wrappers around it — the same arrangement as
+`aggregate.py`, and for the same reason. Put new batch behaviour in `runner.py`, not in a route;
+what stays in the route is what is genuinely about the request, which is the two guards below.
+`tools/generate_tool_data.py` and `tools/clear_results.py` are argparse shells over them,
+the same way `tools/publish_report.py` is a shell over `report/publisher.py` — so the CLI and
+the Setup drawer cannot write different things.
+
+Three rules hold across both operations, and each is enforced rather than trusted:
+
+- **Nothing writes on one request.** `apply` defaults to false, so `/api/prepare/tool-data` and
+  `/api/prepare/clear` answer with a plan — a detection, or a row count per device block — and
+  the UI shows it. A cleared cell is not recoverable from the file, so the second, explicit
+  request is the whole safety model.
+- **A TOOL_DATA sheet that already exists is diffed, never assumed stale.** Someone may have
+  corrected it by eye; detection is a best-effort first pass. `diff_configs` matches blocks on
+  `(sheet, device)` and reports changed fields, so "Create TOOL_DATA" becomes "Check TOOL_DATA"
+  once a workbook has one — and `preparePanel.js` only offers Apply when something would change.
+- **Only the loaded source's files may be touched.** `_requested_files` in `api/routes.py`
+  resolves the source through `runner.source_workbooks` and refuses any path not in it, so a
+  stray path in a request body cannot reach a workbook the user never chose. A folder is
+  re-globbed rather than remembered, so a file dropped in since the last load still appears.
+
+`plan_sheet` classifies the **whole row** via `STATUS.classify_case`, not the Result cell alone.
+That is what makes the keep set honest: `対象外` with a PIC is Cancel and `対象外` without one is
+Out Of Scope, so keeping Cancel must not decide the fate of rows that were never in the plan.
 
 **Out of scope by decision:** the module-level `_data` dict in `api/routes.py` stays global
 mutable state; it is deliberate for a single-user local tool. The same goes for `_auth` and
