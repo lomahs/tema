@@ -17,7 +17,7 @@ BLOCK_2 = "A B H I J K L"
 def test_a_real_date_cell_reads_back_as_an_iso_date(make_workbook):
     path = make_workbook(
         tool_data=[config_row("Login", "iPhone", 4, 4)],
-        cells={"Login": {(4, "A"): "TC-1", (4, "C"): "OK",
+        cells={"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK",
                          (4, "D"): datetime(2026, 8, 1)}},
     )
     case = load_file(path)[0]
@@ -27,7 +27,7 @@ def test_a_real_date_cell_reads_back_as_an_iso_date(make_workbook):
 def test_a_date_cell_with_a_time_keeps_only_the_date(make_workbook):
     path = make_workbook(
         tool_data=[config_row("Login", "iPhone", 4, 4)],
-        cells={"Login": {(4, "A"): "TC-1", (4, "C"): "OK",
+        cells={"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK",
                          (4, "D"): datetime(2026, 8, 2, 13, 30)}},
     )
     assert load_file(path)[0].test_date == "2026-08-02"
@@ -36,7 +36,7 @@ def test_a_date_cell_with_a_time_keeps_only_the_date(make_workbook):
 def test_a_text_date_with_a_midnight_time_is_trimmed(make_workbook):
     path = make_workbook(
         tool_data=[config_row("Login", "iPhone", 4, 4)],
-        cells={"Login": {(4, "A"): "TC-1", (4, "C"): "OK",
+        cells={"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK",
                          (4, "D"): "2026-08-01 00:00:00"}},
     )
     assert load_file(path)[0].test_date == "2026-08-01"
@@ -45,18 +45,54 @@ def test_a_text_date_with_a_midnight_time_is_trimmed(make_workbook):
 def test_numeric_cells_do_not_gain_a_decimal_suffix(make_workbook):
     path = make_workbook(
         tool_data=[config_row("Login", "iPhone", 4, 4)],
-        cells={"Login": {(4, "A"): 1, (4, "C"): "OK"}},
+        cells={"Login": {(4, "A"): 1, (4, "B"): "FPT", (4, "C"): "OK"}},
     )
     assert load_file(path)[0].case_no == "1"
 
 
 def test_blank_cells_become_none(make_workbook):
+    """Scope is not among them: a row without one is not read at all."""
     path = make_workbook(
         tool_data=[config_row("Login", "iPhone", 4, 4)],
-        cells={"Login": {(4, "A"): "TC-1"}},
+        cells={"Login": {(4, "A"): "TC-1", (4, "B"): "FPT"}},
     )
     case = load_file(path)[0]
-    assert (case.scope, case.result, case.test_date, case.pic) == (None,) * 4
+    assert (case.result, case.test_date, case.pic, case.note) == (None,) * 4
+
+
+def test_a_row_with_no_scope_is_not_read_as_a_case(make_workbook):
+    """A blank Scope cell marks a section heading, not work anyone planned."""
+    path = make_workbook(
+        tool_data=[config_row("Login", "iPhone", 4, 6)],
+        cells={"Login": {
+            (4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK",
+            (5, "A"): "Login screen", (5, "C"): "OK",
+            (6, "A"): "TC-2", (6, "B"): "JP", (6, "C"): "NG",
+        }},
+    )
+    assert [c.case_no for c in load_file(path)] == ["TC-1", "TC-2"]
+
+
+def test_a_scope_of_only_spaces_is_no_scope(make_workbook):
+    path = make_workbook(
+        tool_data=[config_row("Login", "iPhone", 4, 4)],
+        cells={"Login": {(4, "A"): "TC-1", (4, "B"): "   ", (4, "C"): "OK"}},
+    )
+    assert load_file(path) == []
+
+
+def test_the_per_file_count_leaves_out_the_rows_with_no_scope(make_workbook):
+    """The drawer's count and the totals on screen have to be the same number."""
+    path = make_workbook(
+        tool_data=[config_row("Login", "iPhone", 4, 5)],
+        cells={"Login": {
+            (4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK",
+            (5, "A"): "Login screen", (5, "C"): "OK",
+        }},
+    )
+    cases, file_results = load_from_files([path])
+    assert len(cases) == 1
+    assert file_results[0]["cases"] == 1
 
 
 def test_two_device_blocks_on_one_sheet_read_their_own_columns(make_workbook):
@@ -71,7 +107,8 @@ def test_two_device_blocks_on_one_sheet_read_their_own_columns(make_workbook):
             (4, "C"): "OK", (4, "D"): "2026-08-01", (4, "E"): "lee",
             (4, "H"): "NG", (4, "I"): "2026-08-02", (4, "J"): "kim",
             (4, "K"): "BUG-1", (4, "L"): "needs a fix",
-            (5, "A"): "TC-2", (5, "C"): "OK", (5, "H"): "保留", (5, "K"): "BUG-2",
+            (5, "A"): "TC-2", (5, "B"): "JP",
+            (5, "C"): "OK", (5, "H"): "保留", (5, "K"): "BUG-2",
         }},
     )
     cases = load_file(path)
@@ -90,7 +127,9 @@ def test_two_device_blocks_on_one_sheet_read_their_own_columns(make_workbook):
 def test_row_numbers_map_back_to_the_excel_rows(make_workbook):
     path = make_workbook(
         tool_data=[config_row("Login", "iPhone", 4, 6)],
-        cells={"Login": {(4, "A"): "TC-1", (5, "A"): "TC-2", (6, "A"): "TC-3"}},
+        cells={"Login": {(4, "A"): "TC-1", (4, "B"): "FPT",
+                         (5, "A"): "TC-2", (5, "B"): "FPT",
+                         (6, "A"): "TC-3", (6, "B"): "FPT"}},
     )
     assert [c.row_num for c in load_file(path)] == [4, 5, 6]
 
@@ -118,7 +157,7 @@ def test_a_bad_row_fails_only_its_own_file(tmp_path):
     good = write_workbook(
         tmp_path / "good.xlsx",
         [config_row("Login", "iPhone", 4, 4)],
-        {"Login": {(4, "A"): "TC-1", (4, "C"): "OK"}},
+        {"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK"}},
     )
     write_workbook(
         tmp_path / "bad.xlsx",
@@ -140,12 +179,12 @@ def test_excel_lock_files_are_skipped_in_files_mode(tmp_path):
     real = write_workbook(
         tmp_path / "TC.xlsx",
         [config_row("Login", "iPhone", 4, 4)],
-        {"Login": {(4, "A"): "TC-1", (4, "C"): "OK"}},
+        {"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK"}},
     )
     lock = write_workbook(
         tmp_path / "~$TC.xlsx",
         [config_row("Login", "iPhone", 4, 4)],
-        {"Login": {(4, "A"): "TC-1", (4, "C"): "OK"}},
+        {"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK"}},
     )
 
     _, file_results = load_from_files([real, lock])
@@ -158,7 +197,7 @@ def test_a_sheet_named_in_tool_data_but_absent_is_skipped(make_workbook):
             config_row("Login", "iPhone", 4, 4),
             config_row("Ghost", "iPhone", 4, 4),
         ],
-        cells={"Login": {(4, "A"): "TC-1", (4, "C"): "OK"}},
+        cells={"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK"}},
     )
     cases = load_file(path)
     assert [c.sheet for c in cases] == ["Login"]
@@ -168,7 +207,7 @@ def test_columns_beyond_the_sheet_width_read_as_none(make_workbook):
     """A TOOL_DATA row can point past the last written column."""
     path = make_workbook(
         tool_data=[config_row("Login", "iPhone", 4, 4, cols="A B C D E Y Z")],
-        cells={"Login": {(4, "A"): "TC-1", (4, "C"): "OK"}},
+        cells={"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK"}},
     )
     case = load_file(path)[0]
     assert (case.ticket_id, case.note) == (None, None)

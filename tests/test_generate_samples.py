@@ -3,7 +3,9 @@ from collections import defaultdict
 
 import pytest
 
-from parser.excel_reader import load_from_folder, parse_tool_data
+from openpyxl import load_workbook
+
+from parser.excel_reader import TOOL_DATA_SHEET, load_from_folder, parse_tool_data
 from tools.generate_samples import DEFAULTS, generate, validate_config
 
 CONFIG = validate_config({
@@ -58,12 +60,26 @@ def test_case_numbers_restart_per_sheet_with_no_gaps(generated):
         assert CONFIG["cases_per_sheet"]["min"] <= len(numbers) <= CONFIG["cases_per_sheet"]["max"]
 
 
-def test_group_rows_carry_only_a_title(generated):
+def test_group_rows_are_written_with_a_title_and_nothing_else(generated):
+    paths, _, _ = generated
+    titles = 0
+    for path in paths:
+        wb = load_workbook(path, read_only=True)
+        for name in wb.sheetnames:
+            if name == TOOL_DATA_SHEET:
+                continue
+            for row in wb[name].iter_rows(values_only=True):
+                if isinstance(row[0], str) and row[0].startswith("["):
+                    titles += 1
+                    assert not any(v is not None for v in row[1:])
+        wb.close()
+    assert titles, "expected at least one group row"
+
+
+def test_group_rows_are_not_read_as_cases(generated):
+    """They carry no scope, so they are section headings, not work."""
     _, cases, _ = generated
-    group_rows = [c for c in cases if c.case_no and c.case_no.startswith("[")]
-    assert group_rows, "expected at least one group row"
-    for c in group_rows:
-        assert (c.scope, c.result, c.test_date, c.pic, c.ticket_id, c.note) == (None,) * 6
+    assert [c for c in cases if c.case_no and c.case_no.startswith("[")] == []
 
 
 def test_values_stay_inside_the_configured_sets(generated):

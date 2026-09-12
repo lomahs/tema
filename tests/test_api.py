@@ -29,12 +29,16 @@ def workbook_dir(tmp_path):
         ],
         {"Login": {
             # iPhone: OK, NG with a ticket, NG without one, an unknown result, blank
-            (4, "A"): "TC-1", (4, "C"): "OK", (4, "D"): datetime(2026, 8, 5), (4, "E"): "lee",
-            (5, "A"): "TC-2", (5, "C"): "NG", (5, "D"): "2026-08-05 00:00:00", (5, "E"): "lee",
+            (4, "A"): "TC-1", (4, "B"): "FPT",
+            (4, "C"): "OK", (4, "D"): datetime(2026, 8, 5), (4, "E"): "lee",
+            (5, "A"): "TC-2", (5, "B"): "FPT",
+            (5, "C"): "NG", (5, "D"): "2026-08-05 00:00:00", (5, "E"): "lee",
             (5, "F"): "BUG-1",
-            (6, "A"): "TC-3", (6, "C"): "NG", (6, "D"): "2026-08-05", (6, "E"): "lee",
-            (7, "A"): "TC-4", (7, "C"): "TBD", (7, "D"): "2026-08-06", (7, "E"): "kim",
-            (8, "A"): "TC-5",
+            (6, "A"): "TC-3", (6, "B"): "FPT",
+            (6, "C"): "NG", (6, "D"): "2026-08-05", (6, "E"): "lee",
+            (7, "A"): "TC-4", (7, "B"): "FPT",
+            (7, "C"): "TBD", (7, "D"): "2026-08-06", (7, "E"): "kim",
+            (8, "A"): "TC-5", (8, "B"): "FPT",
             # iPad
             (4, "H"): "保留", (4, "I"): "2026-08-05", (4, "J"): "kim", (4, "K"): "BUG-2",
             (5, "H"): "OK", (5, "I"): "2026-08-05", (5, "J"): "kim",
@@ -50,11 +54,14 @@ def out_of_scope_dir(tmp_path):
         tmp_path / "OOS.xlsx",
         [config_row("Login", "iPhone", 4, 6, cols="A B C D E F G")],
         {"Login": {
-            (4, "A"): "TC-1", (4, "C"): "OK", (4, "D"): "2026-08-05", (4, "E"): "lee",
+            (4, "A"): "TC-1", (4, "B"): "FPT",
+            (4, "C"): "OK", (4, "D"): "2026-08-05", (4, "E"): "lee",
             # owned: a decision someone made, and still owing a reason
-            (5, "A"): "TC-2", (5, "C"): "対象外", (5, "D"): "2026-08-05", (5, "E"): "lee",
+            (5, "A"): "TC-2", (5, "B"): "FPT",
+            (5, "C"): "対象外", (5, "D"): "2026-08-05", (5, "E"): "lee",
             # unowned: never in the plan
-            (6, "A"): "TC-3", (6, "C"): "対象外", (6, "D"): "2026-08-05",
+            (6, "A"): "TC-3", (6, "B"): "FPT",
+            (6, "C"): "対象外", (6, "D"): "2026-08-05",
         }},
     )
     return str(tmp_path)
@@ -68,17 +75,23 @@ def productivity_dir(tmp_path):
         [config_row("Perf", "iPhone", 4, 11)],
         {"Perf": {
             # alice: 2 executed cases on 08-03, 3 on 08-04 -> 5 over 2 days
-            (4, "A"): "TC-1", (4, "C"): "OK", (4, "D"): "2026-08-03", (4, "E"): "alice",
-            (5, "A"): "TC-2", (5, "C"): "NG", (5, "D"): "2026-08-03", (5, "E"): "alice",
-            (6, "A"): "TC-3", (6, "C"): "NG-OK", (6, "D"): "2026-08-04", (6, "E"): "alice",
-            (7, "A"): "TC-4", (7, "C"): "OK", (7, "D"): "2026-08-04", (7, "E"): "alice",
-            (8, "A"): "TC-5", (8, "C"): "OK", (8, "D"): "2026-08-04", (8, "E"): "alice",
+            (4, "A"): "TC-1", (4, "B"): "FPT",
+            (4, "C"): "OK", (4, "D"): "2026-08-03", (4, "E"): "alice",
+            (5, "A"): "TC-2", (5, "B"): "FPT",
+            (5, "C"): "NG", (5, "D"): "2026-08-03", (5, "E"): "alice",
+            (6, "A"): "TC-3", (6, "B"): "FPT",
+            (6, "C"): "NG-OK", (6, "D"): "2026-08-04", (6, "E"): "alice",
+            (7, "A"): "TC-4", (7, "B"): "FPT",
+            (7, "C"): "OK", (7, "D"): "2026-08-04", (7, "E"): "alice",
+            (8, "A"): "TC-5", (8, "B"): "FPT",
+            (8, "C"): "OK", (8, "D"): "2026-08-04", (8, "E"): "alice",
             # 08-05 holds nothing but a Pending, so it is not a working day
-            (9, "A"): "TC-6", (9, "C"): "保留", (9, "D"): "2026-08-05", (9, "E"): "alice",
+            (9, "A"): "TC-6", (9, "B"): "FPT",
+            (9, "C"): "保留", (9, "D"): "2026-08-05", (9, "E"): "alice",
             # executed, but undated: countable to no day, so counted nowhere
-            (10, "A"): "TC-7", (10, "C"): "OK", (10, "E"): "alice",
+            (10, "A"): "TC-7", (10, "B"): "FPT", (10, "C"): "OK", (10, "E"): "alice",
             # nobody owns this one
-            (11, "A"): "TC-8", (11, "C"): "OK", (11, "D"): "2026-08-03",
+            (11, "A"): "TC-8", (11, "B"): "FPT", (11, "C"): "OK", (11, "D"): "2026-08-03",
         }},
     )
     return str(tmp_path)
@@ -294,7 +307,8 @@ def test_a_pic_with_no_executed_case_reports_zero_instead_of_dividing(client, tm
     write_workbook(
         tmp_path / "Pending.xlsx",
         [config_row("S", "iPhone", 4, 4)],
-        {"S": {(4, "A"): "TC-1", (4, "C"): "保留", (4, "D"): "2026-08-03", (4, "E"): "bob"}},
+        {"S": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "保留",
+                   (4, "D"): "2026-08-03", (4, "E"): "bob"}},
     )
     load(client, str(tmp_path))
     bob = rows_by_pic(client)["bob"]
@@ -367,7 +381,7 @@ def test_an_unowned_cancel_is_not_a_missing_reason(client, out_of_scope_dir):
 
 @pytest.fixture
 def scoped_dir(tmp_path):
-    """One device carrying all three scope groups, including a blank Scope."""
+    """One device carrying all three scope groups, plus a row with no Scope."""
     write_workbook(
         tmp_path / "Scoped.xlsx",
         [config_row("Login", "iPhone", 4, 8, cols="A B C D E F G")],
@@ -380,7 +394,8 @@ def scoped_dir(tmp_path):
             (6, "D"): "2026-08-05", (6, "E"): "kim",
             (7, "A"): "TC-4", (7, "B"): "Vendor", (7, "C"): "OK",
             (7, "D"): "2026-08-05", (7, "E"): "kim",
-            # No Scope at all — a spreadsheet section heading.
+            # No Scope at all — a section heading, not a case. Dropped at read
+            # time, so it reaches neither the Other table nor /api/data.
             (8, "A"): "[Login - normal case]",
         }},
     )
@@ -391,7 +406,7 @@ def test_summary_rows_carry_the_scope_group_they_belong_to(client, scoped_dir):
     load(client, scoped_dir)
     rows = client.get("/api/summary").get_json()["groups"]
 
-    assert {r["scope"]: r["total"] for r in rows} == {"FPT": 2, "JP": 1, "Other": 2}
+    assert {r["scope"]: r["total"] for r in rows} == {"FPT": 2, "JP": 1, "Other": 1}
 
 
 def test_the_two_fpt_scopes_share_one_table(client, scoped_dir):

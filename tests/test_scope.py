@@ -26,14 +26,20 @@ def test_matching_ignores_case_and_surrounding_space():
 
 
 def test_an_unconfigured_scope_falls_back_instead_of_vanishing():
-    """Otherwise the three tables would not add up to what was loaded."""
+    """Otherwise the tables would not add up to every case that was loaded."""
     assert SCOPES.classify("Vendor") == "Other"
 
 
-def test_a_blank_scope_falls_back_too():
-    """Spreadsheet section headings carry no scope; they still have to land."""
+def test_a_blank_scope_is_not_a_case_at_all():
+    """A spreadsheet section heading carries no scope, so it is not work."""
     for blank in (None, "", "   "):
-        assert SCOPES.classify(blank) == "Other"
+        assert SCOPES.is_unscoped(blank) is True
+
+
+def test_any_scope_text_at_all_makes_a_case():
+    """Including one no group names -- that is what the fallback table is for."""
+    for scope in ("FPT", "JP", "Vendor"):
+        assert SCOPES.is_unscoped(scope) is False
 
 
 def test_the_fallback_group_is_last():

@@ -108,9 +108,18 @@ Scope strings belong to which Summary table, validated at import by `ScopeSet` i
 [parser/scope.py](parser/scope.py) exactly the way `StatusSet` validates the taxonomy. FPT work
 and JP work are separate commitments, so Summary draws one table per group rather than one table
 adding them together. The `fallback` group is mandatory and always sorts last: a typo'd scope, or
-the blank Scope of a spreadsheet section heading, lands there rather than vanishing, so **the
-tables always add up to everything loaded**. `views/summary.js` names no scope itself — it draws a
-block per group from the `scopes` list `/api/summary` serves alongside the rows.
+one nobody has configured yet, lands there rather than vanishing, so **the tables always add up to
+every case loaded**. `views/summary.js` names no scope itself — it draws a block per group from the
+`scopes` list `/api/summary` serves alongside the rows.
+
+**A blank Scope is not an unrecognised scope — it is not a case.** A section heading, a spacer, or
+the slack at the end of a generously sized `start_row`–`end_row` block carries no Scope, and
+`SCOPES.is_unscoped` in `parser/scope.py` is the one definition of that. The reader drops those
+rows in `_cases_for_config` before a `TestCase` exists, so they reach no view, no aggregate and no
+published report, and the per-file `cases: n` that `load_files` reports — the number the setup
+drawer shows — is already net of them. Filtering later, per view, is what would let the drawer's
+count and Summary's total disagree. `SCOPES.classify` stays total and still maps a blank onto the
+fallback, so no caller can manufacture a case belonging to no table; it simply never sees one.
 
 `summary_rows(cases, by_scope=False)` is one function serving two granularities. `/api/summary`
 passes `by_scope=True` and each row gains a `scope` key; the report publisher does not, so its

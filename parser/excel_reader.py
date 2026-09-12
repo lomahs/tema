@@ -9,6 +9,7 @@ import pandas as pd
 from openpyxl.utils import column_index_from_string
 
 from parser.models import CASE_COLUMNS, SheetConfig, TestCase
+from parser.scope import SCOPES
 
 log = logging.getLogger(__name__)
 
@@ -166,22 +167,31 @@ def read_test_cases(df: pd.DataFrame, config: SheetConfig, file_name: str) -> li
         return row.iloc[idx] if idx < width else None
 
     cases = []
+    skipped = 0
     for offset, (_, row) in enumerate(rows.iterrows()):
+        scope = _clean(cell(row, "scope"))
+        # A row with no Scope names no commitment: a section heading, a spacer,
+        # or slack at the end of a generously sized block. It is not a test
+        # case, so it never becomes one -- which keeps the per-file count the
+        # reader reports and the totals every view draws the same number.
+        if SCOPES.is_unscoped(scope):
+            skipped += 1
+            continue
         cases.append(TestCase(
             file_name=file_name,
             sheet=config.sheet,
             device=config.device,
             row_num=config.start_row + offset,
             case_no=_clean(cell(row, "case_no")),
-            scope=_clean(cell(row, "scope")),
+            scope=scope,
             result=_clean(cell(row, "result")),
             test_date=_clean_date(cell(row, "test_date")),
             pic=_clean(cell(row, "pic")),
             ticket_id=_clean(cell(row, "ticket_id")),
             note=_clean(cell(row, "note")),
         ))
-    log.info("[%s] Read %d case(s) from sheet '%s' / device '%s'",
-             file_name, len(cases), config.sheet, config.device)
+    log.info("[%s] Read %d case(s) from sheet '%s' / device '%s' (%d row(s) with no scope skipped)",
+             file_name, len(cases), config.sheet, config.device, skipped)
     return cases
 
 

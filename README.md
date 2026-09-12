@@ -413,11 +413,17 @@ câu hỏi nào.
 | `groups[].key` | Tên nhóm (dùng nội bộ, và là giá trị cột `scope` trong `/api/summary`) |
 | `groups[].label` | Tiêu đề hiển thị trên bảng |
 | `groups[].match` | Các giá trị Scope thuộc nhóm này (không phân biệt hoa thường, tự cắt khoảng trắng) |
-| `fallback` | **Bắt buộc.** Nhóm hứng mọi Scope không khớp — kể cả ô Scope trống |
+| `fallback` | **Bắt buộc.** Nhóm hứng mọi Scope có giá trị nhưng không khớp nhóm nào |
 
-`fallback` luôn đứng cuối. Scope gõ sai, Scope chưa cấu hình, hay dòng tiêu đề nhóm trong
-file Excel (không có Scope) đều rơi vào đây, nên **tổng các bảng luôn bằng đúng số case đã
-load** — không có case nào âm thầm biến mất. Bảng nào không có case thì tự ẩn.
+`fallback` luôn đứng cuối. Scope gõ sai hay Scope chưa cấu hình rơi vào đây, nên **tổng các
+bảng luôn bằng đúng số case đã load** — không có case nào âm thầm biến mất. Bảng nào không có
+case thì tự ẩn.
+
+**Ô Scope trống thì không phải là case.** Dòng tiêu đề nhóm trong file Excel, dòng trống, hay
+phần dư ở cuối một block `start_row`–`end_row` đều không có Scope — trình đọc bỏ qua ngay từ
+đầu, nên chúng không vào `Other` mà cũng không vào bất kỳ tab nào (Summary, Daily, Detail,
+productivity, báo cáo SharePoint). Số case mỗi file mà ngăn setup hiển thị cũng đã trừ chúng
+ra. Nói cách khác: **muốn một dòng được tính, dòng đó phải có Scope.**
 
 Đổi env `SCOPE_GROUPS_CONFIG` để trỏ sang file khác, giống `RESULT_STATUS_CONFIG`.
 

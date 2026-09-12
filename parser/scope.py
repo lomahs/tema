@@ -7,9 +7,13 @@ reasoning as `parser/status.py`: a team that renames a scope, or wants a third
 table, edits `parser/scope_groups.json` and nothing else.
 
 Every scope reaches exactly one group. Anything the config does not name — a
-typo, a scope nobody has configured yet, or the blank Scope of a spreadsheet
-section heading — lands in the fallback group, so the three tables always add
-up to everything that was loaded.
+typo, or a scope nobody has configured yet — lands in the fallback group, so
+the tables always add up to every case that was loaded.
+
+A blank Scope is a different thing again, and `is_unscoped` is where that is
+decided: a row with no Scope names no commitment, so it is not a case and the
+reader never builds one. The fallback group therefore holds only scopes that
+were written down and not recognised.
 """
 import json
 import logging
@@ -98,14 +102,28 @@ class ScopeSet:
         groups.append(ScopeGroup(key=fb_key, label=str(fallback.get("label") or fb_key)))
         return cls(groups, lookup, fb_key)
 
+    @staticmethod
+    def is_unscoped(scope) -> bool:
+        """True for a Scope cell nobody filled in.
+
+        A blank Scope is not an unrecognised scope: it is a row that names no
+        commitment at all -- a section heading, a spacer, the tail of a device
+        block that was sized generously. Such a row is not a test case, so the
+        reader drops it rather than handing the aggregates something to count.
+        That is why the fallback group holds only *unrecognised* scopes.
+        """
+        return scope is None or not str(scope).strip()
+
     def classify(self, scope) -> str:
-        """Map a raw Scope cell onto a scope-group key."""
-        if scope is None:
+        """Map a raw Scope cell onto a scope-group key.
+
+        Total by construction, blanks included, so no caller can produce a case
+        that belongs to no table. In practice the blank never arrives: a row
+        with no scope never becomes a `TestCase` -- see `is_unscoped`.
+        """
+        if self.is_unscoped(scope):
             return self._fallback_key
-        text = str(scope).strip()
-        if not text:
-            return self._fallback_key
-        return self._lookup.get(text.casefold(), self._fallback_key)
+        return self._lookup.get(str(scope).strip().casefold(), self._fallback_key)
 
     def to_dict(self) -> dict:
         return {"groups": [g.to_dict() for g in self.groups]}
