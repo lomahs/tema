@@ -229,8 +229,8 @@ def find_workbooks(folder_path: str) -> list[str]:
 
     Excel lock files (``~$name.xlsx``, left behind by an open workbook) are
     left out. This is the one definition of "the workbooks in this folder" —
-    loading, the prepare endpoints and the CLIs all resolve a folder through
-    it, so a file one of them acts on is always one the others can see.
+    loading and the prepare endpoints both resolve a folder through it, so a
+    file one of them acts on is always one the other can see.
     """
     paths = sorted(glob.glob(os.path.join(folder_path, "**", "*.xlsx"), recursive=True))
     return [p for p in paths if not os.path.basename(p).startswith(LOCK_FILE_PREFIX)]

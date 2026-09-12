@@ -10,8 +10,8 @@ Which rows and columns to touch comes from the workbook's TOOL_DATA sheet, so
 `prepare.tool_data` has to have run on a workbook that has none.
 
 Planning is separate from applying because a cleared cell is not recoverable
-from the file: both the CLI and `/api/prepare/clear` show the plan first and
-write only on a second, explicit request.
+from the file: `/api/prepare/clear` shows the plan first and writes only on a
+second, explicit request.
 """
 
 import logging

@@ -19,7 +19,6 @@ Use the project venv (Python 3.14) — it holds Flask/pandas/openpyxl:
 .venv/bin/python -m pytest tests/test_api.py::test_reload_reuses_the_remembered_source -q   # one test
 .venv/bin/python -m tools.generate_samples --out samples/generated --seed 1  # synthetic .xlsx
 RESULT_STATUS_CONFIG=/path/my_status.json .venv/bin/python app.py            # alternate taxonomy
-GRAPH_CLIENT_ID=... .venv/bin/python -m tools.publish_report --folder samples/generated --url "<link>"
 ```
 
 `PORT` and `DEBUG` are env vars (see [config.py](config.py)); `DEBUG` defaults to on.
@@ -48,8 +47,8 @@ files (`~$*.xlsx`) are skipped. `prepare/runner.py` follows the same rule for th
 
 **Two definitions exist so they can't be written twice.** `find_workbooks(folder)` in
 `excel_reader` is *the* answer to "every workbook under here" — loading, the prepare endpoints
-and both CLIs resolve a folder through it, so a file one of them acts on is always one the
-others can see, lock-file skipping included. `CASE_COLUMNS` in [parser/models.py](parser/models.py)
+and the sample generator all resolve a folder through it, so a file one of them acts on is
+always one the others can see, lock-file skipping included. `CASE_COLUMNS` in [parser/models.py](parser/models.py)
 is *the* `TestCase`→`SheetConfig` mapping; the reader and `prepare/clear.py` both walk rows by
 it, and reading a row two different ways is how a case ends up classified two different ways.
 
@@ -236,9 +235,13 @@ isolates the failures per file the way `load_files` does, and returns plain dict
 `/api/prepare/*` endpoints are `jsonify` wrappers around it — the same arrangement as
 `aggregate.py`, and for the same reason. Put new batch behaviour in `runner.py`, not in a route;
 what stays in the route is what is genuinely about the request, which is the two guards below.
-`tools/generate_tool_data.py` and `tools/clear_results.py` are argparse shells over them,
-the same way `tools/publish_report.py` is a shell over `report/publisher.py` — so the CLI and
-the Setup drawer cannot write different things.
+**The app is the only way in.** These operations once had argparse shells in `tools/`; they
+were deleted once the drawer covered them, because two front doors to an irreversible write is
+one more than the invariants above can be enforced at. `tools/` now holds only the sample
+generator, which makes test data rather than touching anyone's. One consequence worth knowing:
+`apply_plan` and `write_tool_data_sheet` still take an `out_path` — write to a copy instead of
+overwriting — and no caller passes it any more. It is kept, and tested, as the escape hatch for
+an irreversible operation.
 
 Three rules hold across both operations, and each is enforced rather than trusted:
 

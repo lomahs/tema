@@ -39,9 +39,6 @@ test-case-management/
 │   └── runner.py           # chạy 2 thao tác trên nhiều file, lỗi tính theo file
 ├── tools/
 │   ├── generate_samples.py   # sinh file .xlsx mẫu
-│   ├── generate_tool_data.py # dò & ghi TOOL_DATA từ dòng lệnh
-│   ├── clear_results.py      # xoá kết quả từ dòng lệnh
-│   ├── publish_report.py     # xuất báo cáo lên SharePoint từ dòng lệnh
 │   └── sample_config.json    # config mặc định cho generator
 ├── tests/
 │   ├── conftest.py             # helper dựng file .xlsx cho test
@@ -146,17 +143,50 @@ Mỗi file .xlsx phải có sheet tên `TOOL_DATA`, gồm các cột (không ph�
 Mỗi dòng trong `TOOL_DATA` mô tả một sheet test case: đọc từ `start_row` đến `end_row`,
 lấy dữ liệu theo chữ cái cột Excel.
 
+## Chuẩn bị file (Prepare the workbooks)
+
+File test case thật thường **chưa có** sheet `TOOL_DATA` — nên lần đầu nạp, app báo lỗi
+`Sheet 'TOOL_DATA' not found` cho đúng những file đó. Mở **Setup → Prepare the workbooks**
+để xử lý ngay trong app, không cần dòng lệnh.
+
+Mỗi file đã nạp là một dòng, kèm nút theo trạng thái của nó:
+
+| Nút | Khi nào hiện | Làm gì |
+|-----|--------------|--------|
+| **Create TOOL_DATA** | file chưa có sheet `TOOL_DATA` | Dò layout từ chính tiêu đề của sheet (`No.`, `担当者`, `結果`, ô ghi `Pad`/`Phone`…) rồi ghi sheet `TOOL_DATA` vào file |
+| **Check TOOL_DATA** | file đã có sheet `TOOL_DATA` | Dò lại rồi **so sánh** với sheet đang có: cột nào đổi, block nào thừa/thiếu |
+| **Clear results** | file đã có sheet `TOOL_DATA` | Xoá 5 ô kết quả (kết quả / ngày confirm / người confirm / ticket / note) để bắt đầu vòng test mới |
+
+Hai điều quan trọng:
+
+- **Không có gì bị ghi khi bấm một lần.** Mọi nút chỉ hiện *dự định*: dò được gì, sẽ xoá
+  bao nhiêu dòng. Phải bấm **Apply** lần nữa mới thực sự ghi vào file — ô đã xoá thì không
+  lấy lại được từ file.
+- **Sheet `TOOL_DATA` đã có sẽ được so sánh, không mặc định ghi đè.** Nếu ai đó đã sửa tay
+  cho đúng, đó mới là bản chuẩn của file đó; app chỉ đề nghị Apply khi thật sự có khác biệt.
+
+Ô **Keep these results when clearing** chọn status nào được giữ lại qua vòng sau (mặc định
+`Cancel`). Danh sách này sinh từ [parser/result_status.json](parser/result_status.json), nên
+thêm status mới là nó tự hiện ra.
+
+Nhãn mà bước dò layout tìm nằm ở [parser/sheet_labels.json](parser/sheet_labels.json) — sheet
+của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không sửa code.
+
 ## API
 
 | Method | Endpoint       | Mô tả |
 |--------|----------------|-------|
 | POST   | `/api/load`    | Body `{"folder": "..."}` hoặc `{"files": ["...", "..."]}` |
 | POST   | `/api/reload`  | Nạp lại từ source đã load trước đó |
+| POST   | `/api/browse`  | Mở hộp thoại chọn folder/file của hệ điều hành, trả `{paths}` |
 | GET    | `/api/data`    | Toàn bộ test case, kèm `status` đã phân loại |
 | GET    | `/api/statuses`| Danh sách status (key / label / badge / text) + `needs_reason` + `executed` + `issue` |
 | GET    | `/api/summary` | Gộp theo (nhóm Scope, file, device) + danh sách nhóm Scope + danh sách case thiếu lý do |
 | GET    | `/api/daily`   | Gộp theo (file, device, PIC, date) |
 | GET    | `/api/productivity` | Năng suất từng PIC: số case đã thực hiện / số ngày có làm việc |
+| GET    | `/api/prepare/files` | Các file của source đang nạp: đã có `TOOL_DATA` chưa, mấy block |
+| POST   | `/api/prepare/tool-data` | Body `{"files": [...], "apply": false}` — dò layout, ghi khi `apply` |
+| POST   | `/api/prepare/clear` | Body `{"files": [...], "keep": [...], "apply": false}` — xoá ô kết quả |
 | GET    | `/api/sharepoint/status` | `not_configured` / `signed_out` / `pending` / `signed_in` |
 | POST   | `/api/sharepoint/login`  | Bắt đầu device code flow, trả `{user_code, verification_uri}` |
 | POST   | `/api/sharepoint/logout` | Quên tài khoản đã cache |
@@ -300,13 +330,6 @@ python app.py
 3. Copy link file báo cáo từ trình duyệt (nút **Copy link**, hoặc URL trên thanh địa chỉ)
    và dán vào ô **SharePoint report file**.
 4. Bấm **Publish**.
-
-Hoặc từ dòng lệnh, cùng một code path:
-
-```bash
-python -m tools.publish_report --folder samples/generated --url "<link SharePoint>"
-python -m tools.publish_report --folder ... --url ... --run-date 2026-09-01
-```
 
 ### Chạy nhiều lần trong ngày
 
