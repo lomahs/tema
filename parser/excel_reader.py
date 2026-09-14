@@ -254,9 +254,14 @@ def load_files(file_paths: list[str]) -> tuple[list[TestCase], list[dict]]:
 
     Returns:
         `(cases, file_results)` where each file result is
-        `{"file", "status": "OK", "cases": n}` or
-        `{"file", "status": "Error", "error": msg}`. Skipped lock files appear
-        in neither.
+        `{"file", "path", "status": "OK", "cases": n}` or
+        `{"file", "path", "status": "Error", "error": msg}`. Skipped lock files
+        appear in neither.
+
+    `path` is there because `file` is only a basename and the folder scan is
+    recursive: two subfolders may each hold a "TC.xlsx", and the Tools view
+    joins these results to `prepare.runner.describe` on the path to put a
+    workbook's case count and its TOOL_DATA state on one row.
     """
     all_cases = []
     file_results = []
@@ -268,10 +273,12 @@ def load_files(file_paths: list[str]) -> tuple[list[TestCase], list[dict]]:
         try:
             cases = load_file(path)
             all_cases.extend(cases)
-            file_results.append({"file": name, "status": "OK", "cases": len(cases)})
+            file_results.append({"file": name, "path": path, "status": "OK",
+                                 "cases": len(cases)})
         except Exception as e:
             log.error("[%s] Failed: %s", name, e)
-            file_results.append({"file": name, "status": "Error", "error": str(e)})
+            file_results.append({"file": name, "path": path, "status": "Error",
+                                 "error": str(e)})
     return all_cases, file_results
 
 

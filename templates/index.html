@@ -3,286 +3,493 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Management</title>
+    <title>Test Result Manager</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500&display=swap">
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
 
-<header class="topbar">
-    <div class="brand">Test Management</div>
+<div class="shell">
 
-    <nav class="tabs" id="viewTabs" role="tablist" hidden>
-        <button class="tab" role="tab" data-view="summary" aria-selected="true">Summary</button>
-        <button class="tab" role="tab" data-view="daily" aria-selected="false">Daily</button>
-        <button class="tab" role="tab" data-view="detail" aria-selected="false">Detail</button>
-    </nav>
+    <!-- ==================== The rail ====================
+         The one large dark field in the app, and it is chrome: navigation,
+         what is loaded, and the way to the Tools view. No data lives here. -->
+    <aside class="rail" id="rail" aria-label="Navigation">
 
-    <div class="topbar-end">
-        <span class="source-summary" id="sourceSummary"></span>
-        <button id="btnReload" class="btn btn-quiet" disabled>Reload</button>
-        <button id="btnTheme" class="btn btn-icon" aria-label="Switch to dark theme" title="Switch theme">◐</button>
-        <button id="btnSetup" class="btn">Setup</button>
-    </div>
-</header>
-
-<main>
-    <!-- Before anything is loaded: an invitation, not a status report. -->
-    <div class="empty" id="emptyState">
-        <h2>Nothing loaded yet</h2>
-        <p>Point this at a folder of test workbooks to begin.</p>
-        <button class="btn btn-primary" id="btnEmptySetup">Choose folder</button>
-    </div>
-
-    <!-- ==================== Summary ==================== -->
-    <section class="view" id="summaryView" hidden>
-        <!-- One block per scope group, generated from /api/summary: FPT work and
-             JP work are separate commitments, and a single table adding them
-             together answers no question anyone asks. -->
-        <div id="summaryTables"></div>
-    </section>
-
-    <!-- ==================== Daily ==================== -->
-    <section class="view" id="dailyView" hidden>
-        <div class="toolbar">
-            <div class="field">
-                <label for="dailyFilterFile">File</label>
-                <select id="dailyFilterFile" class="select"><option value="">All files</option></select>
-            </div>
-            <div class="field">
-                <label for="dailyFilterDevice">Device</label>
-                <select id="dailyFilterDevice" class="select"><option value="">All devices</option></select>
-            </div>
-            <div class="field">
-                <label for="dailyFilterPIC">PIC</label>
-                <select id="dailyFilterPIC" class="select"><option value="">All PICs</option></select>
-            </div>
-            <div class="field">
-                <label for="dailyFilterDateFrom">From</label>
-                <input type="date" id="dailyFilterDateFrom" class="input">
-            </div>
-            <div class="field">
-                <label for="dailyFilterDateTo">To</label>
-                <input type="date" id="dailyFilterDateTo" class="input">
-            </div>
-            <button class="btn" id="btnClearDailyFilters">Clear</button>
-            <div class="toolbar-end">
-                <span class="count" id="dailyCount"></span>
-                <button class="btn btn-quiet" data-expand="daily" data-all="1">Expand all</button>
-                <button class="btn btn-quiet" data-expand="daily" data-all="0">Collapse all</button>
-            </div>
+        <!-- Collapsed: just the way back out, and enough mark to know what app
+             this is. The vertical wordmark is the only decorative element. -->
+        <div class="rail-closed">
+            <button class="rail-icon" id="btnRailOpen" title="Show sidebar"
+                    aria-label="Show sidebar">»</button>
+            <div class="rail-mark">TRM</div>
         </div>
 
-        <div class="scroll-x">
-            <table class="ledger">
-                <thead><tr id="dailyHead"></tr></thead>
-                <tbody id="dailyBody"></tbody>
-                <tfoot id="dailyFoot"></tfoot>
-            </table>
+        <div class="rail-open">
+            <div class="rail-head">
+                <div class="rail-title">
+                    <div class="brand">Test Result Manager</div>
+                    <div class="rail-eyebrow">READS WORKBOOKS · WRITES THE REPORT</div>
+                </div>
+                <button class="rail-icon rail-icon--quiet" id="btnRailClose"
+                        title="Hide sidebar" aria-label="Hide sidebar">«</button>
+            </div>
+
+            <!-- What is loaded. Stated as a fact in the chrome, so no view has
+                 to spend a line of its own saying it. -->
+            <div class="rail-card" id="sourceCard" hidden>
+                <span class="rail-eyebrow">Loaded</span>
+                <span class="rail-figure" id="sourceFigure"></span>
+                <span class="rail-sub" id="sourceSummary"></span>
+            </div>
+
+            <nav class="rail-nav" id="viewNav">
+                <button class="rail-nav-item" data-view="summary" aria-current="true" disabled>
+                    <span>Summary</span><span class="rail-count" id="navCountTotal"></span>
+                </button>
+                <button class="rail-nav-item" data-view="daily" disabled>
+                    <span>Daily</span>
+                </button>
+                <button class="rail-nav-item" data-view="productivity" disabled>
+                    <span>Productivity</span>
+                </button>
+                <button class="rail-nav-item" data-view="detail" disabled>
+                    <span>Review</span><span class="rail-count rail-count--warn" id="navCountReview"></span>
+                </button>
+                <button class="rail-nav-item" data-view="tools">
+                    <span>Tools</span>
+                </button>
+                <!-- Always reachable, like Tools: the taxonomy, the scope groups
+                     and the sheet labels are editable whether or not anything
+                     has been loaded. -->
+                <button class="rail-nav-item" data-view="config">
+                    <span>Config</span>
+                </button>
+            </nav>
+
+            <div class="rail-foot">
+                <button id="btnReload" class="btn btn-rail" disabled>Reload source</button>
+                <button id="btnTheme" class="btn btn-rail btn-rail--quiet"
+                        aria-label="Switch to dark theme" title="Switch theme">◐ Theme</button>
+            </div>
         </div>
-        <nav class="pager" id="dailyPagination" aria-label="Daily pages"></nav>
+    </aside>
 
-        <!-- Reports over everything loaded; the filters above deliberately
-             do not apply here. -->
-        <h2 class="section-title">Productivity by member</h2>
-        <p class="section-note">
-            Executed cases divided by the days that member actually tested.
-            Covers everything loaded — the filters above do not apply.
-        </p>
-        <div class="scroll-x">
-            <table class="ledger">
-                <thead><tr id="productivityHead"></tr></thead>
-                <tbody id="productivityBody"></tbody>
-                <tfoot id="productivityFoot"></tfoot>
-            </table>
-        </div>
-    </section>
+    <main class="main">
 
-    <!-- ==================== Detail ==================== -->
-    <section class="view" id="detailView" hidden>
-        <div class="stats" id="statsRow"></div>
+        <header class="page-head">
+            <h1 id="pageTitle">Summary</h1>
+            <p id="pageSub"></p>
+        </header>
 
-        <div class="toolbar">
-            <div class="field">
-                <label for="filterSearch">Search</label>
+        <!-- ==================== Summary ==================== -->
+        <section class="view" id="summaryView" hidden>
+            <!-- The state of things, above the detail of it: total, executed, what
+                 is left to review, and what owes an explanation. Everything here is
+                 derived from the same rows the tables below draw. -->
+            <div id="summaryOverview" hidden></div>
+
+            <!-- The design puts these in the table card's header. There are
+                 several cards here — one per scope group — so they sit above
+                 all of them and narrow all of them, the way the sort does. -->
+            <div class="toolbar">
+                <div class="field">
+                    <label for="summaryFilterDevice">Device</label>
+                    <select id="summaryFilterDevice" class="select"><option value="">All devices</option></select>
+                </div>
+                <div class="field">
+                    <label for="summaryFilterFile">File</label>
+                    <select id="summaryFilterFile" class="select"><option value="">All files</option></select>
+                </div>
+                <div class="field">
+                    <span class="label">Rows</span>
+                    <button class="btn" id="btnSummaryGrouping"
+                            title="One row per file and device, or one per file">Split</button>
+                </div>
+                <button class="btn" id="btnClearSummaryFilters">Clear</button>
+            </div>
+
+            <!-- One card per scope group, generated from /api/summary: FPT work and
+                 JP work are separate commitments, and a single table adding them
+                 together answers no question anyone asks. -->
+            <div id="summaryTables"></div>
+        </section>
+
+        <!-- ==================== Daily ==================== -->
+        <section class="view" id="dailyView" hidden>
+
+            <!-- Executed per day against the plan. Drawn in CSS rather than
+                 Chart.js: it is a bar per day with one marker, and it has to
+                 repaint on every filter change and every theme change. -->
+            <section class="card">
+                <div class="card-head card-head--row">
+                    <h2>Cases executed per day, against plan</h2>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="swatch swatch--bar"></span>Executed</span>
+                        <span class="legend-item"><span class="swatch swatch--plan"></span>Plan</span>
+                    </div>
+                </div>
+                <div class="bars" id="dailyChart"></div>
+                <p class="chart-note" id="dailyChartNote"></p>
+            </section>
+
+            <div class="toolbar">
+                <div class="field">
+                    <label for="dailyFilterFile">File</label>
+                    <select id="dailyFilterFile" class="select"><option value="">All files</option></select>
+                </div>
+                <div class="field">
+                    <label for="dailyFilterDevice">Device</label>
+                    <select id="dailyFilterDevice" class="select"><option value="">All devices</option></select>
+                </div>
+                <div class="field">
+                    <label for="dailyFilterPIC">PIC</label>
+                    <select id="dailyFilterPIC" class="select"><option value="">All PICs</option></select>
+                </div>
+                <div class="field">
+                    <label for="dailyFilterDateFrom">From</label>
+                    <input type="date" id="dailyFilterDateFrom" class="input">
+                </div>
+                <div class="field">
+                    <label for="dailyFilterDateTo">To</label>
+                    <input type="date" id="dailyFilterDateTo" class="input">
+                </div>
+                <button class="btn" id="btnClearDailyFilters">Clear</button>
+                <div class="toolbar-end">
+                    <span class="count" id="dailyCount"></span>
+                    <button class="btn btn-quiet" data-expand="daily" data-all="1">Expand all</button>
+                    <button class="btn btn-quiet" data-expand="daily" data-all="0">Collapse all</button>
+                </div>
+            </div>
+
+            <div class="scroll-x">
+                <table class="ledger">
+                    <thead><tr id="dailyHead"></tr></thead>
+                    <tbody id="dailyBody"></tbody>
+                    <tfoot id="dailyFoot"></tfoot>
+                </table>
+            </div>
+            <nav class="pager" id="dailyPagination" aria-label="Daily pages"></nav>
+        </section>
+
+        <!-- ==================== Productivity ====================
+             Its own view rather than a second table under Daily: it reports over
+             everything loaded, and sitting beneath Daily's filters implied it
+             answered to them. It never did. -->
+        <section class="view" id="productivityView" hidden>
+            <section class="card card--table">
+                <div class="card-head card-head--row">
+                    <h2>Productivity by member</h2>
+                    <!-- The one number in the app nobody reads out of a workbook.
+                         It is a yardstick the team sets, and the Daily chart's
+                         plan line is derived from the same value. -->
+                    <label class="inline-field" for="productivityTarget">
+                        Target / person / day
+                        <input type="number" id="productivityTarget" class="input input-mono"
+                               min="1" step="1" inputmode="numeric">
+                    </label>
+                </div>
+                <div class="scroll-x scroll-x--flush">
+                    <table class="ledger">
+                        <thead><tr id="productivityHead"></tr></thead>
+                        <tbody id="productivityBody"></tbody>
+                        <tfoot id="productivityFoot"></tfoot>
+                    </table>
+                </div>
+            </section>
+        </section>
+
+        <!-- ==================== Review ==================== -->
+        <section class="view" id="detailView" hidden>
+            <!-- Controls, not readouts: each card filters the table to its own
+                 status and the first clears that filter. Built from the
+                 taxonomy in `renderStatCards`, bound in `views/detail.js`. -->
+            <div class="stats" id="statsRow"></div>
+
+            <!-- Search, and the way to everything else. Nine controls above the
+                 table pushed the first row of data off a laptop screen, so the
+                 rest fold away and the button carries how many are active. -->
+            <div class="filter-bar">
                 <input type="search" id="filterSearch" class="input input-mono"
-                       placeholder="case no, ticket, note" size="18">
-            </div>
-            <div class="field">
-                <label for="filterFile">File</label>
-                <select id="filterFile" class="select"><option value="">All files</option></select>
-            </div>
-            <div class="field">
-                <label for="filterDevice">Device</label>
-                <select id="filterDevice" class="select"><option value="">All devices</option></select>
-            </div>
-            <div class="field">
-                <label for="filterScope">Scope</label>
-                <select id="filterScope" class="select"><option value="">All scopes</option></select>
-            </div>
-            <div class="field">
-                <span class="label" id="filterResultLabel">Result</span>
-                <!-- A toggle per status rather than a select: several results at
-                     once is the normal question here ("NG and Pending"), and a
-                     multi-select box hides what is chosen behind a scrollbar. -->
-                <div class="toggles" id="filterResult" role="group"
-                     aria-labelledby="filterResultLabel"></div>
-            </div>
-            <div class="field">
-                <label for="filterPIC">PIC</label>
-                <select id="filterPIC" class="select"><option value="">All PICs</option></select>
-            </div>
-            <div class="field">
-                <label for="filterDateFrom">From</label>
-                <input type="date" id="filterDateFrom" class="input">
-            </div>
-            <div class="field">
-                <label for="filterDateTo">To</label>
-                <input type="date" id="filterDateTo" class="input">
-            </div>
-            <div class="field">
-                <label for="detailGroupBy">Group by</label>
-                <select id="detailGroupBy" class="select">
-                    <option value="">No grouping</option>
-                    <option value="file_name">File</option>
-                    <option value="file_name,device">File, device</option>
-                </select>
-            </div>
-            <button class="btn" id="btnClearFilters">Clear</button>
-            <div class="toolbar-end">
+                       placeholder="Search case no, ticket, note, PIC…">
+                <button class="btn" id="btnToggleFilters" aria-expanded="false"
+                        aria-controls="detailFilters">
+                    Filters <span class="pill" id="filterCount"></span>
+                </button>
                 <span class="count" id="filteredCount"></span>
             </div>
-        </div>
 
-        <div class="chips" id="detailChips"></div>
-
-        <div class="charts-toggle">
-            <button class="btn btn-quiet" id="btnToggleCharts" aria-expanded="false"
-                    aria-controls="chartsRow">Show charts</button>
-        </div>
-        <div class="charts" id="chartsRow" hidden>
-            <div class="chart"><canvas id="chartResult"></canvas></div>
-            <div class="chart"><canvas id="chartDevice"></canvas></div>
-            <div class="chart"><canvas id="chartPIC"></canvas></div>
-        </div>
-
-        <div class="scroll-x">
-            <table class="ledger">
-                <thead><tr id="detailHead"></tr></thead>
-                <tbody id="dataBody"></tbody>
-            </table>
-        </div>
-        <nav class="pager" id="pagination" aria-label="Detail pages"></nav>
-    </section>
-</main>
-
-<!-- ==================== Setup drawer ==================== -->
-<div class="scrim" id="drawerScrim" hidden></div>
-<aside class="drawer" id="setupDrawer" aria-label="Setup" hidden>
-    <div class="drawer-head">
-        <h2>Setup</h2>
-        <button class="btn btn-icon" id="btnCloseDrawer" aria-label="Close setup">✕</button>
-    </div>
-
-    <section>
-        <h3>Where the test cases come from</h3>
-        <div class="stack">
-            <div class="row">
-                <div class="field">
-                    <label for="sourceType">Source</label>
-                    <select id="sourceType" class="select">
-                        <option value="folder">Folder</option>
-                        <option value="files">Files</option>
-                    </select>
-                </div>
-                <div class="field" style="flex:1" id="folderInputGroup">
-                    <label for="folderPath">Folder path</label>
-                    <div class="input-row">
-                        <input type="text" id="folderPath" class="input input-mono"
-                               placeholder="D:\TestCases\project1">
-                        <button id="btnBrowseFolder" type="button" class="btn">Browse</button>
+            <div class="filter-well" id="detailFilters" hidden>
+                <div class="filter-grid">
+                    <div class="field">
+                        <label for="filterFile">File</label>
+                        <select id="filterFile" class="select"><option value="">All files</option></select>
+                    </div>
+                    <div class="field">
+                        <label for="filterDevice">Device</label>
+                        <select id="filterDevice" class="select"><option value="">All devices</option></select>
+                    </div>
+                    <div class="field">
+                        <label for="filterScope">Scope</label>
+                        <select id="filterScope" class="select"><option value="">All scopes</option></select>
+                    </div>
+                    <div class="field">
+                        <label for="filterPIC">PIC</label>
+                        <select id="filterPIC" class="select"><option value="">All PICs</option></select>
+                    </div>
+                    <div class="field">
+                        <label for="filterDateFrom">From</label>
+                        <input type="date" id="filterDateFrom" class="input">
+                    </div>
+                    <div class="field">
+                        <label for="filterDateTo">To</label>
+                        <input type="date" id="filterDateTo" class="input">
+                    </div>
+                    <div class="field">
+                        <label for="detailGroupBy">Group by</label>
+                        <select id="detailGroupBy" class="select">
+                            <option value="">No grouping</option>
+                            <option value="file_name">File</option>
+                            <option value="file_name,device">File, device</option>
+                        </select>
                     </div>
                 </div>
-                <div class="field" style="flex:1" id="filesInputGroup" hidden>
-                    <label for="filePaths">File paths, one per line</label>
-                    <div class="input-row">
-                        <textarea id="filePaths" class="input" rows="3"
-                                  placeholder="D:\TestCases\file1.xlsx&#10;D:\TestCases\file2.xlsx"></textarea>
-                        <button id="btnBrowseFiles" type="button" class="btn">Browse</button>
+                <div class="filter-row">
+                    <div class="field">
+                        <span class="label" id="filterResultLabel">Result</span>
+                        <!-- Several results at once is the normal question here
+                             ("NG and Pending"), which the single-pick cards
+                             above cannot express and a select hides. -->
+                        <div class="toggles" id="filterResult" role="group"
+                             aria-labelledby="filterResultLabel"></div>
                     </div>
+                    <div class="field">
+                        <span class="label">Condition</span>
+                        <!-- A condition rather than a result: it narrows within
+                             whatever statuses are chosen. The predicate is the
+                             one that paints the Ticket ID and Note cells red. -->
+                        <button type="button" class="toggle" id="btnMissingReason"
+                                aria-pressed="false" data-tone="danger"
+                                title="Only cases that owe a ticket id or a note and carry neither">
+                            Missing reason
+                        </button>
+                    </div>
+                    <button class="btn" id="btnClearFilters">Clear all</button>
                 </div>
             </div>
-            <div class="row">
-                <button id="btnLoad" class="btn btn-primary">Load test cases</button>
-            </div>
-            <div class="status-line" id="loadStatus"></div>
-            <div class="scroll-x" id="fileResultsWrapper" hidden>
-                <table class="ledger">
-                    <thead><tr>
-                        <th class="num">#</th><th>File</th><th>Status</th>
-                        <th class="num">Cases</th><th>Error</th>
-                    </tr></thead>
-                    <tbody id="fileResultsBody"></tbody>
-                </table>
-            </div>
-        </div>
-    </section>
 
-    <section id="prepareSection" hidden>
-        <h3>Prepare the workbooks</h3>
-        <p class="section-note">
-            Acts on the source files themselves. Every button shows what it would do first;
-            nothing is written until you press Apply.
-        </p>
-        <div class="stack">
-            <div class="field">
-                <span class="label">Keep these results when clearing</span>
-                <div class="checks" id="keepStatuses"></div>
-            </div>
-            <div class="row">
-                <button id="btnDetectAll" type="button" class="btn">Check TOOL_DATA in all</button>
-                <button id="btnClearAll" type="button" class="btn">Clear results in all</button>
-            </div>
-            <div class="scroll-x" id="prepareFilesWrapper">
-                <table class="ledger">
-                    <thead><tr>
-                        <th>File</th><th>TOOL_DATA</th><th>Actions</th>
-                    </tr></thead>
-                    <tbody id="prepareFilesBody"></tbody>
-                </table>
-            </div>
-            <div class="status-line" id="prepareStatus"></div>
-            <div class="preview" id="preparePreview" hidden></div>
-            <div class="row" id="prepareApplyRow" hidden>
-                <button id="btnPrepareApply" type="button" class="btn btn-primary">Apply</button>
-                <button id="btnPrepareCancel" type="button" class="btn btn-quiet">Discard</button>
-            </div>
-        </div>
-    </section>
+            <div class="chips" id="detailChips"></div>
 
-    <section>
-        <h3>Where the report goes</h3>
-        <div class="stack">
-            <div class="field">
-                <label for="reportUrl">SharePoint report file</label>
-                <input type="text" id="reportUrl" class="input input-mono"
-                       placeholder="https://contoso.sharepoint.com/:x:/r/sites/qa/Shared%20Documents/QA%20Report.xlsx">
+            <div class="charts-toggle">
+                <button class="btn btn-quiet" id="btnToggleCharts" aria-expanded="false"
+                        aria-controls="chartsRow">Show charts</button>
             </div>
-            <div class="row">
-                <button id="btnSignIn" class="btn">Sign in</button>
-                <button id="btnSignOut" class="btn" hidden>Sign out</button>
-                <button id="btnPublish" class="btn btn-primary" disabled
-                        title="Load test cases first">Publish</button>
+            <div class="charts" id="chartsRow" hidden>
+                <div class="chart"><canvas id="chartResult"></canvas></div>
+                <div class="chart"><canvas id="chartDevice"></canvas></div>
+                <div class="chart"><canvas id="chartPIC"></canvas></div>
             </div>
-            <div class="status-line" id="sharepointStatus"></div>
-            <div class="status-line" id="publishStatus"></div>
-        </div>
-    </section>
-</aside>
+
+            <!-- Framed and full width, like Summary's tables: the pane is
+                 capped at about ten rows and scrolls, so Show all does not make
+                 the page itself grow. -->
+            <section class="card card--table">
+                <div class="scroll-x scroll-x--flush scroll-x--rows">
+                    <table class="ledger">
+                        <thead><tr id="detailHead"></tr></thead>
+                        <tbody id="dataBody"></tbody>
+                    </table>
+                </div>
+                <div class="card-foot" id="detailFooter"></div>
+            </section>
+        </section>
+
+        <!-- ==================== Tools ====================
+             Where the data comes from, what gets written back to the workbooks,
+             and where the report goes. This was a drawer; it is a view now, and
+             the three panels below still know nothing about each other or about
+             which view they happen to be drawn in. -->
+        <section class="view view--grid" id="toolsView" hidden>
+
+            <!-- One card, because there is one list of files.
+                 Loading is read-only; the buttons on each row write to the
+                 workbook itself. Two cards meant the same workbooks were listed
+                 twice, in two tables, a screen apart. -->
+            <section class="card" id="sourceSection">
+                <div class="card-head">
+                    <h2>Where the test cases come from</h2>
+                    <p>Loading is read-only. The actions on each row change the workbook
+                       itself — every one shows what it would do first, and nothing is
+                       written until you press Apply.</p>
+                </div>
+                <div class="stack">
+                    <div class="row">
+                        <div class="field">
+                            <label for="sourceType">Source</label>
+                            <select id="sourceType" class="select">
+                                <option value="folder">Folder</option>
+                                <option value="files">Files</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex:1" id="folderInputGroup">
+                            <label for="folderPath">Folder path</label>
+                            <div class="input-row">
+                                <input type="text" id="folderPath" class="input input-mono"
+                                       placeholder="D:\TestCases\project1">
+                                <button id="btnBrowseFolder" type="button" class="btn">Browse</button>
+                            </div>
+                        </div>
+                        <div class="field" style="flex:1" id="filesInputGroup" hidden>
+                            <label for="filePaths">File paths, one per line</label>
+                            <div class="input-row">
+                                <textarea id="filePaths" class="input" rows="3"
+                                          placeholder="D:\TestCases\file1.xlsx&#10;D:\TestCases\file2.xlsx"></textarea>
+                                <button id="btnBrowseFiles" type="button" class="btn">Browse</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <button id="btnLoad" class="btn btn-primary">Load test cases</button>
+                    </div>
+                    <div class="status-line" id="loadStatus"></div>
+
+                    <!-- The controls that act on every workbook at once. Hidden
+                         until a load succeeds, because the file list they work
+                         from is the loaded source's. -->
+                    <div class="stack" id="prepareControls" hidden>
+                        <div class="field">
+                            <span class="label">Keep these results when clearing</span>
+                            <div class="checks" id="keepStatuses"></div>
+                        </div>
+                        <div class="row">
+                            <button id="btnDetectAll" type="button" class="btn">Check TOOL_DATA in all</button>
+                            <button id="btnClearAll" type="button" class="btn">Clear results in all</button>
+                        </div>
+                    </div>
+
+                    <!-- What each workbook contributed, what state it is in, and
+                         what may be done to it. `filesTable.js` owns it; both
+                         panels feed it and neither knows the other exists. -->
+                    <div class="scroll-x" id="sourceFilesWrapper" hidden>
+                        <table class="ledger">
+                            <thead><tr>
+                                <th class="num">#</th><th>File</th><th>Status</th>
+                                <th class="num">Cases</th><th>TOOL_DATA</th>
+                                <th>Actions</th><th>Error</th>
+                            </tr></thead>
+                            <tbody id="sourceFilesBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="status-line" id="prepareStatus"></div>
+                    <div class="preview" id="preparePreview" hidden></div>
+                    <div class="row" id="prepareApplyRow" hidden>
+                        <button id="btnPrepareApply" type="button" class="btn btn-danger">Apply</button>
+                        <button id="btnPrepareCancel" type="button" class="btn btn-quiet">Discard</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-head">
+                    <h2>Where the report goes</h2>
+                    <p>Publishing rewrites today's rows in the SharePoint workbook and appends
+                       the current ones. Safe to run twice.</p>
+                </div>
+                <div class="stack">
+                    <div class="field">
+                        <label for="reportUrl">SharePoint report file</label>
+                        <input type="text" id="reportUrl" class="input input-mono"
+                               placeholder="https://contoso.sharepoint.com/:x:/r/sites/qa/Shared%20Documents/QA%20Report.xlsx">
+                    </div>
+                    <div class="row">
+                        <button id="btnSignIn" class="btn">Sign in</button>
+                        <button id="btnSignOut" class="btn" hidden>Sign out</button>
+                        <button id="btnPublish" class="btn btn-primary" disabled
+                                title="Load test cases first">Publish</button>
+                    </div>
+                    <div class="status-line" id="sharepointStatus"></div>
+                    <div class="status-line" id="publishStatus"></div>
+                </div>
+            </section>
+
+        </section>
+
+        <!-- ==================== Config ====================
+             The three JSON files the rest of the app is driven by. A view
+             rather than a fourth Tools card: all three are editable whether or
+             not anything is loaded, and three forms is more than a card's worth
+             of screen. `views/config.js` names none of the vocabularies it
+             draws — tones, derive conditions and field names all arrive from
+             /api/config. -->
+        <section class="view view--grid" id="configView" hidden>
+
+            <section class="card" id="configCard-statuses">
+                <div class="card-head card-head--row">
+                    <h2>Result statuses</h2>
+                    <span class="pill" id="configDirty-statuses" hidden>unsaved</span>
+                </div>
+                <div class="card-head">
+                    <p>What a Result cell means. Every status column, badge, chart slice and
+                       report column is built from this — order included.
+                       <span class="mono" id="configPath-statuses"></span></p>
+                </div>
+                <div class="stack">
+                    <div id="configStatuses"></div>
+                    <div class="status-line" id="configStatus-statuses"></div>
+                    <div class="row">
+                        <button id="configSave-statuses" type="button" class="btn btn-primary" disabled>Save</button>
+                        <button id="configRevert-statuses" type="button" class="btn btn-quiet" disabled>Revert</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="configCard-scopes">
+                <div class="card-head card-head--row">
+                    <h2>Scope groups</h2>
+                    <span class="pill" id="configDirty-scopes" hidden>unsaved</span>
+                </div>
+                <div class="card-head">
+                    <p>Which Scope values belong to which Summary table. Separate commitments get
+                       separate tables rather than one that adds them together.
+                       <span class="mono" id="configPath-scopes"></span></p>
+                </div>
+                <div class="stack">
+                    <div id="configScopes"></div>
+                    <div class="status-line" id="configStatus-scopes"></div>
+                    <div class="row">
+                        <button id="configSave-scopes" type="button" class="btn btn-primary" disabled>Save</button>
+                        <button id="configRevert-scopes" type="button" class="btn btn-quiet" disabled>Revert</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="configCard-sheet_labels">
+                <div class="card-head card-head--row">
+                    <h2>Sheet labels</h2>
+                    <span class="pill" id="configDirty-sheet_labels" hidden>unsaved</span>
+                </div>
+                <div class="card-head">
+                    <p>The words TOOL_DATA detection looks for when working out a sheet's layout.
+                       Changing these changes what "Create TOOL_DATA" finds, not what is already
+                       loaded. <span class="mono" id="configPath-sheet_labels"></span></p>
+                </div>
+                <div class="stack">
+                    <div id="configSheetLabels"></div>
+                    <div class="status-line" id="configStatus-sheet_labels"></div>
+                    <div class="row">
+                        <button id="configSave-sheet_labels" type="button" class="btn btn-primary" disabled>Save</button>
+                        <button id="configRevert-sheet_labels" type="button" class="btn btn-quiet" disabled>Revert</button>
+                    </div>
+                </div>
+            </section>
+
+        </section>
+    </main>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>

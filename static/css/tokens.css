@@ -1,172 +1,268 @@
 /*
- * Design tokens: the whole palette, type scale and spacing rhythm.
+ * Design tokens: the whole palette, type scale, geometry and spacing rhythm.
  *
- * Two rules govern this file.
+ * The values come from the Test Result Manager design canvas; the token *names*
+ * and the three rules below are the app's and predate it.
  *
  * 1. The interface has no accent colour. Colour on screen always means *status*,
- *    so chrome (tabs, buttons, focus, selection) is rendered in ink and paper
+ *    so chrome (nav, buttons, focus, selection) is rendered in ink and paper
  *    only. That is what keeps a device breakdown from reading as pass/fail.
+ *    The design's green primary (#1F6F5C) was deliberately NOT adopted: it sits
+ *    a few degrees from OK's own green, which is exactly the collision this
+ *    rule exists to prevent. Primary actions are ink blocks instead.
  *
  * 2. Every colour is defined on bare `:root` first. The dark blocks only
  *    redefine; nothing gets its sole definition inside a media query, so a
- *    browser that never matches one still has a complete palette.
+ *    browser that never matches one still has a complete palette. The design
+ *    is light-only, so the dark palette is derived from it rather than copied:
+ *    same hues, inverted ground.
+ *
+ * 3. Geometry is a scale, not a constant. Curvature carries meaning here:
+ *    the further a surface is from the data, the rounder it gets. A table cell
+ *    is square, a button is 8px, a card is 10px, and a control whose whole job
+ *    is to be pressed is a full pill. Reaching for an arbitrary `border-radius`
+ *    instead of a token is what makes an interface look assembled rather than
+ *    designed.
  */
 
 :root {
     /* --- ground ------------------------------------------------------------
-     * A pale cool green-grey rather than white or cream. The cast is
-     * functional: it damps green slightly and lifts red, which is the right
-     * bias for a tool whose green column is the boring majority and whose red
-     * column is the thing you are hunting for.
+     * A warm grey-cream. The design puts cards in flat white ON that ground,
+     * which is the structural move: `--paper` is the desk, `--paper-raised` is
+     * the sheet of paper lying on it. Panes are white and the app never is.
      */
-    --paper:          #f1f3ef;
-    --paper-sunk:     #e7eae4;   /* the status band, and table headers */
-    --paper-raised:   #f8f9f6;   /* drawer and empty state, the only boxes */
-    --paper-hover:    #e4e8e0;
+    --paper:          #f2f1ed;   /* the desk */
+    --paper-raised:   #ffffff;   /* cards, table panes — the working surface */
+    --paper-sunk:     #faf9f6;   /* table headers, filter wells, row hover */
+    --paper-hover:    #f7f6f3;
 
-    --rule:           #d3d8cf;
-    --rule-strong:    #b4bcb0;
+    --rule:           #e4e2dc;   /* card and pane borders */
+    --rule-soft:      #efeee9;   /* between rows, inside a pane */
+    --rule-strong:    #dfddd6;   /* inputs, selects, secondary buttons */
 
     /* Grouped rows are tinted by depth, darkest at the outermost level, so the
        three tiers of the daily table read apart without counting indents. */
-    --level-0:        #dbe1d7;
-    --level-1:        #e8ebe4;
+    --level-0:        #eceae3;
+    --level-1:        #f5f4f0;
 
     /* --- ink --------------------------------------------------------------- */
-    --ink:            #1c211c;
-    --ink-soft:       #5b635a;
-    --ink-faint:      #8b937f;
-    --ink-invert:     #f1f3ef;   /* text on an ink block */
+    --ink:            #14171c;
+    --ink-soft:       #6b7078;
+    --ink-faint:      #8a8f98;
+    --ink-invert:     #f7f6f3;   /* text on an ink block */
+
+    /* --- the rail ----------------------------------------------------------
+     * The sidebar is the one large dark field in the light theme, and it is
+     * chrome, not data — so it gets its own ramp rather than borrowing the
+     * status palette. In dark mode these barely move: the rail is already dark.
+     */
+    --rail-bg:        #14171c;
+    --rail-sunk:      #1c2128;   /* the "today" card inside the rail */
+    --rail-hover:     #242931;
+    --rail-rule:      #343a43;
+    --rail-ink:       #edece7;
+    --rail-ink-soft:  #7e8791;
 
     /* --- status tones ------------------------------------------------------
      * The only chromatic values in the system. `parser/result_status.json`
      * names which tone a status carries; what the tone looks like lives here,
      * so a palette change never touches the taxonomy and vice versa.
+     *
+     * Five tones, eight statuses: `taxonomy.js` steps the shade within a tone
+     * so NG-OK and Pending (both `warn`) still read apart.
      */
-    --tone-success:   #1f7a4c;
-    --tone-danger:    #c2352a;
-    --tone-warn:      #9a6b05;
-    --tone-neutral:   #5f675e;
-    --tone-muted:     #949c90;
+    --tone-success:   #2e7d5b;
+    --tone-danger:    #c2413a;
+    --tone-warn:      #c98a2b;
+    --tone-neutral:   #8a8f98;
+    --tone-muted:     #c6c4bd;
 
-    /* Badge fills: the tone at full strength, text knocked out in paper. */
-    --tone-success-fg: #ffffff;
-    --tone-danger-fg:  #ffffff;
-    --tone-warn-fg:    #ffffff;
-    --tone-neutral-fg: #ffffff;
-    --tone-muted-fg:   #ffffff;
+    /* Badge fills. The design's chips are a TINT carrying deep text rather than
+       a solid block carrying knocked-out white — quieter next to a column of
+       figures, which is most of what sits beside them here. */
+    --tone-success-bg: #eaf3ee;
+    --tone-danger-bg:  #fbedec;
+    --tone-warn-bg:    #fbf3e4;
+    --tone-neutral-bg: #f2f1ed;
+    --tone-muted-bg:   #f2f1ed;
 
-    /* Washes for row-level flags, kept far below text contrast. */
-    --tone-danger-bg:  #f7e4e1;
-    --tone-warn-bg:    #f5ecd8;
+    --tone-success-fg: #226147;
+    --tone-danger-fg:  #a4332c;
+    --tone-warn-fg:    #8a5c13;
+    --tone-neutral-fg: #61666e;
+    --tone-muted-fg:   #61666e;
 
     /* --- type -------------------------------------------------------------
-     * IBM Plex, for two reasons specific to this app rather than to taste:
-     * the status labels are bilingual ("Pending (保留)"), and Plex Sans JP is a
-     * real in-family companion, so CJK does not fall back to a mismatched
-     * system face partway through a label. Plex Mono carries anything
-     * genuinely code-like — counts, case numbers, paths, Excel column letters.
+     * IBM Plex Sans, with Noto Sans JP carrying the Japanese.
+     *
+     * The design sets everything in Plex Sans and every figure in Plex Mono.
+     * Plex has no CJK, and the status labels here are bilingual ("Pending
+     * (保留)") — Latin and CJK inside one string — so Noto Sans JP stays in the
+     * stack whatever the Latin face is. Plex Sans JP would be the in-family
+     * companion, but Noto is what agrees with Noto elsewhere in this app.
+     *
+     * Counts are set in Plex Mono, as drawn: the design leans on the mono face
+     * to mark what is a figure, and the tables are dense enough that the
+     * distinction earns its keep.
      */
-    --font-sans: "IBM Plex Sans", "IBM Plex Sans JP", ui-sans-serif, system-ui,
+    --font-sans: "IBM Plex Sans", "Noto Sans JP", ui-sans-serif, system-ui,
                  -apple-system, "Segoe UI", sans-serif;
     --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
+    /* The design's ramp: 11 for uppercase eyebrows, 12.5-13 for table text,
+       14 for card headings, 23 for the page title, 27 for a headline figure. */
     --fs-xs:   11px;
-    --fs-sm:   12px;
+    --fs-sm:   12.5px;
     --fs-base: 13px;
-    --fs-md:   15px;
-    --fs-lg:   19px;
+    --fs-md:   14px;
+    --fs-lg:   23px;
+    --fs-xl:   27px;   /* the overview's headline figures */
 
     --lh-tight: 1.25;
-    --lh-base:  1.45;
-    --lh-cjk:   1.6;    /* a 13px kanji is not a 13px "a" */
+    --lh-base:  1.5;
+    --lh-cjk:   1.65;   /* a 13px kanji is not a 13px "a" */
 
-    /* --- space ------------------------------------------------------------- */
+    /* Uppercase eyebrow labels — the design's one typographic mannerism, and
+       the thing that makes a card heading read as a label and not a sentence. */
+    --ls-eyebrow: 0.06em;
+    --ls-tight:  -0.02em;   /* headline figures and the page title */
+
+    /* --- space -------------------------------------------------------------
+     * 4 / 8 / 12 / 16 / 20 / 32. Every step is a multiple of 4.
+     */
     --sp-1: 4px;
-    --sp-2: 6px;
-    --sp-3: 8px;
-    --sp-4: 12px;
-    --sp-5: 16px;
-    --sp-6: 24px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 20px;
+    --sp-6: 32px;
 
-    --row-h:    28px;
-    --topbar-h: 48px;
-    --band-w:   118px;  /* one width for every status column;
+    --row-h:    34px;
+    --ctl-h:    33px;   /* buttons, inputs and selects all agree on one height */
+    --rail-w:   232px;
+    --rail-w-closed: 64px;
+    --band-w:   116px;  /* one width for every status column;
                             wide enough that "Cancel (対象外)" stays on one line */
 
-    /* The grid has corners. 2px on inputs only, so a focus ring reads as a
-     * ring rather than as a rounded card. */
-    --radius: 2px;
+    /* --- geometry ----------------------------------------------------------
+     * Distance from the data sets the curvature. See rule 3 above.
+     */
+    --r-sm:   6px;    /* inputs, selects, small in-cell buttons */
+    --r-md:   7px;    /* buttons, rail nav items */
+    --r-lg:   10px;   /* cards and table panes — the design's card radius */
+    --r-full: 999px;  /* chips and result toggles — things that are pressed */
+
+    /* --- elevation ---------------------------------------------------------
+     * The design frames with a hairline rather than a shadow, so these are
+     * quieter than they were and only the genuinely floating surfaces use them.
+     * Shadow colour is a literal rather than a mix of `--ink`, because `--ink`
+     * inverts in dark mode and a light shadow is not a shadow.
+     */
+    --shadow-1: 0 1px 2px rgba(20, 23, 28, .04);
+    --shadow-2: 0 4px 12px -2px rgba(20, 23, 28, .08);
+    --shadow-3: 0 24px 48px -8px rgba(20, 23, 28, .18);
 }
 
 /*
  * Dark. Guarded so an explicit light choice still wins over the OS setting.
+ * The design ships no dark mode; this keeps its hues and inverts the ground.
  */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-        --paper:        #161a16;
-        --paper-sunk:   #1e231e;
-        --paper-raised: #1f251f;
-        --paper-hover:  #232922;
+        --paper:        #14171c;
+        --paper-raised: #1b1f26;
+        --paper-sunk:   #20252d;
+        --paper-hover:  #242931;
 
-        --rule:         #2c332c;
-        --rule-strong:  #3e463d;
+        --rule:         #2c323b;
+        --rule-soft:    #242931;
+        --rule-strong:  #3a414b;
 
-        --level-0:      #2b332a;
-        --level-1:      #212820;
+        --level-0:      #272d36;
+        --level-1:      #1f242b;
 
-        --ink:          #e4e8e0;
-        --ink-soft:     #9aa396;
-        --ink-faint:    #6e7a6c;
-        --ink-invert:   #161a16;
+        --ink:          #edece7;
+        --ink-soft:     #9aa1ab;
+        --ink-faint:    #7e8791;
+        --ink-invert:   #14171c;
 
-        --tone-success: #4fb07a;
-        --tone-danger:  #e8695c;
-        --tone-warn:    #d9a02e;
-        --tone-neutral: #9aa396;
-        --tone-muted:   #6e7a6c;
+        --rail-bg:      #0f1216;
+        --rail-sunk:    #171b21;
+        --rail-hover:   #222831;
+        --rail-rule:    #2c323b;
+        --rail-ink:     #edece7;
+        --rail-ink-soft: #7e8791;
 
-        --tone-success-fg: #0d1a12;
-        --tone-danger-fg:  #21100e;
-        --tone-warn-fg:    #201802;
-        --tone-neutral-fg: #14170f;
-        --tone-muted-fg:   #e4e8e0;
+        --tone-success: #4aa87c;
+        --tone-danger:  #e0665d;
+        --tone-warn:    #d8a441;
+        --tone-neutral: #9aa1ab;
+        --tone-muted:   #6d7480;
 
-        --tone-danger-bg:  #33201d;
-        --tone-warn-bg:    #2e2814;
+        --tone-success-bg: #16281f;
+        --tone-danger-bg:  #2e1917;
+        --tone-warn-bg:    #2b2210;
+        --tone-neutral-bg: #242931;
+        --tone-muted-bg:   #242931;
+
+        --tone-success-fg: #7fcaa1;
+        --tone-danger-fg:  #f0948c;
+        --tone-warn-fg:    #e8c17a;
+        --tone-neutral-fg: #b3b9c2;
+        --tone-muted-fg:   #b3b9c2;
+
+        /* Deeper and harder: on a dark ground a 4%-alpha shadow is invisible. */
+        --shadow-1: 0 1px 2px rgba(0, 0, 0, .30);
+        --shadow-2: 0 4px 12px -2px rgba(0, 0, 0, .40);
+        --shadow-3: 0 24px 48px -8px rgba(0, 0, 0, .55);
     }
 }
 
 /* The toggle, winning in both directions. */
 :root[data-theme="dark"] {
-    --paper:        #161a16;
-    --paper-sunk:   #1e231e;
-    --paper-raised: #1f251f;
-    --paper-hover:  #232922;
+    --paper:        #14171c;
+    --paper-raised: #1b1f26;
+    --paper-sunk:   #20252d;
+    --paper-hover:  #242931;
 
-    --rule:         #2c332c;
-    --rule-strong:  #3e463d;
+    --rule:         #2c323b;
+    --rule-soft:    #242931;
+    --rule-strong:  #3a414b;
 
-    --level-0:      #2b332a;
-    --level-1:      #212820;
+    --level-0:      #272d36;
+    --level-1:      #1f242b;
 
-    --ink:          #e4e8e0;
-    --ink-soft:     #9aa396;
-    --ink-faint:    #6e7a6c;
-    --ink-invert:   #161a16;
+    --ink:          #edece7;
+    --ink-soft:     #9aa1ab;
+    --ink-faint:    #7e8791;
+    --ink-invert:   #14171c;
 
-    --tone-success: #4fb07a;
-    --tone-danger:  #e8695c;
-    --tone-warn:    #d9a02e;
-    --tone-neutral: #9aa396;
-    --tone-muted:   #6e7a6c;
+    --rail-bg:      #0f1216;
+    --rail-sunk:    #171b21;
+    --rail-hover:   #222831;
+    --rail-rule:    #2c323b;
+    --rail-ink:     #edece7;
+    --rail-ink-soft: #7e8791;
 
-    --tone-success-fg: #0d1a12;
-    --tone-danger-fg:  #21100e;
-    --tone-warn-fg:    #201802;
-    --tone-neutral-fg: #14170f;
-    --tone-muted-fg:   #e4e8e0;
+    --tone-success: #4aa87c;
+    --tone-danger:  #e0665d;
+    --tone-warn:    #d8a441;
+    --tone-neutral: #9aa1ab;
+    --tone-muted:   #6d7480;
 
-    --tone-danger-bg:  #33201d;
-    --tone-warn-bg:    #2e2814;
+    --tone-success-bg: #16281f;
+    --tone-danger-bg:  #2e1917;
+    --tone-warn-bg:    #2b2210;
+    --tone-neutral-bg: #242931;
+    --tone-muted-bg:   #242931;
+
+    --tone-success-fg: #7fcaa1;
+    --tone-danger-fg:  #f0948c;
+    --tone-warn-fg:    #e8c17a;
+    --tone-neutral-fg: #b3b9c2;
+    --tone-muted-fg:   #b3b9c2;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .30);
+    --shadow-2: 0 4px 12px -2px rgba(0, 0, 0, .40);
+    --shadow-3: 0 24px 48px -8px rgba(0, 0, 0, .55);
 }

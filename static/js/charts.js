@@ -69,17 +69,26 @@ function inkRamp(n) {
     });
 }
 
-/** Chart.js options shared by every chart, themed from the tokens. */
+/**
+ * Chart.js options shared by every chart, themed from the tokens.
+ *
+ * The font family is pushed into Chart.js's global defaults rather than set
+ * per-scale: Chart.js draws to a canvas and so inherits nothing from CSS, and
+ * without this the charts render in the browser's default face while every
+ * label around them is Inter. Read from the token so the two can only ever
+ * change together.
+ */
 function baseOptions(title) {
     const ink = cssValue("--ink");
     const soft = cssValue("--ink-soft");
+    Chart.defaults.font.family = cssValue("--font-sans");
     return {
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
         plugins: {
-            title: { display: true, text: title, color: ink, font: { size: 13, weight: "600" } },
-            legend: { labels: { color: soft, boxWidth: 10, font: { size: 11 } } },
+            title: { display: true, text: title, color: ink, font: { size: 14, weight: "600" } },
+            legend: { labels: { color: soft, boxWidth: 10, font: { size: 12 } } },
             tooltip: { backgroundColor: ink, titleColor: cssValue("--ink-invert"),
                        bodyColor: cssValue("--ink-invert"), displayColors: false },
         },
@@ -125,9 +134,9 @@ function renderBarChart(id, title, data) {
     const options = baseOptions(title);
     options.plugins.legend = { display: false };
     options.scales = {
-        x: { ticks: { color: soft, font: { size: 11 } }, grid: { display: false },
+        x: { ticks: { color: soft, font: { size: 12 } }, grid: { display: false },
              border: { color: rule } },
-        y: { beginAtZero: true, ticks: { color: soft, precision: 0, font: { size: 11 } },
+        y: { beginAtZero: true, ticks: { color: soft, precision: 0, font: { size: 12 } },
              grid: { color: rule }, border: { display: false } },
     };
 

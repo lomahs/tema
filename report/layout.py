@@ -85,6 +85,16 @@ class ReportLayout:
             raw = json.load(f)
         return cls.from_dict(raw, status_set=status_set, source=path)
 
+    def adopt(self, other: "ReportLayout") -> None:
+        """Become `other`, in place — see `StatusSet.adopt` for why.
+
+        This matters more here than it looks: `{"expand": "statuses"}` is
+        materialised into columns when the layout is *built*, so a taxonomy
+        edit leaves a layout that was widened for the old set of statuses. The
+        Config view rebuilds this one whenever it saves the taxonomy.
+        """
+        self.__dict__.update(other.__dict__)
+
     @classmethod
     def from_dict(cls, raw: dict, status_set=STATUS, source: str = "<dict>") -> "ReportLayout":
         entries = raw.get("sheets")

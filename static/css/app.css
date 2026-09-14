@@ -1,10 +1,21 @@
 /*
  * Components.
  *
- * The organising idea is the ledger: this tool sits between two spreadsheets,
- * its users already think in rows and columns, so the grid is the structure.
- * There is no `.card` and no `.panel` here — the drawer and the empty state are
- * the only boxed surfaces in the app. Everything else is ruled, not framed.
+ * The organising idea is still the ledger: this tool sits between two
+ * spreadsheets, its users already think in rows and columns, so the grid is the
+ * structure. Rows are ruled and cells are square, because a curve inside a grid
+ * of figures is noise.
+ *
+ * Around the grid, the Test Result Manager design canvas: a dark rail carrying
+ * navigation, and white cards on a warm grey desk carrying everything else.
+ * Each table sits in its own rounded pane and the controls take the curvature
+ * scale in `tokens.css`. The rule is distance from the data: the closer a
+ * surface is to a figure, the squarer it is. Cells are square, their pane is
+ * 10px, and a control whose entire job is to be pressed is a full pill.
+ *
+ * Selection is still an inverted ink block and never a hue, because on this
+ * screen a hue always means a status. The design's green primary was dropped
+ * for precisely that reason — see rule 1 in `tokens.css`.
  */
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -27,84 +38,190 @@ body {
 
 :focus-visible {
     outline: 2px solid var(--ink);
-    outline-offset: 1px;
+    outline-offset: 2px;
+    /* Modern engines follow `border-radius`, so a ring around a pill is a pill
+       and not the rectangle the old 1px offset used to draw around one. */
+    border-radius: inherit;
 }
 
-/* --- top bar -------------------------------------------------------------- */
+/* --- the shell -----------------------------------------------------------
+ * Two columns: a rail that does not scroll and a main column that does. The
+ * rail is `position: sticky` rather than `fixed` so it participates in the
+ * grid and the main column needs no matching margin to avoid sliding under it.
+ */
 
-.topbar {
+.shell {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    min-height: 100vh;
+}
+
+.rail {
     position: sticky;
     top: 0;
     z-index: 30;
     display: flex;
-    align-items: center;
-    gap: var(--sp-5);
-    height: var(--topbar-h);
-    padding: 0 var(--sp-5);
-    background: var(--paper);
-    border-bottom: 1px solid var(--rule-strong);
+    flex-direction: column;
+    width: var(--rail-w);
+    height: 100vh;
+    padding: var(--sp-5) var(--sp-4);
+    overflow: hidden;
+    background: var(--rail-bg);
+    color: var(--rail-ink);
 }
+
+/* Collapsed and open are two blocks, one hidden — rather than one block whose
+   every child has to know how to be narrow. */
+.rail-closed { display: none; }
+.rail.is-closed { width: var(--rail-w-closed); align-items: center; }
+.rail.is-closed .rail-open { display: none; }
+.rail.is-closed .rail-closed {
+    display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
+}
+
+.rail-open { display: flex; flex-direction: column; gap: var(--sp-5); flex: 1; min-height: 0; }
+
+.rail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-2); }
 
 .brand {
     font-size: var(--fs-md);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    white-space: nowrap;
+    font-weight: 700;
+    letter-spacing: var(--ls-tight);
+    line-height: var(--lh-tight);
 }
 
-.topbar-end {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-3);
-    margin-left: auto;
+/* The one typographic mannerism taken wholesale from the design: a tracked,
+   uppercase micro-label. It is only ever a label — never a heading, and never
+   anything a reader has to parse as a sentence. */
+.rail-eyebrow, .eyebrow {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: var(--ls-eyebrow);
+    text-transform: uppercase;
+    color: var(--rail-ink-soft);
+}
+.eyebrow { color: var(--ink-soft); }
+
+.rail-mark {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.08em;
+    color: var(--rail-ink-soft);
+    writing-mode: vertical-rl;
 }
 
-.source-summary {
-    color: var(--ink-soft);
-    font-size: var(--fs-sm);
-    white-space: nowrap;
-}
-
-/* --- tabs: an ink block, not a coloured underline -------------------------- */
-
-.tabs {
-    display: flex;
-    gap: 1px;
-    background: var(--rule);
-    border: 1px solid var(--rule);
-}
-
-.tab {
+.rail-icon {
     appearance: none;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
     border: 0;
-    padding: var(--sp-1) var(--sp-4);
-    background: var(--paper);
-    color: var(--ink-soft);
+    border-radius: var(--r-md);
+    background: var(--rail-hover);
+    color: var(--rail-ink);
     font: inherit;
-    font-size: var(--fs-sm);
+    font-size: var(--fs-md);
+    line-height: 1;
     cursor: pointer;
 }
+.rail-icon--quiet { background: transparent; color: var(--rail-ink-soft); }
+.rail-icon:hover { background: var(--rail-hover); color: var(--rail-ink); }
 
-.tab:hover { background: var(--paper-hover); color: var(--ink); }
-
-.tab[aria-selected="true"] {
-    background: var(--ink);
-    color: var(--ink-invert);
+/* What is loaded: a figure and its unit, not a sentence. */
+.rail-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-md);
+    background: var(--rail-sunk);
 }
+.rail-figure {
+    font-family: var(--font-mono);
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: var(--ls-tight);
+}
+.rail-sub { font-size: var(--fs-sm); color: var(--rail-ink-soft); }
+
+/* --- rail navigation ------------------------------------------------------
+ * The selected item is a filled block, as every other selected thing in this
+ * app is. Inside the rail the fill is `--rail-hover` rather than ink: the
+ * ground is already ink, so an ink block would be invisible.
+ */
+
+.rail-nav { display: flex; flex-direction: column; gap: 2px; }
+
+.rail-nav-item {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--rail-ink);
+    font: inherit;
+    font-size: var(--fs-base);
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background 90ms ease-out, color 90ms ease-out;
+}
+.rail-nav-item:hover:not(:disabled) { background: var(--rail-hover); }
+.rail-nav-item[aria-current="true"] { background: var(--rail-hover); }
+.rail-nav-item:disabled { color: var(--rail-ink-soft); cursor: not-allowed; }
+
+/* The two figures the rail carries. Muted by default; the review count takes
+   its tone, because a number of things needing attention is a status. */
+.rail-count {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--rail-ink-soft);
+}
+.rail-count--warn:not(:empty) { color: var(--tone-warn); }
+
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); }
+
+/* --- the main column ------------------------------------------------------ */
+
+.main { min-width: 0; padding: var(--sp-6) var(--sp-5) 60px; }
+
+.page-head { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-5); }
+.page-head h1 {
+    margin: 0;
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    letter-spacing: var(--ls-tight);
+}
+.page-head p { margin: 0; max-width: 80ch; color: var(--ink-soft); font-size: var(--fs-base); }
 
 /* --- buttons -------------------------------------------------------------- */
 
 .btn {
     appearance: none;
-    padding: var(--sp-1) var(--sp-4);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    min-height: var(--ctl-h);
+    padding: 0 var(--sp-3);
     border: 1px solid var(--rule-strong);
-    border-radius: var(--radius);
+    border-radius: var(--r-md);
     background: var(--paper-raised);
     color: var(--ink);
     font: inherit;
     font-size: var(--fs-sm);
+    font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
+    transition: background 90ms ease-out, border-color 90ms ease-out;
 }
 
 .btn:hover:not(:disabled) { background: var(--paper-hover); }
@@ -118,14 +235,44 @@ body {
 }
 .btn-primary:hover:not(:disabled) { background: var(--ink-soft); border-color: var(--ink-soft); }
 
+/* Apply, in the prepare panel. The only button in the app that destroys
+   something a file cannot give back, and the one place a status colour is
+   allowed on a control rather than on a figure. */
+.btn-danger {
+    background: var(--tone-danger);
+    border-color: var(--tone-danger);
+    color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+    background: var(--tone-danger-fg);
+    border-color: var(--tone-danger-fg);
+}
+
 .btn-quiet { border-color: transparent; background: transparent; }
 .btn-quiet:hover:not(:disabled) { background: var(--paper-hover); }
 
-.btn-icon { padding: var(--sp-1) var(--sp-2); line-height: 1; }
+/* A button on the rail's dark ground. Defined after `.btn` on purpose: it
+   overrides the base paper background, and at equal specificity that is
+   decided by source order. */
+.btn-rail {
+    justify-content: flex-start;
+    border-color: var(--rail-rule);
+    background: transparent;
+    color: var(--rail-ink);
+}
+.btn-rail:hover:not(:disabled) { background: var(--rail-hover); border-color: var(--rail-ink-soft); }
+.btn-rail--quiet { border-color: transparent; color: var(--rail-ink-soft); }
+
+.btn-icon {
+    width: var(--ctl-h);
+    padding: 0;
+    border-radius: var(--r-full);
+    line-height: 1;
+}
 
 /* --- fields --------------------------------------------------------------- */
 
-.field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.field { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
 
 /* A group of toggles has no single control to point at, so it is captioned by a
    `<span class="label">` wired up with aria-labelledby rather than a `<label>`.
@@ -134,12 +281,14 @@ body {
 .field > label, .field > .label {
     color: var(--ink-soft);
     font-size: var(--fs-xs);
+    font-weight: 500;
 }
 
 .input, .select, textarea.input {
-    padding: var(--sp-1) var(--sp-2);
+    min-height: var(--ctl-h);
+    padding: var(--sp-1) var(--sp-3);
     border: 1px solid var(--rule-strong);
-    border-radius: var(--radius);
+    border-radius: var(--r-md);
     background: var(--paper-raised);
     color: var(--ink);
     font: inherit;
@@ -147,26 +296,32 @@ body {
     min-width: 0;
 }
 
-textarea.input { font-family: var(--font-mono); resize: vertical; }
+textarea.input {
+    min-height: 0;
+    font-family: var(--font-mono);
+    resize: vertical;
+}
 .input-mono { font-family: var(--font-mono); }
 
 .input-row { display: flex; }
-.input-row .input { flex: 1; border-radius: var(--radius) 0 0 var(--radius); }
-.input-row .btn { border-radius: 0 var(--radius) var(--radius) 0; border-left: 0; }
+.input-row .input { flex: 1; border-radius: var(--r-md) 0 0 var(--r-md); }
+.input-row .btn { border-radius: 0 var(--r-md) var(--r-md) 0; border-left: 0; }
 
 /* --- toolbar -------------------------------------------------------------- */
 
+/* A filter well: framed and set into the page rather than pinned to the top of
+   it. Nothing is sticky here any more — the rail took over as the fixed
+   element, and a second sticky bar under it ate a third of a laptop screen. */
 .toolbar {
-    position: sticky;
-    top: var(--topbar-h);
-    z-index: 20;
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
     gap: var(--sp-3);
-    padding: var(--sp-3) var(--sp-5);
-    background: var(--paper);
-    border-bottom: 1px solid var(--rule);
+    margin-bottom: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
 }
 
 .toolbar-end { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
@@ -176,8 +331,8 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 
 .count {
     color: var(--ink-soft);
-    font-family: var(--font-mono);
     font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
 }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
@@ -186,10 +341,12 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
     display: inline-flex;
     align-items: center;
     gap: var(--sp-2);
-    padding: 1px var(--sp-2);
-    border: 1px solid var(--rule-strong);
+    padding: var(--sp-1) var(--sp-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-full);
     background: var(--paper-sunk);
     font-size: var(--fs-xs);
+    font-weight: 500;
 }
 
 .chip button {
@@ -200,60 +357,151 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 
 /* --- toggle group --------------------------------------------------------- */
 /* Several results at once is the normal question on the Detail tab, so Result
-   is a row of toggles rather than a select. Built like `.tabs`: hairline-ruled
+   is a row of toggles rather than a select. Built like the rail nav: hairline-ruled
    cells, and the chosen one is an inverted ink block — selection is never a
    hue here, because on this screen a hue always means a status. */
 
-.toggles {
-    display: flex;
-    gap: 1px;
-    background: var(--rule);
-    border: 1px solid var(--rule);
-}
+.toggles { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 
 .toggle {
     appearance: none;
-    border: 0;
+    min-height: var(--ctl-h);
     padding: var(--sp-1) var(--sp-3);
-    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-full);
+    background: var(--paper-raised);
     color: var(--tone-neutral);
     font: inherit;
     font-size: var(--fs-sm);
+    font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
+    transition: background 90ms ease-out, color 90ms ease-out,
+                border-color 90ms ease-out;
 }
 
 /* Unpressed, a toggle carries its status' tone: the reader is picking results,
-   so the words should look like the badges and columns they will filter to. */
-.toggle[data-tone="success"] { color: var(--tone-success); }
-.toggle[data-tone="danger"]  { color: var(--tone-danger); }
-.toggle[data-tone="warn"]    { color: var(--tone-warn); }
-.toggle[data-tone="neutral"] { color: var(--tone-neutral); }
-.toggle[data-tone="muted"]   { color: var(--tone-muted); }
+   so the words should look like the badges they will filter to — and so they
+   take the badge's DEEP variant, not the raw tone. The raw tone is calibrated
+   to be legible as a 20px figure or a 10px bar segment; as 12.5px body text on
+   paper, `--tone-muted` is about 2:1 and "Cancel (対象外)" simply disappears. */
+.toggle[data-tone="success"] { color: var(--tone-success-fg); }
+.toggle[data-tone="danger"]  { color: var(--tone-danger-fg); }
+.toggle[data-tone="warn"]    { color: var(--tone-warn-fg); }
+.toggle[data-tone="neutral"] { color: var(--tone-neutral-fg); }
+.toggle[data-tone="muted"]   { color: var(--tone-muted-fg); }
 
 .toggle:hover { background: var(--paper-hover); }
 
 .toggle[aria-pressed="true"] {
     background: var(--ink);
+    border-color: var(--ink);
     color: var(--ink-invert);
 }
 
-/* --- summary scope blocks ------------------------------------------------- */
-/* One table per scope group. The gap is what separates them; they are not
-   boxed, because the ledger is ruled and never framed. */
+/* --- the summary overview -------------------------------------------------
+ *
+ * The KPI cards and panels are above; what remains here is the progress bar
+ * they share with the Summary table's Executed column and the scope headings.
+ *
+ * The distinction the curvature scale draws still holds: a summary *of* the
+ * data may have a frame and the rows themselves may not.
+ */
 
-.scope-block + .scope-block { margin-top: var(--sp-6); }
+/* --- the progress bar -----------------------------------------------------
+ * One stacked bar over the counted statuses, in taxonomy order, painted from
+ * `colourFor` — the same stepped-tone function the charts use, so the bar and
+ * the doughnut cannot drift apart. Excluded statuses are absent: `total` does
+ * not include them, and a bar that failed to fill its own track would read as
+ * a rendering bug rather than as the deliberate gap the table's dashed rule
+ * makes explicit.
+ */
+
+.progress {
+    display: flex;
+    height: 10px;
+    overflow: hidden;
+    border-radius: var(--r-full);
+    background: var(--paper-sunk);
+}
+
+.progress-seg { display: block; height: 100%; }
+
+/* Per scope group, in the heading strip above its table. */
+.progress--sm { height: 6px; width: 140px; flex: 0 0 auto; }
+
+.scope-pct {
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* A list, not a flowed line: label, share and count each get a column, so the
+   three read down the panel instead of wrapping into an unalignable ribbon. */
+.progress-legend {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin: var(--sp-4) 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--fs-base);
+}
+
+.progress-legend .legend-item {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto auto;
+    gap: var(--sp-3);
+    align-items: center;
+}
+.legend-label { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-pct { color: var(--ink-soft); font-size: var(--fs-sm); }
+.legend-count { font-weight: 600; min-width: 58px; }
+
+/* The chart strip's legend still flows inline — two items, no columns to align. */
+.legend-item { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.legend-item b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: var(--r-full);
+    flex: 0 0 auto;
+}
+
+
+/* --- summary scope cards -------------------------------------------------- */
+/* One table per scope group, each in its own card. The heading carries that
+   group's own progress bar: FPT work and JP work are separate commitments, so
+   one of them running behind is exactly the fact the combined figure above
+   would hide. */
+
+#summaryTables .card + .card { margin-top: var(--sp-4); }
 
 .empty-note { color: var(--ink-soft); font-size: var(--fs-sm); padding: var(--sp-5) 0; }
 
 /* --- the ledger ----------------------------------------------------------- */
 
-.view { padding: 0 var(--sp-5) var(--sp-6); }
+/* `.main` carries the page padding now, so a view is just a stack. */
+.view { min-width: 0; }
+
+/* Tools: independent panels, each as wide as it needs and none of them the
+   width of the screen. The design's card grid, with a wider floor — two of
+   these cards hold a table, and at the design's 340px the file list and the
+   prepare actions were permanently mid-scroll. */
+.view--grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+    gap: var(--sp-4);
+    align-items: start;
+}
 
 .section-title {
     margin: var(--sp-6) 0 var(--sp-2);
     font-size: var(--fs-md);
     font-weight: 600;
+    letter-spacing: -0.01em;
 }
 .section-note { margin: 0 0 var(--sp-3); color: var(--ink-soft); font-size: var(--fs-sm); max-width: 68ch; }
 
@@ -268,11 +516,25 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
  * The height cap is what gives the pane something to scroll. Without it the
  * pane grows to fit its content, nothing ever scrolls inside it, and a sticky
  * header with a non-zero offset gets pushed *down into* the rows instead.
+ *
+ * `width: max-content` capped at 100% is what lets the frame hug the table.
+ * The ledger still sizes to its columns (see `.ledger`), so a full-width pane
+ * would leave the border floating out to the right of the last column on a
+ * narrow table; sizing the pane to its content instead keeps the frame tight
+ * and still clamps — and therefore scrolls — once the band outgrows the screen.
+ *
+ * `overflow` also clips to the radius, which is what tucks the sticky header
+ * and footer inside the rounded corners rather than squaring them off.
  */
 .scroll-x {
     overflow: auto;
-    max-height: calc(100vh - 170px);
+    width: max-content;
+    max-width: 100%;
+    max-height: calc(100vh - 200px);
     overscroll-behavior: contain;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
 }
 
 .ledger {
@@ -285,19 +547,29 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
     padding: 0 var(--sp-3);
     height: var(--row-h);
     text-align: left;
-    border-bottom: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule-soft);
     white-space: nowrap;
 }
 
+/* The last row's rule would otherwise sit a hairline inside the pane's own
+   bottom border and read as a double line. */
+.ledger tbody tr:last-child > td { border-bottom: 0; }
+
+/* Uppercase and tracked, at 11px. It is a label for a column of figures, not a
+   sentence — and set this small, the tracking is what keeps it legible. Status
+   column heads are the exception: they carry bilingual labels that must not be
+   uppercased, and `.band` below opts them back out. */
 .ledger thead th {
     position: sticky;
     top: 0;              /* pins to the .scroll-x pane, not the viewport */
     z-index: 10;
     background: var(--paper-sunk);
-    border-bottom: 1px solid var(--rule-strong);
+    border-bottom: 1px solid var(--rule);
     color: var(--ink-soft);
-    font-size: var(--fs-sm);
-    font-weight: 500;   /* sentence case, medium — never uppercase and tracked */
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: var(--ls-eyebrow);
+    text-transform: uppercase;
 }
 
 .ledger tbody tr:hover td { background: var(--paper-hover); }
@@ -312,7 +584,13 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
     font-weight: 600;
 }
 
-/* Numbers right-align on tabular figures so digits stack down the page. */
+/* Numbers right-align on tabular figures so digits stack down the page.
+ *
+ * Set in the mono face. The design uses Plex Mono to mark what is a figure,
+ * throughout — counts, dates, percentages, case numbers — and at these row
+ * densities the distinction does real work: it tells you at a glance which
+ * columns you can compare down the page and which you can only read.
+ */
 .num {
     text-align: right;
     font-family: var(--font-mono);
@@ -321,6 +599,11 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 
 .mono { font-family: var(--font-mono); }
 .muted { color: var(--ink-soft); }
+
+/* Centred figures. Digits still stack on `tabular-nums`, they simply stack
+   about the middle of the column rather than its right edge. */
+.ledger .num.center, .ledger th.num.center > button { text-align: center; }
+.ledger th.num.center.sortable > button { justify-content: center; }
 
 /* A single outlier — a spreadsheet section header sitting in the Case no
    column, or one long note — should not set the width for the whole column.
@@ -350,8 +633,17 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
    see where the sum stops, or the row looks like it simply fails to add up. */
 .ledger .band--aside { border-left: 1px dashed var(--rule-strong); }
 
-/* A fixed width is only achievable if the long bilingual labels may wrap. */
-.ledger th.band { white-space: normal; vertical-align: middle; }
+/* A fixed width is only achievable if the long bilingual labels may wrap — and
+   these are the one set of headers that is NOT uppercased and tracked: "OK"
+   uppercases to nothing, and 保留 has no case to change, so the treatment would
+   only add tracking between two kanji. They are proper names, drawn as given. */
+.ledger th.band {
+    white-space: normal;
+    vertical-align: middle;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: var(--fs-sm);
+}
 .ledger th.band > button {
     white-space: normal;
     word-break: keep-all;   /* wrap at the space, never inside 対象外 */
@@ -440,28 +732,31 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 
 /* --- badges --------------------------------------------------------------- */
 
+/* A tint carrying deep text, rather than a solid tone carrying knocked-out
+   white. Badges sit inside rows of figures here, and a run of saturated blocks
+   down a column competes with the numbers it is meant to be labelling. */
 .badge {
     display: inline-block;
-    padding: 0 var(--sp-2);
-    border-radius: var(--radius);
+    padding: 2px var(--sp-2);
+    border-radius: var(--r-full);
     font-size: var(--fs-xs);
-    font-weight: 500;
-    background: var(--tone-neutral);
+    font-weight: 600;
+    background: var(--tone-neutral-bg);
     color: var(--tone-neutral-fg);
 }
 
-[data-tone="success"] .badge, .badge[data-tone="success"] { background: var(--tone-success); color: var(--tone-success-fg); }
-[data-tone="danger"]  .badge, .badge[data-tone="danger"]  { background: var(--tone-danger);  color: var(--tone-danger-fg); }
-[data-tone="warn"]    .badge, .badge[data-tone="warn"]    { background: var(--tone-warn);    color: var(--tone-warn-fg); }
-[data-tone="neutral"] .badge, .badge[data-tone="neutral"] { background: var(--tone-neutral); color: var(--tone-neutral-fg); }
-[data-tone="muted"]   .badge, .badge[data-tone="muted"]   { background: var(--tone-muted);   color: var(--tone-muted-fg); }
+[data-tone="success"] .badge, .badge[data-tone="success"] { background: var(--tone-success-bg); color: var(--tone-success-fg); }
+[data-tone="danger"]  .badge, .badge[data-tone="danger"]  { background: var(--tone-danger-bg);  color: var(--tone-danger-fg); }
+[data-tone="warn"]    .badge, .badge[data-tone="warn"]    { background: var(--tone-warn-bg);    color: var(--tone-warn-fg); }
+[data-tone="neutral"] .badge, .badge[data-tone="neutral"] { background: var(--tone-neutral-bg); color: var(--tone-neutral-fg); }
+[data-tone="muted"]   .badge, .badge[data-tone="muted"]   { background: var(--tone-muted-bg);   color: var(--tone-muted-fg); }
 
 /* Numeric cells and stat figures take the tone as text colour. */
-[data-tone="success"].num, [data-tone="success"].stat-value, th[data-tone="success"] { color: var(--tone-success); }
-[data-tone="danger"].num,  [data-tone="danger"].stat-value,  th[data-tone="danger"]  { color: var(--tone-danger); }
-[data-tone="warn"].num,    [data-tone="warn"].stat-value,    th[data-tone="warn"]    { color: var(--tone-warn); }
-[data-tone="neutral"].num, [data-tone="neutral"].stat-value, th[data-tone="neutral"] { color: var(--tone-neutral); }
-[data-tone="muted"].num,   [data-tone="muted"].stat-value,   th[data-tone="muted"]   { color: var(--tone-muted); }
+[data-tone="success"].num, [data-tone="success"].stat-value, [data-tone="success"].kpi-value, th[data-tone="success"] { color: var(--tone-success); }
+[data-tone="danger"].num,  [data-tone="danger"].stat-value, [data-tone="danger"].kpi-value,  th[data-tone="danger"]  { color: var(--tone-danger); }
+[data-tone="warn"].num,    [data-tone="warn"].stat-value, [data-tone="warn"].kpi-value,    th[data-tone="warn"]    { color: var(--tone-warn); }
+[data-tone="neutral"].num, [data-tone="neutral"].stat-value, [data-tone="neutral"].kpi-value, th[data-tone="neutral"] { color: var(--tone-neutral); }
+[data-tone="muted"].num,   [data-tone="muted"].stat-value, [data-tone="muted"].kpi-value,   th[data-tone="muted"]   { color: var(--tone-muted); }
 
 /* A zero is noise; keep it present for alignment but recede it. */
 .zero { color: var(--ink-faint) !important; }
@@ -481,51 +776,289 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 
 .pager button {
     appearance: none;
-    min-width: 26px;
-    height: 24px;
+    min-width: 30px;
+    height: 30px;
     padding: 0 var(--sp-2);
     border: 1px solid var(--rule);
+    border-radius: var(--r-md);
     background: var(--paper-raised);
     color: var(--ink-soft);
     font: inherit;
-    font-family: var(--font-mono);
     font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
     cursor: pointer;
+    transition: background 90ms ease-out, color 90ms ease-out;
 }
 .pager button:hover:not(:disabled) { background: var(--paper-hover); color: var(--ink); }
 .pager button[aria-current="page"] {
     background: var(--ink); border-color: var(--ink); color: var(--ink-invert);
 }
-.pager .gap { border: 0; background: none; cursor: default; color: var(--ink-faint); }
+.pager .gap { border-color: transparent; background: none; cursor: default; color: var(--ink-faint); }
 
 /* --- stats ---------------------------------------------------------------- */
 
+/* Separate cards rather than one divided strip: the design treats each figure
+   as its own object, and at five or six statuses the strip had to scroll
+   sideways on a laptop while a grid simply wraps. */
 .stats {
-    display: flex;
-    flex-wrap: wrap;
-    width: max-content;
-    max-width: 100%;
-    gap: 0;
-    border: 1px solid var(--rule);
-    border-left: 0;
-    margin: var(--sp-4) 0;
-    background: var(--paper-raised);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--sp-3);
+    margin: 0 0 var(--sp-4);
 }
 
 .stat {
-    flex: 0 0 auto;
-    min-width: 92px;
-    padding: var(--sp-2) var(--sp-4);
-    border-left: 1px solid var(--rule);
+    appearance: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    min-width: 0;
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+    font: inherit;
+    color: inherit;
+    text-align: left;
 }
 
-.stat-label { color: var(--ink-soft); font-size: var(--fs-xs); }
+.stat-label {
+    color: var(--ink-soft);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: var(--ls-eyebrow);
+    text-transform: uppercase;
+}
 .stat-value {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: var(--fs-lg);
-    font-weight: 500;
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: var(--ls-tight);
 }
+
+
+/* --- KPI cards -----------------------------------------------------------
+ * The design's headline row: one card per figure, an uppercase eyebrow above
+ * a large mono number. A card with an action is a button, so it is operated by
+ * keyboard and announced as a control; the rest are plain divs.
+ */
+
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+}
+
+.kpi {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    min-width: 0;
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+    font: inherit;
+    text-align: left;
+    color: inherit;
+}
+
+.kpi--link { cursor: pointer; transition: border-color 90ms ease-out; }
+.kpi--link:hover { border-color: var(--rule-strong); }
+
+.kpi-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+
+/* The only place in the app where a non-status element carries emphasis, and
+   it is ink: "View →" is an affordance, not a result. */
+.kpi-action { font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
+
+.kpi-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-xl);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: var(--ls-tight);
+}
+
+.kpi-sub { color: var(--ink-soft); font-size: var(--fs-sm); }
+
+/* --- the panel grid ------------------------------------------------------
+ * Breakdown, today, and what owes a reason. The design has two of these; the
+ * third is this app's own and drops into the same auto-fit grid.
+ */
+
+.panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: var(--sp-4);
+    align-items: start;
+    margin-bottom: var(--sp-5);
+}
+
+.panel-empty { margin: 0; color: var(--ink-soft); font-size: var(--fs-sm); }
+
+/* --- today's progress ----------------------------------------------------- */
+
+.today-list { margin: 0; padding: 0; list-style: none; max-height: 260px; overflow-y: auto; }
+
+.today-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-2) 0;
+    border-bottom: 1px solid var(--rule-soft);
+}
+.today-row:last-child { border-bottom: 0; }
+
+.today-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    min-width: 0;
+}
+.today-file {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.today-line .muted { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; }
+
+.chips--tight { gap: var(--sp-1); justify-content: flex-end; }
+.chips--tight .badge { font-size: 10.5px; }
+
+/* --- the daily chart -----------------------------------------------------
+ * Bars in CSS. Chart.js resolves its colours at construction and sizes to a
+ * container that is 0x0 while the view is hidden; a grid of divs reads the
+ * tokens live and survives both.
+ */
+
+.bars {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--sp-1);
+    height: 220px;
+    padding-bottom: var(--sp-1);
+    overflow-x: auto;
+}
+
+.bar-col {
+    /* Capped: a fortnight of days fills the strip, but four days stretched to
+       400px each read as slabs rather than as a chart. */
+    flex: 1 1 34px;
+    max-width: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--sp-1);
+    height: 100%;
+    min-width: 34px;
+}
+
+.bar-count { font-size: var(--fs-xs); font-weight: 600; line-height: 1; }
+
+.bar-track {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    background: var(--paper-sunk);
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
+}
+
+.bar-fill {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    border-radius: var(--r-sm) var(--r-sm) 0 0;
+    background: var(--tone-neutral);
+}
+.bar-fill[data-tone="success"] { background: var(--tone-success); }
+.bar-fill[data-tone="danger"]  { background: var(--tone-danger); }
+.bar-fill[data-tone="warn"]    { background: var(--tone-warn); }
+.bar-fill[data-tone="muted"]   { background: var(--tone-muted); }
+
+/* The plan. A dashed rule rather than a second bar: it is a threshold the bar
+   is read against, not a quantity standing beside it. */
+.bar-plan {
+    position: absolute;
+    left: -2px; right: -2px;
+    border-top: 2px dashed var(--tone-danger);
+}
+
+.bar-label { font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; }
+
+.chart-legend { display: flex; gap: var(--sp-4); font-size: var(--fs-sm); color: var(--ink-soft); }
+.chart-note { margin: var(--sp-3) 0 0; color: var(--ink-soft); font-size: var(--fs-sm); }
+
+.swatch--bar { background: var(--tone-success); }
+.swatch--plan { width: 14px; height: 2px; border-radius: 0; background: var(--tone-danger); }
+
+/* --- a bar inside a table cell -------------------------------------------
+ * Summary's Executed column, Daily's Cumulative, Productivity's Attainment.
+ * One treatment, because they are the same idea three times.
+ */
+
+.progress-col { width: 190px; }
+.ledger th.progress-col { text-transform: uppercase; letter-spacing: var(--ls-eyebrow); }
+
+.progress-cell { display: flex; align-items: center; gap: var(--sp-2); }
+.progress-cell .progress { flex: 1; }
+.progress-cell .num { min-width: 44px; text-align: right; font-size: var(--fs-xs); color: var(--ink-soft); }
+
+/* --- the folded filter panel --------------------------------------------- */
+
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-3);
+}
+.filter-bar .input { flex: 1; min-width: 160px; }
+.filter-bar .count { margin-left: auto; }
+
+/* How many conditions are folded away, on the button that folds them. */
+.pill {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: var(--r-full);
+    background: var(--ink);
+    color: var(--ink-invert);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 16px;
+    text-align: center;
+}
+.pill:empty { display: none; }
+
+.filter-well {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--sp-3);
+}
+.filter-row { display: flex; align-items: flex-end; gap: var(--sp-4); flex-wrap: wrap; }
+.filter-row .btn { margin-left: auto; }
+
+/* A stat card that is a control, and the one that is not. */
+.stat { cursor: pointer; transition: border-color 90ms ease-out, background 90ms ease-out; }
+.stat--inert { cursor: default; }
+.stat:not(.stat--inert):hover { border-color: var(--rule-strong); }
+.stat[aria-pressed="true"] { border-color: var(--ink); background: var(--paper-sunk); }
 
 /* --- charts --------------------------------------------------------------- */
 
@@ -537,43 +1070,50 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 .charts {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: var(--sp-5);
+    gap: var(--sp-4);
     padding: var(--sp-4) 0;
-    border-bottom: 1px solid var(--rule);
 }
 
-.chart { min-width: 0; height: 220px; position: relative; }
-
-/* --- drawer --------------------------------------------------------------- */
-
-.scrim {
-    position: fixed; inset: 0; z-index: 40;
-    background: color-mix(in srgb, var(--ink) 32%, transparent);
+.chart {
+    min-width: 0;
+    height: 220px;
+    position: relative;
+    padding: var(--sp-3);
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
 }
 
-.drawer {
-    position: fixed;
-    top: 0; right: 0; bottom: 0;
-    z-index: 50;
-    width: min(560px, 100%);
-    overflow-y: auto;
+/* --- cards ---------------------------------------------------------------
+ * The Tools panels, and the general framed surface. This replaces the setup
+ * drawer: the same three panels, no longer floating over the data, so nothing
+ * needs a scrim, an escape key, or a focus trap to get out of.
+ */
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
     padding: var(--sp-5);
     background: var(--paper-raised);
-    border-left: 1px solid var(--rule-strong);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
 }
 
-.drawer-head {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: var(--sp-5);
+.card-head { display: flex; flex-direction: column; gap: var(--sp-1); }
+.card-head h2 {
+    margin: 0;
+    font-size: var(--fs-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
 }
-.drawer-head h2 { margin: 0; font-size: var(--fs-md); }
-
-.drawer section + section {
-    margin-top: var(--sp-6);
-    padding-top: var(--sp-5);
-    border-top: 1px solid var(--rule);
+.card-head p {
+    margin: 0;
+    max-width: 60ch;
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-base);
 }
-.drawer h3 { margin: 0 0 var(--sp-3); font-size: var(--fs-base); font-weight: 600; }
 
 .stack { display: flex; flex-direction: column; gap: var(--sp-3); }
 .row { display: flex; gap: var(--sp-3); align-items: flex-end; flex-wrap: wrap; }
@@ -583,18 +1123,79 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 .is-error { color: var(--tone-danger); }
 .is-ok { color: var(--tone-success); }
 
-/* --- empty states --------------------------------------------------------- */
+/* --- card variants -------------------------------------------------------
+ * Defined after the base `.card` and `.card-head` on purpose: these override
+ * them, and at equal specificity that is decided by source order.
+ */
 
-.empty {
-    max-width: 44ch;
-    margin: 12vh auto;
-    padding: var(--sp-6);
-    border: 1px solid var(--rule);
-    background: var(--paper-raised);
-    text-align: center;
+/* A card whose whole body is a table: the pane goes edge to edge inside it, so
+   there is one frame around the rows rather than a frame inside a frame. */
+.card--table { padding: 0; gap: 0; }
+/* The ledger hugs its columns everywhere else; inside a card it also has to
+   reach the card's edge, or the header band stops short of its own frame. */
+.card--table .ledger { min-width: 100%; }
+.card--table > .card-head { padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--rule); }
+
+.scroll-x--flush {
+    width: auto;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    background: none;
 }
-.empty h2 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); font-weight: 600; }
-.empty p { margin: 0 0 var(--sp-5); color: var(--ink-soft); }
+
+/* A pane the height of about ten rows, whatever is inside it.
+ *
+ * This is what makes "Show all" a reasonable offer: every row is rendered, but
+ * the pane scrolls rather than the page growing to three thousand rows. It is
+ * also why the tables keep a fixed footprint as you page — a card that changed
+ * height on every Next would move everything under it.
+ *
+ * `--rows` is the body; the two extra steps and the slack cover the header and
+ * the totals row, and the bilingual status heads that wrap onto two lines.
+ */
+.scroll-x--rows {
+    --rows: 10;
+    max-height: calc(var(--row-h) * (var(--rows) + 2) + 26px);
+}
+
+/* A heading that puts its figures beside the title rather than under it. */
+.card-head--row {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+}
+/* Not `margin-right: auto` on the title: in a wrapping row that swallows the
+   whole line and pushes everything after it onto the next one. */
+.card-head--row h2 { flex: 1 1 auto; }
+
+.card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-5);
+    border-top: 1px solid var(--rule);
+}
+.card-foot-end { display: flex; align-items: center; gap: var(--sp-2); }
+
+.inline-field {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+}
+.inline-field .input { width: 72px; text-align: right; }
+
+/* --- empty states --------------------------------------------------------
+ * There is no "nothing loaded" panel any more — the app opens on Tools, which
+ * is where you would go from such a panel anyway. What remains is the two
+ * in-place notes: a table with no rows, and a scope group with no cases.
+ */
 
 .empty-row td {
     padding: var(--sp-6);
@@ -618,15 +1219,29 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 
 /* --- narrow --------------------------------------------------------------- */
 
-@media (max-width: 720px) {
-    .topbar { gap: var(--sp-3); padding: 0 var(--sp-3); }
-    .source-summary { display: none; }
-    .view, .toolbar { padding-left: var(--sp-3); padding-right: var(--sp-3); }
+/* Below this the two columns stop being two columns: the rail goes back to the
+   top of the page, full width and no longer sticky, because 232px of a 400px
+   screen is not a margin, it is the screen. */
+@media (max-width: 860px) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .rail, .rail.is-closed {
+        position: static;
+        width: auto;
+        height: auto;
+        padding: var(--sp-3) var(--sp-4);
+    }
+    .rail-closed { display: none !important; }
+    .rail.is-closed .rail-open { display: flex; }
+    .rail-icon { display: none; }
+    .rail-open { gap: var(--sp-3); }
+    .rail-nav { flex-direction: row; flex-wrap: wrap; }
+    .rail-foot { margin-top: 0; flex-direction: row; }
+    .main { padding: var(--sp-5) var(--sp-4) var(--sp-6); }
 }
 
 /* --- Preparing the workbooks ---------------------------------------------
  *
- * The two operations in the setup drawer that write to the source files. They
+ * The two operations in the Tools view that write to the source files. They
  * borrow the ledger for the file list and add three things it has no vocabulary
  * for: a row of status checkboxes, buttons small enough to sit inside a cell,
  * and a preview block — the one place in the app that reports on something that
@@ -640,12 +1255,18 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 
 /* Ticked reads as chosen; unticked steps back rather than disappearing, so the
  * whole taxonomy stays legible as a set. */
-.check .badge { opacity: .4; transition: opacity 90ms ease-out; }
+/* .4 was calibrated against solid-tone badges; a tint badge at .4 is gone. */
+.check .badge { opacity: .6; transition: opacity 90ms ease-out; }
 .check input:checked + .badge { opacity: 1; }
-.check:hover .badge { opacity: .75; }
+.check:hover .badge { opacity: .85; }
 .check input:checked:hover + .badge { opacity: 1; }
 
-.btn-sm { padding: 2px var(--sp-2); font-size: var(--fs-sm); height: 22px; }
+.btn-sm {
+    min-height: 26px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--r-sm);
+    font-size: var(--fs-xs);
+}
 
 .ledger td.actions { white-space: nowrap; }
 .ledger td.actions .btn + .btn { margin-left: var(--sp-1); }
@@ -654,13 +1275,16 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
  * The preview: what Apply would do, per workbook.
  *
  * Capped and scrollable for the same reason the tables are — a folder of forty
- * workbooks must not push the Apply button off the bottom of the drawer.
+ * workbooks must not push the Apply button off the bottom of the card.
  */
 .preview {
     max-height: 320px;
     overflow: auto;
     overscroll-behavior: contain;
-    border-top: 1px solid var(--rule);
+    padding: 0 var(--sp-3);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
     font-size: var(--fs-sm);
 }
 
@@ -679,3 +1303,152 @@ textarea.input { font-family: var(--font-mono); resize: vertical; }
 }
 .preview-line b { color: var(--ink); font-weight: 600; }
 .preview-line s { color: var(--ink-faint); }
+
+/* --- the config editor ---------------------------------------------------- */
+/*
+ * Three forms over the JSON the rest of the app is driven by. The ledger is
+ * still the structure — the taxonomy and the scope groups *are* tables, and a
+ * row of stacked fields would hide that a status is one line among several that
+ * have to agree. So the controls sit in ledger cells and the grid does the
+ * explaining, which is also why the inputs here lose their own frame: twelve
+ * boxed controls in a row would draw twelve boxes and no table.
+ */
+
+/* A status is the widest row in the app — ten columns, five of them controls —
+ * so its card takes the whole grid rather than half of it. The other two are
+ * narrow enough to sit side by side, which is what the grid is for. */
+#configCard-statuses { grid-column: 1 / -1; }
+
+/* No height cap on a config pane. Every other table in the app is a view of
+   data long enough to page through; these are the whole taxonomy and the whole
+   list of scope groups, and a status hidden below a scroll line inside a card
+   is a status nobody edits. They are short by nature — if one is not, that is
+   worth seeing too. */
+.config-pane { max-height: none; }
+
+/* These rows are taller than a ledger row: a cell holds controls, and one of
+   them holds five checkboxes. The fixed row height and `nowrap` that keep a
+   table of figures on one rhythm are exactly what made them overlap. */
+.config-grid td {
+    height: auto;
+    padding: var(--sp-2);
+    vertical-align: middle;
+    white-space: normal;
+}
+.config-grid th { white-space: nowrap; }
+
+.config-grid .input, .config-grid .select { width: 100%; }
+
+/* Inside a ruled cell the cell is already the frame. The control declares
+   itself on hover and focus instead, which is where it matters. */
+.config-grid .input, .config-grid .select {
+    border-color: transparent;
+    background: transparent;
+    border-radius: var(--r-sm);
+}
+.config-grid .input:hover, .config-grid .select:hover,
+.config-grid .input:focus, .config-grid .select:focus {
+    border-color: var(--rule-strong);
+    background: var(--paper-raised);
+}
+
+/* Each control gets the room its content actually needs. Without this the
+   table divides the width evenly and a status key reads as one letter. */
+.config-grid .input[data-field="key"]   { min-width: 7rem; font-weight: 600; }
+.config-grid .input[data-field="label"] { min-width: 9.5rem; }
+.config-grid .input[data-field="match"] { min-width: 11rem; }
+
+/* The five flags a status carries, as a block rather than a column each: they
+   are a set, and a reader checking whether NG counts as executed reads them
+   together. Two lines, not one — the min-width that fitted all five across cost
+   the Derives-from column its place on screen, and a set of five is as legible
+   in two rows as in one.
+   It is a div inside the cell, never the cell itself: `display: flex` on a `td`
+   takes it out of table layout, so it sizes to its own content instead of the
+   row and draws its bottom rule short of the others. */
+.config-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-1) var(--sp-3);
+    min-width: 11rem;
+    max-width: 13rem;
+    font-size: var(--fs-xs);
+    color: var(--ink-soft);
+}
+.config-flags .check { white-space: nowrap; }
+
+/* `empty` and `fallback`: one pick each for the whole taxonomy, so they sit
+   under the table as two selects rather than as two columns of radios. Framed
+   the way the scope fallback is — both are "and everything else goes here". */
+.config-catchalls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-4);
+    margin-top: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+.config-catchalls .field { flex: 1 1 20rem; }
+.config-catchalls .select { max-width: 14rem; }
+.config-catchalls .muted { font-size: var(--fs-xs); line-height: var(--lh-cjk); }
+
+/* The tone, shown as the thing it produces. A select reading "warn" says less
+   than the badge the reader will meet on every other screen. */
+.config-tone { display: flex; align-items: center; gap: var(--sp-2); min-width: 13rem; }
+.config-tone .badge { flex: none; }
+.config-tone .select { width: auto; min-width: 6rem; margin-left: auto; }
+
+.config-derive { display: flex; gap: var(--sp-1); }
+.config-derive .select { width: auto; min-width: 5rem; }
+
+/* Move up / move down. Order is load-bearing in both tables — it sets the
+   report's column order and the step of the charts' shading — so it is edited
+   rather than inferred from a sort. */
+.config-move { white-space: nowrap; }
+.config-move .btn { padding: 0 var(--sp-1); min-width: 22px; }
+
+.config-add {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+    padding-top: var(--sp-3);
+    font-size: var(--fs-xs);
+}
+
+/* The catch-all scope group, and the sheet-label groups: framed blocks under
+   their table, because each is a caption plus its own fields rather than one
+   more row of the thing above it. */
+.config-fallback, .config-group {
+    margin-top: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+.config-group:first-child { margin-top: 0; }
+
+.config-fallback p, .config-group p {
+    margin: var(--sp-1) 0 var(--sp-3);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-cjk);
+}
+
+.config-group .field { margin-top: var(--sp-2); }
+.config-group .field .muted { font-size: var(--fs-xs); }
+.config-fallback .row, .config-group .row { gap: var(--sp-3); }
+
+/* The path of the file being edited. It is a location, not prose — and long
+   enough to need breaking rather than widening the card. */
+.card-head .mono { word-break: break-all; }
+
+/* "unsaved": the one thing about this screen that is genuinely a state, so it
+   is marked in the card head where the Save button is not. */
+#configView .pill { background: var(--paper-sunk); border: 1px solid var(--rule); }
+
+/* --- the merged source card ----------------------------------------------- */
+/* Seven columns and two buttons a row: wider than half the Tools grid, and a
+   clipped "Clear results" reads as broken rather than as scrollable. */
+#sourceSection { grid-column: 1 / -1; }

@@ -93,15 +93,42 @@ expands over `counted`, so an excluded status gets **no report column** — whic
 published sheet adding up to its own total and its width unchanged. In the UI the column is drawn
 with `band--aside`, a dashed rule marking where the sum stops.
 
-**`"review": true` is what the Detail view holds.** Detail is the list of work outstanding, so it
-loads *only* those statuses (NG / NG-OK / Pending / Cancel) and drops everything else at
-`initDetail`. That is a deliberate restriction, not a default filter — which is why its stat strip
-is labelled **"To review"** and not "Total": it counts this screen, and Summary's Total counts the
-plan. Two figures both called Total would read as a bug. A status may not be both `excluded` and
+**`"review": true` is what the Review view holds.** Review (still `#detailView` / `views/detail.js`
+in the code) is the list of work outstanding, so it loads *only* those statuses (NG / NG-OK /
+Pending / Cancel) and drops everything else at `initDetail`. That is a deliberate restriction, not
+a default filter — which is why its stat strip is labelled **"To review"** and not "Total": it
+counts this screen, and Summary's Total counts the plan. Two figures both called Total would read as a bug. A status may not be both `excluded` and
 `review` — a case outside the plan is not work to review — and the validator refuses it.
 
 Adding or renaming a status means editing only that JSON. Backend, `/api/statuses`, the UI and the
 sample generator all read from it — never hard-code status keys in Python or JS.
+
+**Those JSON files are editable from the app, and an edit applies without a restart.**
+[config_store.py](config_store.py) is the one place that writes them — `config.py` says *where*
+each file is, this says how to check an edit, how to write it, and how to make it take effect.
+`/api/config` and `PUT /api/config/<name>` are `jsonify` wrappers around its two functions, the
+same arrangement as `aggregate.py` and `prepare/runner.py`. Four things about it are load-bearing:
+
+- **Validation is not written twice.** An edit is checked by building a throwaway instance through
+  the config class's own `from_dict`, so every invariant above holds for an edit made from the
+  browser without a second copy of the rules to drift from the first. The 400 carries the config
+  class's own message, because it names the invariant that broke.
+- **Nothing is written until it validates, and the write is atomic.** A half-written
+  `result_status.json` does not make the taxonomy wrong, it stops the app booting —
+  `_load_default` raises at import. So the text goes to a temp file beside the target and
+  `os.replace` swaps it in.
+- **`adopt` is why one save reaches everything.** `STATUS`, `SCOPES` and `LABELS` are imported *by
+  name* into eight modules, and rebinding the name in `parser.status` would reach none of them.
+  So each class has an `adopt(other)` that copies the validated state onto `self`: the singleton
+  stays the singleton and its contents change. `SheetLabels` is no longer a frozen dataclass for
+  this reason — config you can edit at runtime is not frozen. No source re-read is needed, because
+  `classify_case` and `SCOPES.classify` both run per request.
+- **Saving the taxonomy rebuilds `LAYOUT`.** `{"expand": "statuses"}` is materialised into columns
+  when the report layout is *built*, which happens once at import — so without that step a
+  taxonomy edit would leave the publisher writing the column set the old taxonomy had.
+
+`report/report_layout.json` is deliberately **not** editable from the app: its columns are the
+geometry of someone's report workbook rather than a vocabulary. It is only ever rebuilt.
 
 **Scope groups are data too.** [parser/scope_groups.json](parser/scope_groups.json) says which
 Scope strings belong to which Summary table, validated at import by `ScopeSet` in
@@ -116,8 +143,8 @@ every case loaded**. `views/summary.js` names no scope itself — it draws a blo
 the slack at the end of a generously sized `start_row`–`end_row` block carries no Scope, and
 `SCOPES.is_unscoped` in `parser/scope.py` is the one definition of that. The reader drops those
 rows in `_cases_for_config` before a `TestCase` exists, so they reach no view, no aggregate and no
-published report, and the per-file `cases: n` that `load_files` reports — the number the setup
-drawer shows — is already net of them. Filtering later, per view, is what would let the drawer's
+published report, and the per-file `cases: n` that `load_files` reports — the number the Tools
+view shows — is already net of them. Filtering later, per view, is what would let that
 count and Summary's total disagree. `SCOPES.classify` stays total and still maps a blank onto the
 fallback, so no caller can manufacture a case belonging to no table; it simply never sees one.
 
@@ -131,25 +158,86 @@ asserts directly.
 [static/css/tokens.css](static/css/tokens.css) holds every colour, type and spacing token
 (light palette on bare `:root`, dark redefined under both `prefers-color-scheme` and
 `[data-theme="dark"]`), and [static/css/app.css](static/css/app.css) holds the components.
-The organising idea is **the ledger** — this tool sits between two spreadsheets, so the grid
-is the structure. There is no `.card` and no `.panel`; the setup drawer and the empty state
-are the only boxed surfaces. Tables are ruled, never framed.
+The organising idea is still **the ledger** — this tool sits between two spreadsheets, so the
+grid is the structure. Rows are ruled and cells are square: a curve inside a run of figures is
+noise.
 
-**The interface has no accent colour.** Colour on screen always means *status*. Tabs, primary
-buttons, selection and focus are rendered as inverted ink blocks, and the device/PIC charts use
-a monochrome ink ramp — so a device breakdown can never be misread as a pass/fail one. Do not
-introduce a brand or accent hue; it will collide with the five status tones.
+**Curvature is a scale, and it means distance from the data.** `--r-sm` (6px) for inputs and
+small in-cell buttons, `--r-md` (7px) for buttons and rail nav items, `--r-lg` (10px) for cards
+and table panes, `--r-full` for badges and result toggles — things whose whole job is to be
+pressed, or read as a token. Reaching for a literal `border-radius` instead of a token is what
+makes an interface look assembled rather than designed. Two consequences worth knowing, because
+each reverses an earlier rule:
+
+- **Tables are now framed.** Each `.scroll-x` is a rounded, hairline-bordered pane, and its
+  `overflow` clips the sticky `<thead>`/`<tfoot>` into the corners. The pane is
+  `width: max-content` capped at `100%` — the ledger still hugs its columns, so a full-width
+  pane would leave the border floating right of the last column on a narrow table, while the
+  cap is what still makes it scroll once the status band outgrows the screen.
+- **Boxed surfaces exist.** The Tools panels, the stat cards, the filter well, the chart tiles
+  and the Summary overview are all framed. The distinction the scale draws is that a summary
+  *of* the data may have a frame and the rows themselves may not.
+
+Framing is a hairline, not a shadow. `--shadow-1/2/3` survive as a scale but almost nothing uses
+them now: with no floating surface left in the app — the drawer became the Tools view — a border
+is what marks an edge. The shadow colour is a literal rather than a mix of `--ink`, because
+`--ink` inverts in dark mode and a light shadow is not a shadow.
+
+**The type stack is IBM Plex Sans + Noto Sans JP, and that pairing is the one compromise in it.**
+The status labels are bilingual ("Pending (保留)"), so Latin and CJK sit inside one string and must
+agree on x-height and weight. Plex has no CJK. Plex Sans JP would be the in-family companion, but
+Noto Sans JP is what agrees with the Noto already in the stack — so it is a pairing, not a family,
+and that is what it gives up. **Counts are set in Plex Mono**: `.num` carries `--font-mono` with
+`tabular-nums`. That reverses an earlier decision, deliberately — the design uses the mono face
+throughout to mark what is a figure, and at these row densities the distinction does real work,
+telling you which columns you can compare down the page and which you can only read. `--font-mono`
+also still carries what is genuinely code: case numbers, paths, Excel column letters.
+
+**The interface has no accent colour.** Colour on screen always means *status*. Nav selection,
+primary buttons, selection and focus are rendered as inverted ink blocks (inside the rail, as
+`--rail-hover` blocks — the ground there is already ink), and the device/PIC charts use a
+monochrome ink ramp, so a device breakdown can never be misread as a pass/fail one. Do not
+introduce a brand or accent hue; it will collide with the five status tones. **The design canvas
+this palette came from has one** — a green primary, `#1F6F5C`, a few degrees from OK's own
+`#2E7D5B` — and it was deliberately not adopted. That is the collision this rule exists to
+prevent, and it is the one place the implementation departs from the canvas on purpose.
+
+The one exception is `.btn-danger` on the prepare panel's Apply: the only control in the app that
+destroys something a file cannot give back, and the only one allowed to carry a status colour.
 
 **Frontend state ownership.** No framework, no bundler; `templates/index.html` loads
 [static/js/main.js](static/js/main.js) as `<script type="module">`. An imported ES binding can't be
 reassigned by the importer, so each piece of mutable state lives in exactly one module and is
 reached through functions: taxonomy in `taxonomy.js`, cases/filters/page/expansion in
 `views/detail.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
-`views/productivity.js`, Chart.js instances in `charts.js`, theme in `theme.js`.
+`views/productivity.js`, Chart.js instances in `charts.js`, theme in `theme.js`,
+the daily target in `target.js`, the working copy of each config file in `views/config.js`.
 
-`pagination.js` and `groupedTable.js` are self-contained widgets that **must not import any
-view module** (circular). `groupedTable.js` takes the caller's rows, grouping keys and its own
-`expanded` Set, and reports back through `onToggle`; build group paths with its `groupPath()`
+**`target.js` holds the one number nobody reads out of a workbook.** Cases per person per day —
+the yardstick the Daily chart's plan line, the daily log's Plan and Attain columns and
+Productivity's attainment bar are all derived from. It has no endpoint, no aggregate and writes
+nothing: Productivity owns the *input*, `target.js` owns the *value*, and Daily redraws through
+`onTargetChange`. It is kept in `localStorage` (the design canvas keeps it in component state,
+which forgets it on reload — a standing figure retyped every morning is how it ends up wrong).
+`planFor(members)` returns 0 when nobody worked, so a day with no named PIC has no plan rather
+than a plan of zero it can never meet.
+
+**The shell is a rail and six views.** `shell.js` owns the dark sidebar — nav, the loaded-source
+card, the two counts it carries, and the page heading — and nothing else; it does not know what a
+view contains, so `main.js` hands it an `onNavigate` callback and it reports clicks back through
+that. `main.js` owns `VIEWS`, which is the single list of what exists: Summary, Daily,
+Productivity, Review, Tools and Config. Adding a view means adding an entry there and a
+`<section class="view" id="<name>View">`, and nothing else. `ALWAYS_ENABLED` in `shell.js` is the
+other half of that list: Tools and Config answer something with nothing loaded, so they are never
+disabled, and the four data views are.
+
+`pagination.js`, `groupedTable.js` and `filesTable.js` are self-contained widgets that
+**must not import any view or panel module** (circular). `groupedTable.js` takes the caller's rows, grouping keys and its own
+`expanded` Set, and reports back through `onToggle`. Its `renderValues(row, index, depth)` gets
+the nesting level — `index` is -1 on a group row, `depth` is 0 on the outermost — which is what
+lets Daily put Plan, Attain, Members and Cumulative on the date rows and leave them blank on the
+device and PIC rows beneath. A plan for one device of one file is not a figure anyone set.
+Build group paths with its `groupPath()`; build group paths with its `groupPath()`
 rather than joining labels by hand, because the separator is a NUL.
 
 **Never round-trip a group path through the DOM.** An HTML attribute is not a lossless
@@ -174,8 +262,14 @@ Behavior worth preserving when touching the UI:
   first, not the file that happens to own the worst row.
 - Paging counts **groups**, not rows, wherever grouping is on (Daily always; Detail when the
   group-by control is set). A page that split a group would make its roll-up a lie.
-- The productivity table sits inside `#dailyView` but ignores the daily filters on purpose —
-  it reports over everything loaded, so it re-renders only on sort, never on filter change.
+- **Productivity is its own view, not a second table under Daily.** It reports over everything
+  loaded and never answered to Daily's filters; sitting beneath them implied that it did. It
+  re-renders only on sort, never on filter change.
+- **`.scroll-x--rows` caps a pane at about ten rows** (`--rows`, plus two steps of slack for the
+  header and totals row). That is what makes "Show all" a reasonable offer: every row renders and
+  the *pane* scrolls, rather than the page growing to three thousand rows. It is also why a card
+  keeps its footprint as you page — one that changed height on every Next would move everything
+  under it. Summary's and Review's tables both use it.
 - Every table lives in a `.scroll-x` pane that has `overflow: auto` **and** a `max-height`.
   Both halves matter: the overflow makes the pane — not the viewport — the scrollport for
   the sticky `<thead>` and `<tfoot>`, and the height cap is what gives it something to
@@ -192,17 +286,111 @@ Behavior worth preserving when touching the UI:
   about the views. `refreshViews()` calls `setReportEnabled(true)` — publishing with nothing
   loaded would clear the day's rows and write none back, which the endpoint also refuses.
 - `preparePanel.js` is the third of those panels: it owns *changing the source files* and also
-  knows nothing about the views. It stays hidden until a load succeeds, because the file list it
-  works from is the loaded source's, and its keep checkboxes are built from `/api/statuses` —
-  never a status list written into the JS. Writing there means the workbooks no longer match
-  what is loaded, so `onApplied` re-reads the source; `refreshViews()` takes `{close: false}` on
-  that path, because pulling the drawer away mid-workflow would lose the user's place.
-- `setupDrawer.js` owns chrome only. It opens itself when nothing is loaded and closes on a
-  successful load; `sourcePanel.js`, `reportPanel.js` and `preparePanel.js` do not know it exists.
-- `views/summary.js` must not import `views/detail.js`. It has no reason to now — the
-  missing-reason list that used to jump into Detail has been removed from the screen, along with
-  `initSummaryView`, `showCase` and the `onJumpToCase` callback. `/api/summary` still returns
-  `missing_reason`; nothing draws it.
+  knows nothing about the views. Its controls stay hidden until a load succeeds, because the file
+  list they work from is the loaded source's, and its keep checkboxes are built from
+  `/api/statuses` — never a status list written into the JS. They are rebuilt on every
+  `refreshPrepare`, not once at init, because the Config view can rename or remove a status while
+  the app runs; `readKeep` filters the remembered set against the taxonomy as it stands now, so a
+  key that no longer exists cannot be sent to an endpoint that would refuse it. Writing to the
+  workbooks means they no longer match what is loaded, so `onApplied` re-reads the source;
+  `refreshViews()` takes `{show: false}` on that path, because throwing the user onto Summary
+  mid-workflow would lose their place.
+- **One list of workbooks is one table, and `filesTable.js` is it.** `sourcePanel` knows what each
+  file contributed to the load; `preparePanel` knows its TOOL_DATA state and what may be done to
+  it. They used to say that in two tables, one under the other, listing the same files twice. So
+  the table is a self-contained widget in the mould of `pagination.js` and `groupedTable.js` — it
+  **imports no panel module**, both panels feed it (`setLoadResults` / `setPrepareFiles`), and it
+  reports a pressed row button back through `onAction`, which `main.js` routes to
+  `runFileAction`. That is what let the two Tools cards merge without either panel learning the
+  other exists. The two halves arrive one round trip apart and are joined **on the path, not the
+  file name**: `find_workbooks` is recursive, so two subfolders may each hold a `TC.xlsx` — which
+  is why `load_files` reports `path` alongside `file`. A row addresses its workbook by index into
+  a render-local array, never through a `data-` attribute.
+- **Tools is where those panels live, and it is a view like any other.** It was a drawer
+  pulled over the app; making it a view removed the scrim, the focus trap, the escape key and the
+  open/closed state that all the panels had to be kept in step with. It is also the empty state:
+  the app opens on Tools, because with nothing loaded it is the only screen that can answer
+  anything. `sourcePanel.js`, `reportPanel.js` and `preparePanel.js` still know nothing about it,
+  or about each other.
+- **Config is a view, not a fourth Tools card**, because all three files are editable whether or
+  not anything is loaded. `views/config.js` follows the panels' rule and knows nothing about the
+  other views: saving the taxonomy changes what every figure on screen *means*, so `main.js` owns
+  that consequence through `onSaved` and redraws with `{show: false}` — which is why it now holds
+  the last load result. Three things about the form itself:
+  - **It names no vocabulary of its own.** Tones, derive conditions and the sheet-label field
+    names all arrive in `/api/config`'s `vocabulary`, the same rule that keeps status keys out of
+    the JS. A form offering a tone the validator refuses is worse than no form.
+  - **It edits the file, not a model of the file.** Each row holds the raw object it was drawn
+    from and mutates only the fields it owns, so the legacy `badge` and `text` keys survive a save
+    instead of being silently dropped. Dirtiness is `JSON.stringify` against the last known
+    on-disk text, so reordering counts as a change — which it is.
+  - **`empty` and `fallback` are one pick each for the whole taxonomy**, so they are two selects
+    under the table rather than two columns of radios: as columns they were eight controls of
+    which one mattered, and they cost the Derives-from column its place on screen.
+- **Summary is laid out as the design canvas draws it**: five KPI cards, a grid of panels
+  (result breakdown, today's progress, what owes a reason), then one card per scope group. Each
+  card carries the design's chrome — Device and File selects, a Rows combined/split toggle, an
+  Executed progress column, condition chips and a Prev/Next/Show-all footer. **The one control
+  the design has and this does not is the Scope select**, because the scope is the heading of the
+  card you are already reading; collapsing FPT and JP into one filtered table is the thing the
+  scope-group rule forbids. The filters are shared across cards for the reason the sort is —
+  "iPad only" should mean the same thing in both — and paging is not, because a page number only
+  means something inside one table. `combine()` sums the devices of a file and reports how many
+  it summed; a Device cell reading "iPad" on a row that also counts an iPhone would be a lie.
+- **Daily leads with a CSS bar chart, not Chart.js.** Executed per day against a dashed plan
+  line, drawn as divs: it repaints on every filter change and every theme change, and a canvas
+  that resolves its colours at construction is what `charts.js` exists to work around. Unlike the
+  design's, it answers to the filters above it — a chart contradicting the table beneath it is
+  worse than a chart with a narrower question. Cumulative is computed in date order regardless of
+  how the table is sorted, because a running total that reversed with the sort would not be one.
+- **Review's stat cards are controls.** Each filters the table to its own status and the first
+  clears that filter; clicking the pressed one clears it too, so the row is also the way back out.
+  They count over `conditioned` — every filter applied *except* the status choice — not over
+  `filtered`: a card is the way to pick a status, so its figure has to say how many there are to
+  pick. A "To review" card dropping to 256 the moment NG is chosen would be counting the choice it
+  is offering to change. `Files` is the exception and counts what is on screen. The Result toggles
+  inside the folded filter panel edit the same `chosenStatuses` set one at a time — the cards are
+  the single pick, the toggles the combination the cards cannot express.
+- `views/summary.js` must not import `views/detail.js`. The missing-reason list that used to
+  jump into Detail took `showCase` and the `onJumpToCase` callback with it when it went.
+  **`missing_reason` reaches the screen as the "Missing reason" KPI figure**, which is a link:
+  the list of those rows was drawn as an at-risk panel and has since been removed, because
+  Review can show them properly. Both navigating cards ("To review" and "Missing reason") go
+  through `setJumpHandler`, a callback `main.js` installs — `main.js` owns the views, so a card
+  that navigates is not a reason to put the import back. A card may also name a *filter*
+  (`data-filter`), which `main.js` translates into a call on whichever module owns that view's
+  state — `showMissingReason()` in `views/detail.js`.
+- **`lacksReason(d)` in `views/detail.js` is the one definition of "owes a reason and has
+  none"**: `requiresReason(status) && !ticket_id && !note`. It paints the Ticket ID and Note
+  cells red *and* drives the Missing reason filter, and it is the browser-side twin of what
+  `/api/summary` computes for `missing_reason`. Which statuses oblige an explanation stays the
+  taxonomy's business (`needs_reason`), never named in the JS. The filter is a **condition, not a
+  status choice** — it narrows within whatever results are chosen, so it lives beside the Result
+  toggles and is applied to `conditioned`, which is why the status cards keep counting correctly
+  underneath it. One consequence worth knowing: Review's figure can be smaller than the KPI's,
+  because `needs_reason` may name a status that is not a `review` one, and such a case is not in
+  that view at all.
+- **`renderPageFooter` in `pagination.js` is the footer Summary and Review share.** Count on the
+  left, `Prev · n / m · Next` and a Show-all on the right. Two footers that drifted would be two
+  different answers to "is this all of it", so the markup and the paging arithmetic live in the
+  widget, not in either view. It imports no view module, like everything else in that file.
+- **`views/summaryOverview.js` owns the strip above the tables**, and owns none of
+  `summary.js`'s state. It is drawn from `renderSummary` rather than from `render()`, because
+  it reports over every row regardless of order — re-sorting a table must not redraw it.
+  Everything in it is derived: the figures from `sumRows` over the same `/api/summary` rows the
+  tables draw (so the strip cannot disagree with the numbers beneath it), the activity line
+  from `/api/daily`, which `main.js` already holds. No endpoint was added for it.
+- **The progress bar expands over `STATUS.counted`, the way the report's columns do.** An
+  excluded status is absent from it: `total` does not include it, and a bar that failed to fill
+  its own track would read as a rendering bug rather than as the deliberate gap the table's
+  dashed `band--aside` rule makes explicit. Segments are painted with `colourFor`, the same
+  stepped-tone function the charts use, so the bar and the doughnut cannot drift apart.
+- **The headline figure is "Executed", never "Done".** It counts `STATUS.executed`, and an NG
+  is work carried out that is not a pass — "70% done" beside a red NG column is a claim the
+  reader has no way to check. For the same reason the day-on-day figure is *per-day activity*
+  rather than a cumulative delta: `daily_rows` drops undated cases, so a running total taken
+  from it would not reconcile with Summary's total. Its label names the day being compared
+  *against*, not the latest one.
 
 **Aggregation is shared, not owned by the routes.** [aggregate.py](aggregate.py) holds
 `summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` as plain functions over
@@ -245,7 +433,7 @@ isolates the failures per file the way `load_files` does, and returns plain dict
 `aggregate.py`, and for the same reason. Put new batch behaviour in `runner.py`, not in a route;
 what stays in the route is what is genuinely about the request, which is the two guards below.
 **The app is the only way in.** These operations once had argparse shells in `tools/`; they
-were deleted once the drawer covered them, because two front doors to an irreversible write is
+were deleted once the Tools view covered them, because two front doors to an irreversible write is
 one more than the invariants above can be enforced at. `tools/` now holds only the sample
 generator, which makes test data rather than touching anyone's. One consequence worth knowing:
 `apply_plan` and `write_tool_data_sheet` still take an `out_path` — write to a copy instead of

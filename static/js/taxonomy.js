@@ -216,23 +216,35 @@ export function statusHeadCells(th) {
  * Build the detail view's stat cards: the review total, one per review status,
  * then Files.
  *
- * Only the review statuses, because those are the only cases Detail holds — a
+ * Only the review statuses, because those are the only cases Review holds — a
  * card reading "OK 0" would be a permanent, meaningless zero. The first card is
  * labelled "To review" rather than "Total" for the same reason: it counts the
  * cases on this screen, which is deliberately not the Total that Summary
  * reports, and two figures both called Total would read as a bug.
  *
- * Generated rather than written into the template because the status list is
- * configurable. {@link setTaxonomy} must have run first.
+ * **They are controls, not readouts.** Each card filters the table to its own
+ * status, and the first clears that filter — the design's tab row, which is the
+ * quick single pick over the same state the Result toggles inside the filter
+ * panel edit one at a time. `views/detail.js` binds them; this only builds them,
+ * because the status list is configurable and nothing may hard-code it.
+ *
+ * {@link setTaxonomy} must have run first.
  */
 export function renderStatCards() {
-    const cell = (label, id, tone) => `
-        <div class="stat">
-            <div class="stat-label">${esc(label)}</div>
-            <div class="stat-value"${tone ? ` data-tone="${esc(tone)}"` : ""} id="${esc(id)}">0</div>
-        </div>`;
+    const cell = (label, id, tone, status) => `
+        <button type="button" class="stat" data-status-card="${esc(status)}"
+                aria-pressed="false">
+            <span class="stat-label">${esc(label)}</span>
+            <span class="stat-value"${tone ? ` data-tone="${esc(tone)}"` : ""} id="${esc(id)}">0</span>
+        </button>`;
 
-    $("#statsRow").innerHTML = cell("To review", "statTotal")
-        + getReviewStatuses().map((s) => cell(s.label, `stat-${s.key}`, toneFor(s.key))).join("")
-        + cell("Files", "statFiles");
+    $("#statsRow").innerHTML = cell("To review", "statTotal", "", "")
+        + getReviewStatuses()
+            .map((s) => cell(s.label, `stat-${s.key}`, toneFor(s.key), s.key)).join("")
+        // Files is a fact about the selection, not a status anyone can filter
+        // to, so it is the one card that stays inert.
+        + `<div class="stat stat--inert">
+               <span class="stat-label">Files</span>
+               <span class="stat-value" id="statFiles">0</span>
+           </div>`;
 }

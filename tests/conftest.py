@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from openpyxl import Workbook
 from openpyxl.utils import column_index_from_string
@@ -57,3 +59,48 @@ def make_workbook(tmp_path):
     def _make(name="TC.xlsx", tool_data=(), cells=None):
         return write_workbook(tmp_path / name, list(tool_data), cells or {})
     return _make
+
+
+# --- editable configs ------------------------------------------------------
+# `config_store.save` writes a file *and* mutates the live singletons, so a
+# test that saves anything has to be given somewhere to write and be put back
+# afterwards. Both fixtures live here because the store's own tests and the
+# endpoint's tests need exactly the same pair.
+
+@pytest.fixture
+def restore_configs():
+    """Put the live config singletons back after a test has written over them."""
+    import config_store
+    from parser.scope import SCOPES
+    from parser.sheet_labels import LABELS
+    from parser.status import STATUS
+    from report.layout import LAYOUT
+
+    saved = [(obj, dict(obj.__dict__)) for obj in (STATUS, SCOPES, LABELS, LAYOUT)]
+    yield config_store
+    for obj, state in saved:
+        obj.__dict__.clear()
+        obj.__dict__.update(state)
+
+
+@pytest.fixture
+def config_paths(tmp_path, monkeypatch):
+    """Point every editable config at a copy in `tmp_path`.
+
+    The repo's own JSON must never be the thing under test: a save that went to
+    the wrong place would rewrite the shipped taxonomy.
+    """
+    import config as app_config
+    import config_store
+
+    paths = {}
+    for name, spec in config_store.CONFIGS.items():
+        source = getattr(app_config, spec.setting)
+        # Copied under the real file's name: the store labels its refusals with
+        # the basename, so a copy called something else would not be testable.
+        target = tmp_path / os.path.basename(source)
+        with open(source, encoding="utf-8") as f:
+            target.write_text(f.read(), encoding="utf-8")
+        monkeypatch.setattr(app_config, spec.setting, str(target))
+        paths[name] = target
+    return paths

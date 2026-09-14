@@ -11,6 +11,7 @@
 import { $, esc } from "../dom.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortRows } from "../sorting.js";
 import { getExecutedStatuses, toneFor } from "../taxonomy.js";
+import { getTarget, onTargetChange, setTarget } from "../target.js";
 
 /** @type {Object[]} rows from /api/productivity */
 let prodData = [];
@@ -23,6 +24,42 @@ const prodSort = { ...DEFAULT_SORT };
 
 /** Columns that are not one of the executed statuses. */
 const NUMERIC_BASE = ["executed", "days", "productivity"];
+
+/**
+ * Wire the target input. Call once, at startup.
+ *
+ * This view owns the *control*; `target.js` owns the value, because the Daily
+ * chart reads it too. Typing here redraws both.
+ */
+export function initProductivityView() {
+    const input = $("#productivityTarget");
+    input.value = String(getTarget());
+    input.addEventListener("change", () => {
+        // `setTarget` returns what it actually adopted, so a refused value
+        // (blank, zero, negative) corrects itself in the box rather than
+        // leaving the reader looking at a number the table did not use.
+        input.value = String(setTarget(input.value));
+    });
+    onTargetChange(renderProductivity);
+}
+
+/**
+ * Attainment against the target, as a bar and a percentage.
+ *
+ * @param {number} rate Cases per day.
+ * @returns {string} HTML.
+ */
+function attainCell(rate) {
+    const pct = Math.round((rate / getTarget()) * 100);
+    const tone = pct >= 100 ? "success" : pct >= 80 ? "warn" : "danger";
+    return `<td class="progress-col"><span class="progress-cell">
+        <span class="progress progress--sm" role="img" aria-label="${pct}% of target">
+            <span class="progress-seg" style="width:${Math.min(100, pct)}%;
+                  background:var(--tone-${tone})"></span>
+        </span>
+        <span class="num" data-tone="${tone}">${pct}%</span>
+    </span></td>`;
+}
 
 const SELECTOR = "#productivityHead th.sortable";
 
@@ -40,9 +77,12 @@ export function renderProductivityHead() {
     $("#productivityHead").innerHTML =
         sortableTh("pic", "PIC")
         + statusHeads
-        + sortableTh("executed", "Executed", { cls: "num" })
-        + sortableTh("days", "Working days", { cls: "num" })
-        + sortableTh("productivity", "Cases / day", { cls: "num" });
+        // Centred: these three are the member's own figures rather than part of
+        // the status band, and centring is what sets them apart from it.
+        + sortableTh("executed", "Executed", { cls: "num center" })
+        + sortableTh("days", "Working days", { cls: "num center" })
+        + sortableTh("productivity", "Cases / day", { cls: "num center" })
+        + `<th class="progress-col">Attainment</th>`;
 
     makeSortable(SELECTOR, prodSort, renderProductivity);
     paintSortIndicators(SELECTOR, prodSort);
@@ -73,7 +113,7 @@ function renderProductivity() {
 
     if (!rows.length) {
         $("#productivityBody").innerHTML =
-            `<tr class="empty-row"><td colspan="${statuses.length + 4}">`
+            `<tr class="empty-row"><td colspan="${statuses.length + 5}">`
             + "No executed cases yet.</td></tr>";
         $("#productivityFoot").innerHTML = "";
         return;
@@ -86,9 +126,10 @@ function renderProductivity() {
             return `<td class="num band${v ? "" : " zero"}" `
                  + `data-tone="${esc(toneFor(s.key))}">${v || ""}</td>`;
         }).join("")}
-        <td class="num">${r.executed}</td>
-        <td class="num">${r.days}</td>
-        <td class="num"><b>${r.productivity.toFixed(2)}</b></td>
+        <td class="num center">${r.executed}</td>
+        <td class="num center">${r.days}</td>
+        <td class="num center"><b>${r.productivity.toFixed(2)}</b></td>
+        ${attainCell(r.productivity)}
     </tr>`).join("");
 
     renderProductivityFoot(rows, statuses);
@@ -113,8 +154,9 @@ function renderProductivityFoot(rows, statuses) {
     $("#productivityFoot").innerHTML = `<tr>
         <td>Team</td>
         ${statuses.map((s) => `<td class="num band">${sum(s.key) || 0}</td>`).join("")}
-        <td class="num">${executed}</td>
-        <td class="num">${days}</td>
-        <td class="num">${rate.toFixed(2)}</td>
+        <td class="num center">${executed}</td>
+        <td class="num center">${days}</td>
+        <td class="num center">${rate.toFixed(2)}</td>
+        ${attainCell(rate)}
     </tr>`;
 }

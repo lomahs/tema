@@ -257,3 +257,38 @@ def test_sheet_config_round_trips_through_to_dict():
         "test_no_col": "A", "scope_col": "B", "result_col": "C",
         "test_date_col": "D", "pic_col": "E", "ticket_id_col": "F", "note_col": "G",
     }
+
+
+def test_each_file_result_carries_the_path_it_was_read_from(tmp_path):
+    """A basename does not identify a workbook; the folder scan is recursive.
+
+    The Tools view joins these results to `prepare.runner.describe` to put a
+    workbook's TOOL_DATA state on the same row as its case count, and two
+    subfolders may each hold a "TC.xlsx".
+    """
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    for folder in ("a", "b"):
+        write_workbook(
+            tmp_path / folder / "TC.xlsx",
+            [config_row("Login", "iPhone", 4, 4)],
+            {"Login": {(4, "A"): "TC-1", (4, "B"): "FPT", (4, "C"): "OK"}},
+        )
+
+    _, file_results = load_from_folder(str(tmp_path))
+
+    assert [r["file"] for r in file_results] == ["TC.xlsx", "TC.xlsx"]
+    assert sorted(os.path.relpath(r["path"], tmp_path) for r in file_results) == [
+        os.path.join("a", "TC.xlsx"), os.path.join("b", "TC.xlsx"),
+    ]
+
+
+def test_a_failed_file_result_carries_its_path_too(make_workbook):
+    """The row that needs identifying most is the one that could not be read."""
+    path = make_workbook("bad.xlsx", [config_row("Login", "iPhone", 4, "oops")],
+                         {"Login": {(4, "A"): "TC-1"}})
+
+    _, file_results = load_from_files([path])
+
+    assert file_results[0]["status"] == "Error"
+    assert file_results[0]["path"] == path

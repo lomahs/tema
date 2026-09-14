@@ -1,19 +1,25 @@
 /**
- * The source picker at the top of the page: folder-vs-files toggle, the Load
- * and Reload buttons, and the per-file result table.
+ * The source picker at the top of the Tools view: the folder-vs-files toggle,
+ * Browse, and the Load and Reload buttons.
  *
  * Owns everything about *where* the data comes from; it hands the loaded data
  * off through the `onLoaded` callback and knows nothing about the views.
+ *
+ * It no longer owns the file table. `preparePanel` has as much to say about the
+ * same workbooks as this does, so the table is `filesTable.js` and both panels
+ * feed it — which is what let the two Tools cards merge without either panel
+ * learning the other exists.
  */
 import { $, esc } from "./dom.js";
 import { postBrowse, postLoad, postReload } from "./api.js";
+import { clearFilesTable, setLoadResults } from "./filesTable.js";
 
 /** localStorage key holding the last source, so a refresh keeps your place. */
 const STORAGE_KEY = "tcm_source";
 
 let sourceType, folderGroup, filesGroup, folderPath, filePaths;
 let btnLoad, btnReload, btnBrowseFolder, btnBrowseFiles;
-let loadStatus, fileResultsWrapper, fileResultsBody;
+let loadStatus;
 
 /**
  * Wire up the panel. Call once, at startup.
@@ -33,8 +39,6 @@ export function initSourcePanel({ onLoaded }) {
     btnBrowseFolder = $("#btnBrowseFolder");
     btnBrowseFiles = $("#btnBrowseFiles");
     loadStatus = $("#loadStatus");
-    fileResultsWrapper = $("#fileResultsWrapper");
-    fileResultsBody = $("#fileResultsBody");
 
     restoreSource();
 
@@ -162,7 +166,7 @@ async function doLoad(onLoaded) {
             return;
         }
         loadStatus.innerHTML = `Loaded <b>${json.loaded}</b> cases from <b>${json.file_count}</b> file(s).`;
-        renderFileResults(json.file_results);
+        setLoadResults(json.file_results);
         btnReload.disabled = false;
         await onLoaded(json);
     } catch (e) {
@@ -186,7 +190,7 @@ async function doReload(onLoaded) {
             return;
         }
         loadStatus.innerHTML = `Reloaded <b>${json.loaded}</b> cases from <b>${json.file_count}</b> file(s).`;
-        renderFileResults(json.file_results);
+        setLoadResults(json.file_results);
         await onLoaded(json);
     } catch (e) {
         loadStatus.innerHTML = `<span class="is-error">Reload failed: ${esc(e.message)}</span>`;
@@ -196,37 +200,10 @@ async function doReload(onLoaded) {
 }
 
 /**
- * Show an API error and hide the stale per-file table.
+ * Show an API error and clear the stale file table.
  * @param {string} message
  */
 function showError(message) {
     loadStatus.innerHTML = `<span class="is-error">${esc(message)}</span>`;
-    fileResultsWrapper.hidden = true;
-}
-
-/**
- * Render the per-file outcome table.
- *
- * One unreadable workbook does not fail the whole load, so this is where a
- * partial success gets reported: OK rows carry a case count, failed rows carry
- * the parser's message.
- *
- * @param {Array<{file: string, status: string, cases?: number, error?: string}>} results
- */
-function renderFileResults(results) {
-    if (!results || !results.length) {
-        fileResultsWrapper.hidden = true;
-        return;
-    }
-    fileResultsWrapper.hidden = false;
-    fileResultsBody.innerHTML = results.map((r, i) => {
-        const statusCls = r.status === "OK" ? "is-ok" : "is-error";
-        return `<tr>
-            <td class="num muted">${i + 1}</td>
-            <td>${esc(r.file)}</td>
-            <td class="${statusCls}">${esc(r.status)}</td>
-            <td class="num">${r.cases != null ? r.cases : "—"}</td>
-            <td>${r.error ? esc(r.error) : ""}</td>
-        </tr>`;
-    }).join("");
+    clearFilesTable();
 }

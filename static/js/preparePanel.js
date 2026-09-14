@@ -1,5 +1,6 @@
 /**
- * The "Prepare the workbooks" section of the setup drawer.
+ * Changing the source workbooks: give one a TOOL_DATA sheet, or empty last
+ * round's results out of it.
  *
  * Mirrors `sourcePanel.js` and `reportPanel.js`: it owns everything about
  * *changing the source files* and knows nothing about the views. The two
@@ -7,18 +8,22 @@
  * one click — every button produces a preview, and a second, explicit Apply is
  * what writes.
  *
- * The section stays hidden until something has been loaded, because the file
- * list it works from is the loaded source's.
+ * It shares its file list with `sourcePanel`, through `filesTable.js`: one list
+ * of workbooks is one table, and what this panel contributes to each row is the
+ * TOOL_DATA state and the two buttons. The controls that act on *every*
+ * workbook at once stay hidden until a load succeeds, because the list they
+ * work from is the loaded source's.
  */
 import { $, esc } from "./dom.js";
 import {
     getPrepareFiles, getStatuses, postPrepareClear, postPrepareToolData,
 } from "./api.js";
+import { setActionsEnabled, setPrepareFiles } from "./filesTable.js";
 
 /** localStorage key holding the kept status keys, so a round keeps its choice. */
 const STORAGE_KEY = "tcm_prepare_keep";
 
-let section, keepBox, filesBody, filesWrapper, statusLine;
+let controls, keepBox, statusLine;
 let preview, applyRow, btnApply, btnCancel, btnDetectAll, btnClearAll;
 
 /** Runs after a successful write, so the shell can re-read the changed files. */
@@ -27,13 +32,7 @@ let onApplied = async () => {};
 /** The taxonomy's statuses, for the keep checkboxes. */
 let statuses = [];
 
-/**
- * The file list as the server last reported it.
- *
- * Rows are addressed by index into this array rather than by writing the path
- * into a `data-` attribute: an HTML attribute is not a lossless channel, and a
- * path is the one thing here that must survive a click intact.
- */
+/** The file list as the server last reported it. */
 let files = [];
 
 /** The previewed operation awaiting Apply, or `null`. */
@@ -49,10 +48,8 @@ let pending = null;
 export function initPreparePanel({ onApplied: applied }) {
     onApplied = applied;
 
-    section = $("#prepareSection");
+    controls = $("#prepareControls");
     keepBox = $("#keepStatuses");
-    filesBody = $("#prepareFilesBody");
-    filesWrapper = $("#prepareFilesWrapper");
     statusLine = $("#prepareStatus");
     preview = $("#preparePreview");
     applyRow = $("#prepareApplyRow");
@@ -68,9 +65,6 @@ export function initPreparePanel({ onApplied: applied }) {
         runToolData(files.map((f) => f.path)));
     btnClearAll.addEventListener("click", () =>
         runClear(files.filter((f) => f.has_tool_data).map((f) => f.path)));
-
-    // One listener for the whole table: rows are redrawn on every refresh.
-    filesBody.addEventListener("click", onRowClick);
 
     loadStatuses();
 }
@@ -89,8 +83,10 @@ async function loadStatuses() {
 /**
  * Draw one checkbox per status.
  *
- * Built from `/api/statuses` rather than listed here, so adding a status to
- * `result_status.json` reaches this panel with no change to the JS.
+ * Built from `/api/statuses` rather than listed here, so adding a status —
+ * whether by editing `result_status.json` or from the Config view — reaches
+ * this panel with no change to the JS. Redrawn on every `refreshPrepare`,
+ * because the taxonomy can now change without the page being reloaded.
  */
 function renderKeepChecks() {
     const kept = new Set(readKeep());
@@ -108,13 +104,22 @@ function renderKeepChecks() {
         }));
 }
 
-/** The keep set, defaulting to Cancel the first time the panel is opened. */
+/**
+ * The keep set, defaulting to Cancel the first time the panel is opened.
+ *
+ * Filtered against the taxonomy as it stands now: a status can be renamed or
+ * removed from the Config view, and a remembered key that no longer exists is
+ * not a choice anyone can make — leaving it in would send the clear endpoint a
+ * key it refuses, on behalf of a box nobody could see.
+ */
 function readKeep() {
+    const known = new Set(statuses.map((s) => s.key));
+    let saved = ["Cancel"];
     try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (Array.isArray(saved)) return saved;
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (Array.isArray(stored)) saved = stored;
     } catch { /* a corrupt entry just means the default */ }
-    return ["Cancel"];
+    return saved.filter((key) => known.has(key));
 }
 
 /** The keys currently ticked. */
@@ -123,15 +128,21 @@ function currentKeep() {
 }
 
 /**
- * Show the section and re-read the loaded source's files.
+ * Show the controls and re-read the loaded source's files.
  *
  * Called after every load, so a workbook that has just been given a TOOL_DATA
- * sheet shows up as described without a page refresh.
+ * sheet shows up as described without a page refresh. The rows themselves are
+ * drawn by `filesTable`; what is handed over is this panel's half of them.
  */
 export async function refreshPrepare() {
-    section.hidden = false;
+    controls.hidden = false;
     pending = null;
     renderPreview(null);
+
+    // The taxonomy may have changed since these boxes were drawn — the Config
+    // view can rename or remove a status while the app runs, and this is the
+    // one list in the app built from `/api/statuses` outside a view refresh.
+    await loadStatuses();
 
     let res;
     try {
@@ -142,50 +153,24 @@ export async function refreshPrepare() {
     if (!res.ok) return setStatus(res.json.error, "is-error");
 
     files = res.json.files;
-    renderFiles();
+    setPrepareFiles(files);
+    setActionsEnabled(true);
     setStatus("");
 }
 
-/** Draw one row per workbook, with the buttons its state allows. */
-function renderFiles() {
-    filesWrapper.hidden = files.length === 0;
-
-    filesBody.innerHTML = files.map((f, index) => {
-        const described = f.has_tool_data;
-        const state = f.error
-            ? `<span class="is-error">${esc(f.error)}</span>`
-            : described
-                ? `<span class="mono">${f.blocks} block${f.blocks === 1 ? "" : "s"}</span>`
-                : `<span class="muted">none</span>`;
-
-        // A workbook with no TOOL_DATA cannot be cleared: nothing says which
-        // cells hold results.
-        return `<tr>
-            <td class="clip" title="${esc(f.path)}">${esc(f.file)}</td>
-            <td>${state}</td>
-            <td class="actions">
-                <button type="button" class="btn btn-sm" data-act="tool-data" data-index="${index}">
-                    ${described ? "Check TOOL_DATA" : "Create TOOL_DATA"}
-                </button>
-                <button type="button" class="btn btn-sm" data-act="clear" data-index="${index}"
-                        ${described ? "" : "disabled title=\"Needs a TOOL_DATA sheet first\""}>
-                    Clear results
-                </button>
-            </td>
-        </tr>`;
-    }).join("");
-}
-
-/** Route a click on either per-row button. */
-function onRowClick(event) {
-    const btn = event.target.closest("button[data-act]");
-    if (!btn || btn.disabled) return;
-
-    const file = files[Number(btn.dataset.index)];
-    if (!file) return;
-
-    if (btn.dataset.act === "tool-data") runToolData([file.path]);
-    else runClear([file.path]);
+/**
+ * Run the action a row's button asked for.
+ *
+ * `filesTable` reports the workbook's path rather than an index, because the
+ * row it was pressed on is a merged one and its position in this panel's list
+ * is not the position on screen.
+ *
+ * @param {string} path
+ * @param {"tool-data"|"clear"} action
+ */
+export function runFileAction(path, action) {
+    if (action === "tool-data") runToolData([path]);
+    else runClear([path]);
 }
 
 // --- previewing ------------------------------------------------------------

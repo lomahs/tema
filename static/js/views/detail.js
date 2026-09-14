@@ -21,14 +21,36 @@ import { $, esc } from "../dom.js";
 import { renderCharts, resizeCharts } from "../charts.js";
 import { populateSelect, uniqueOf } from "../filters.js";
 import { renderGroupedTable, toggleGroup } from "../groupedTable.js";
-import { renderPagination } from "../pagination.js";
+import { renderPageFooter } from "../pagination.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortGrouped, sortRows } from "../sorting.js";
 import { getReviewStatuses, isExcluded, isReview, requiresReason, toneFor } from "../taxonomy.js";
 
 const PAGE_SIZE = 50;
 
+/**
+ * A case whose status obliges the tester to record a ticket id or a note, and
+ * which carries neither.
+ *
+ * The same predicate marks the cells red and drives the Missing reason filter,
+ * and it is the browser-side twin of what `/api/summary` reports under
+ * `missing_reason`. Which statuses oblige an explanation is the taxonomy's
+ * business — `needs_reason` in `parser/result_status.json` — never named here.
+ *
+ * @param {Object} d A case row.
+ * @returns {boolean}
+ */
+function lacksReason(d) {
+    return requiresReason(d.status) && !d.ticket_id && !d.note;
+}
+
 /** Groups per page once grouping is on. */
 const GROUP_PAGE_SIZE = 8;
+
+/** Whether paging is off and every matching row is rendered into the pane. */
+let showAll = false;
+
+/** Whether the list is narrowed to cases that owe a reason and carry none. */
+let missingOnly = false;
 
 const DEFAULT_EXPANDED = true;
 
@@ -38,6 +60,8 @@ let allData = [];
 const chosenStatuses = new Set();
 /** @type {Object[]} `allData` after filters and sorting */
 let filtered = [];
+/** @type {Object[]} `allData` after every filter EXCEPT the status choice */
+let conditioned = [];
 let currentPage = 1;
 
 /** @type {Set<string>} which groups are open */
@@ -107,6 +131,38 @@ export function initDetailView() {
     });
     $("#detailGroupBy").addEventListener("change", rerender);
 
+    // The status cards are the design's tab row: a single pick over the same
+    // state the Result toggles edit one at a time. One listener on the strip,
+    // because the cards are regenerated on every taxonomy load.
+    $("#statsRow").addEventListener("click", (e) => {
+        const card = e.target.closest("button[data-status-card]");
+        if (!card) return;
+        const key = card.dataset.statusCard;
+        chosenStatuses.clear();
+        // Clicking the card already selected clears it, so the row is also the
+        // way back out — otherwise "All" would be the only way to undo a pick.
+        if (key && card.getAttribute("aria-pressed") !== "true") chosenStatuses.add(key);
+        paintResultToggles();
+        rerender();
+    });
+
+    // Filters are folded away by default: search plus the status cards answers
+    // most of what this screen is opened for, and nine controls above the table
+    // pushed the first row of data off a laptop screen.
+    $("#btnToggleFilters").addEventListener("click", () => {
+        const well = $("#detailFilters");
+        well.hidden = !well.hidden;
+        $("#btnToggleFilters").setAttribute("aria-expanded", String(!well.hidden));
+    });
+
+    // A condition, not a status: it narrows *within* whatever results are
+    // chosen, so it sits beside the Result toggles rather than among them.
+    $("#btnMissingReason").addEventListener("click", () => {
+        missingOnly = !missingOnly;
+        paintMissingReason();
+        rerender();
+    });
+
     $("#btnClearFilters").addEventListener("click", () => {
         clearFilters();
         rerender();
@@ -128,7 +184,34 @@ function clearFilters() {
     [...FILTERS, ...DATE_FILTERS].forEach(({ id }) => { $("#" + id).value = ""; });
     $("#filterSearch").value = "";
     chosenStatuses.clear();
+    missingOnly = false;
     paintResultToggles();
+    paintMissingReason();
+}
+
+/** Reflect `missingOnly` onto its button. */
+function paintMissingReason() {
+    $("#btnMissingReason").setAttribute("aria-pressed", String(missingOnly));
+}
+
+/**
+ * Open this view showing only the cases that owe a reason and carry none.
+ *
+ * Called from `main.js` when Summary's Missing reason card is pressed. Every
+ * other filter is cleared first: the card reports over the whole load, so
+ * arriving into a list still narrowed by somebody's earlier File choice would
+ * show a smaller number than the card that sent you.
+ *
+ * The figure can still be smaller, and legitimately: `needs_reason` may name a
+ * status that is not a `review` one, and such a case is not in this view at all.
+ */
+export function showMissingReason() {
+    clearFilters();
+    missingOnly = true;
+    paintMissingReason();
+    currentPage = 1;
+    showAll = false;
+    applyFilters();
 }
 
 /**
@@ -151,6 +234,16 @@ function paintResultToggles() {
     $("#filterResult").querySelectorAll("button[data-status]").forEach((b) => {
         b.setAttribute("aria-pressed", String(chosenStatuses.has(b.dataset.status)));
     });
+    // The cards show the same state. "All" is pressed when nothing is chosen;
+    // a status card is pressed only when it is the *sole* choice, because the
+    // toggles can express a combination the single-pick row cannot.
+    $("#statsRow").querySelectorAll("button[data-status-card]").forEach((b) => {
+        const key = b.dataset.statusCard;
+        const on = key
+            ? chosenStatuses.size === 1 && chosenStatuses.has(key)
+            : chosenStatuses.size === 0;
+        b.setAttribute("aria-pressed", String(on));
+    });
 }
 
 /**
@@ -171,6 +264,19 @@ export function renderDetailHead() {
  * Adopt a fresh dataset, refill the filter dropdowns, and redraw.
  * @param {Object[]} cases `/api/data` body, each row carrying a `status` key.
  */
+/**
+ * How many cases this view holds — the count the rail carries beside "Review".
+ *
+ * Exported rather than recomputed by the caller so the figure in the nav and
+ * the rows on the screen cannot answer to two different definitions of what
+ * counts as open work.
+ *
+ * @returns {number}
+ */
+export function reviewCount() {
+    return allData.length;
+}
+
 export function initDetail(cases) {
     // The restriction is applied once, here, rather than as a default filter:
     // this view is the list of work outstanding, and the dropdowns below should
@@ -201,20 +307,28 @@ function applyFilters() {
         [...FILTERS, ...DATE_FILTERS].map(({ id }) => [id, $("#" + id).value]));
     const q = $("#filterSearch").value.trim().toLowerCase();
 
-    filtered = allData.filter((d) => {
+    // Everything except the status choice. The status cards count over *this*,
+    // not over `filtered`: a card is the way to pick a status, so its figure has
+    // to say how many there are to pick — a "To review" card reporting 256 the
+    // moment NG is chosen would be counting the choice it is offering to change.
+    conditioned = allData.filter((d) => {
         for (const { id, field } of FILTERS) {
             if (values[id] && d[field] !== values[id]) return false;
         }
-        // No toggle on means "every result", not "none" — an empty selection is
-        // the unfiltered state, the same as a select sitting on its placeholder.
-        if (chosenStatuses.size && !chosenStatuses.has(d.status)) return false;
         const from = values.filterDateFrom;
         const to = values.filterDateTo;
         if (from && (!d.test_date || d.test_date < from)) return false;
         if (to && (!d.test_date || d.test_date > to)) return false;
         if (q && !matchesSearch(d, q)) return false;
+        if (missingOnly && !lacksReason(d)) return false;
         return true;
     });
+
+    // No toggle on means "every result", not "none" — an empty selection is
+    // the unfiltered state, the same as a select sitting on its placeholder.
+    filtered = chosenStatuses.size
+        ? conditioned.filter((d) => chosenStatuses.has(d.status))
+        : conditioned.slice();
 
     const keys = groupBy();
     const numeric = new Set(["row_num"]);
@@ -246,7 +360,7 @@ function matchesSearch(d, q) {
 function renderStats() {
     const counts = {};
     getReviewStatuses().forEach((s) => { counts[s.key] = 0; });
-    filtered.forEach((d) => {
+    conditioned.forEach((d) => {
         if (counts[d.status] !== undefined) counts[d.status] += 1;
     });
 
@@ -257,13 +371,24 @@ function renderStats() {
     // Every case here is a review case, so the row count *is* the figure. It is
     // labelled "To review" rather than "Total" precisely because it is not the
     // Total on the Summary tab, which counts the whole plan.
-    setStat("statTotal", filtered.length);
+    setStat("statTotal", conditioned.length);
     getReviewStatuses().forEach((s) => setStat(`stat-${s.key}`, counts[s.key]));
+    // Files is a fact about what you are looking at, not about what you could
+    // pick, so it alone counts the rows actually on screen.
     setStat("statFiles", new Set(filtered.map((d) => d.file_name)).size);
 
     $("#filteredCount").textContent = filtered.length === allData.length
         ? `${filtered.length} cases`
         : `${filtered.length} / ${allData.length} cases`;
+
+    // How many conditions are folded away, on the button that folds them —
+    // otherwise a closed panel hides the fact that the table is narrowed.
+    const narrowing = FILTERS.filter(({ id }) => $("#" + id).value).length
+        + DATE_FILTERS.filter(({ id }) => $("#" + id).value).length
+        + (chosenStatuses.size ? 1 : 0)
+        + (missingOnly ? 1 : 0)
+        + ($("#detailGroupBy").value ? 1 : 0);
+    $("#filterCount").textContent = narrowing ? String(narrowing) : "";
 }
 
 /**
@@ -289,8 +414,20 @@ function renderChips() {
             + ` aria-label="Clear ${esc(st.label)} filter">✕</button></span>`));
     DATE_FILTERS.forEach(({ id, label }) => push(id, label, $("#" + id).value));
     push("filterSearch", "Search", $("#filterSearch").value.trim());
+    if (missingOnly) {
+        chips.push(`<span class="chip">Missing reason`
+            + `<button type="button" data-missing="1"`
+            + ` aria-label="Clear Missing reason filter">✕</button></span>`);
+    }
 
     $("#detailChips").innerHTML = chips.join("");
+    $("#detailChips").querySelectorAll("button[data-missing]").forEach((b) =>
+        b.addEventListener("click", () => {
+            missingOnly = false;
+            paintMissingReason();
+            currentPage = 1;
+            applyFilters();
+        }));
     $("#detailChips").querySelectorAll("button[data-clear]").forEach((b) =>
         b.addEventListener("click", () => {
             $("#" + b.dataset.clear).value = "";
@@ -351,7 +488,7 @@ function cellCls(d, field) {
         return has > 0 && !v ? "flag" : "";
     }
     if (field === "ticket_id" || field === "note") {
-        return requiresReason(d.status) && !d.ticket_id && !d.note ? "flag" : "";
+        return lacksReason(d) ? "flag" : "";
     }
     return "";
 }
@@ -406,10 +543,10 @@ function renderTable() {
     const keys = groupBy();
 
     if (!keys.length) {
-        const start = (currentPage - 1) * PAGE_SIZE;
+        const start = showAll ? 0 : (currentPage - 1) * PAGE_SIZE;
         renderGroupedTable({
             container: "#dataBody",
-            rows: filtered.slice(start, start + PAGE_SIZE),
+            rows: showAll ? filtered : filtered.slice(start, start + PAGE_SIZE),
             totalCols: COLUMNS.length,
             expanded,
             renderLabelCells: () => "",
@@ -418,18 +555,22 @@ function renderTable() {
             onToggle: () => {},
             emptyMessage: "No cases match these filters.",
         });
-        renderPagination({
+        renderPageFooter({
+            container: "#detailFooter",
             totalItems: filtered.length,
             pageSize: PAGE_SIZE,
             currentPage,
+            showAll,
+            unit: "case",
             onPageChange: (page) => { currentPage = page; renderTable(); },
+            onToggleAll: (all) => { showAll = all; currentPage = 1; renderTable(); },
         });
         return;
     }
 
     const values = groupValues(keys);
     const start = (currentPage - 1) * GROUP_PAGE_SIZE;
-    const visible = new Set(values.slice(start, start + GROUP_PAGE_SIZE));
+    const visible = new Set(showAll ? values : values.slice(start, start + GROUP_PAGE_SIZE));
     const rows = filtered.filter((r) => visible.has(String(r[keys[0]] ?? "")));
 
     renderGroupedTable({
@@ -451,10 +592,16 @@ function renderTable() {
         emptyMessage: "No cases match these filters.",
     });
 
-    renderPagination({
+    renderPageFooter({
+        container: "#detailFooter",
         totalItems: values.length,
         pageSize: GROUP_PAGE_SIZE,
         currentPage,
+        showAll,
+        // Paging counts **groups** wherever grouping is on: a page that split a
+        // group would make its roll-up a lie, and so would a count of rows.
+        unit: "group",
         onPageChange: (page) => { currentPage = page; renderTable(); },
+        onToggleAll: (all) => { showAll = all; currentPage = 1; renderTable(); },
     });
 }

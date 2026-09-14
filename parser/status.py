@@ -127,6 +127,18 @@ class StatusSet:
             raw = json.load(f)
         return cls.from_dict(raw, source=path)
 
+    def adopt(self, other: "StatusSet") -> None:
+        """Become `other`, in place.
+
+        Five modules hold `from parser.status import STATUS`, and an imported
+        binding cannot be reassigned by whoever rebinds the original. So the
+        singleton stays the singleton and its contents change: editing the
+        taxonomy from the Config view reaches every one of them at once.
+        `other` has already been through `from_dict`, so an invalid edit never
+        gets this far.
+        """
+        self.__dict__.update(other.__dict__)
+
     @classmethod
     def from_dict(cls, raw: dict, source: str = "<dict>") -> "StatusSet":
         entries = raw.get("statuses")

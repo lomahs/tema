@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<template id="__bundler_thumbnail" data-bg-color="#14171C">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#14171C"/>
+    <rect x="360" y="250" width="80" height="300" rx="10" fill="#1F6F5C"/>
+    <rect x="480" y="180" width="80" height="370" rx="10" fill="#EDECE7"/>
+    <rect x="600" y="320" width="80" height="230" rx="10" fill="#C98A2B"/>
+    <rect x="720" y="230" width="80" height="320" rx="10" fill="#C2413A"/>
+    <rect x="360" y="590" width="440" height="14" rx="7" fill="#3A3F47"/>
+  </svg>
+</template>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  body { margin:0; background:#F2F1ED; color:#14171C; font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:#1F6F5C; }
+  a:hover { color:#14171C; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#D9D7D0; border-radius:6px; }
+</style>
+</helmet>
+
+<div style="display:grid; grid-template-columns:{{ gridCols }} minmax(0,1fr); min-height:100vh; align-items:stretch">
+
+  <aside style="background:#14171C; color:#EDECE7; padding:22px 16px; display:flex; flex-direction:column; gap:26px; position:sticky; top:0; height:100vh; overflow:hidden">
+    <sc-if value="{{ railClosed }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; gap:14px; align-items:center">
+        <button onClick="{{ toggleSidebar }}" title="Show sidebar" style="cursor:pointer; font:inherit; font-size:15px; line-height:1; color:#EDECE7; background:#242931; border:0; width:32px; height:32px; border-radius:7px">»</button>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#7E8791; writing-mode:vertical-rl; letter-spacing:0.08em">TRM</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ sidebarOpen }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex; flex-direction:column; gap:4px">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px">
+        <div style="font-size:15px; font-weight:700; letter-spacing:-0.01em">Test Result Manager</div>
+        <button onClick="{{ toggleSidebar }}" title="Hide sidebar" style="cursor:pointer; font:inherit; font-size:15px; line-height:1; color:#7E8791; background:transparent; border:0; padding:2px 4px; border-radius:5px; flex:none" style-hover="color:#EDECE7;background:#242931">«</button>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#7E8791; letter-spacing:0.04em">READ-ONLY · IMPORT REFRESHES</div>
+      <div style="margin-top:10px; padding:9px 11px; border-radius:7px; background:#1C2128; display:flex; flex-direction:column; gap:2px">
+        <span style="font-size:10.5px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#7E8791">Today</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:500; color:#EDECE7">{{ todayLabel }}</span>
+        <span style="font-size:11.5px; color:#7E8791">{{ todayExec }}</span>
+      </div>
+    </div>
+
+    <nav style="display:flex; flex-direction:column; gap:2px">
+      <button onClick="{{ goSummary }}" style="text-align:left; border:0; cursor:pointer; font:inherit; font-size:13.5px; font-weight:500; color:#EDECE7; padding:9px 11px; border-radius:7px; display:flex; justify-content:space-between; align-items:center; background:{{ navSummary }}" style-hover="background:#242931">Summary<span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#7E8791">{{ totalCases }}</span></button>
+      <button onClick="{{ goDaily }}" style="text-align:left; border:0; cursor:pointer; font:inherit; font-size:13.5px; font-weight:500; color:#EDECE7; padding:9px 11px; border-radius:7px; background:{{ navDaily }}" style-hover="background:#242931">Daily Tracking</button>
+      <button onClick="{{ goTeam }}" style="text-align:left; border:0; cursor:pointer; font:inherit; font-size:13.5px; font-weight:500; color:#EDECE7; padding:9px 11px; border-radius:7px; background:{{ navTeam }}" style-hover="background:#242931">Productivity</button>
+      <button onClick="{{ goIssues }}" style="text-align:left; border:0; cursor:pointer; font:inherit; font-size:13.5px; font-weight:500; color:#EDECE7; padding:9px 11px; border-radius:7px; display:flex; justify-content:space-between; align-items:center; background:{{ navIssues }}" style-hover="background:#242931">Non-OK cases<span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#C98A2B">{{ nonOkCount }}</span></button>
+      <button onClick="{{ goTools }}" style="text-align:left; border:0; cursor:pointer; font:inherit; font-size:13.5px; font-weight:500; color:#EDECE7; padding:9px 11px; border-radius:7px; background:{{ navTools }}" style-hover="background:#242931">Tools</button>
+    </nav>
+
+    <div style="margin-top:auto; display:flex; flex-direction:column; gap:10px">
+      <label style="display:block; cursor:pointer; background:#1F6F5C; color:#fff; font-size:13px; font-weight:600; padding:10px 12px; border-radius:7px; text-align:center" style-hover="background:#25866F">
+        Load files
+        <input type="file" multiple="true" accept=".xlsx,.xls,.csv" onChange="{{ onPickFiles }}" style="display:none" />
+      </label>
+      <label style="display:block; cursor:pointer; border:1px solid #343A43; color:#C8CDD3; font-size:13px; font-weight:500; padding:9px 12px; border-radius:7px; text-align:center" style-hover="border-color:#5B636D;color:#EDECE7">
+        Load folder
+        <input type="file" multiple="true" onChange="{{ onPickFolder }}" ref="{{ folderRef }}" style="display:none" />
+      </label>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6B7078; line-height:1.5">{{ importStatus }}</div>
+    </div>
+    </sc-if>
+  </aside>
+
+  <main style="padding:26px 30px 60px; display:flex; flex-direction:column; gap:20px; min-width:0">
+
+    <header style="display:flex; flex-direction:column; gap:5px">
+      <h1 style="margin:0; font-size:23px; font-weight:600; letter-spacing:-0.02em">{{ viewTitle }}</h1>
+      <div style="font-size:13px; color:#6B7078">{{ viewSub }}</div>
+    </header>
+
+    <!-- SUMMARY -->
+    <sc-if value="{{ isSummary }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-direction:column; gap:20px">
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px">
+          <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="5">
+            <div onClick="{{ k.onClick }}" title="{{ k.hint }}" style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; padding:15px 16px; display:flex; flex-direction:column; gap:6px; cursor:{{ k.cursor }}" style-hover="border-color:#C9C6BE">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:6px">
+                <span style="font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:#6B7078">{{ k.label }}</span>
+                <span style="font-size:11px; color:#1F6F5C; font-weight:600">{{ k.action }}</span>
+              </div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:27px; font-weight:600; letter-spacing:-0.02em; color:{{ k.color }}">{{ k.value }}</div>
+              <div style="font-size:12px; color:#6B7078">{{ k.sub }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:16px">
+          <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; padding:18px 20px">
+            <h2 style="margin:0 0 14px; font-size:14px; font-weight:600">Result breakdown — all files</h2>
+            <div style="display:flex; height:12px; border-radius:6px; overflow:hidden; background:#F2F1ED; margin-bottom:16px">
+              <sc-for list="{{ statusRows }}" as="s" hint-placeholder-count="6"><div style="background:{{ s.color }}; width:{{ s.pct }}"></div></sc-for>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:9px">
+              <sc-for list="{{ statusRows }}" as="s" hint-placeholder-count="6">
+                <div style="display:grid; grid-template-columns:10px 1fr auto auto; gap:10px; align-items:center; font-size:13px">
+                  <span style="width:10px; height:10px; border-radius:3px; background:{{ s.color }}"></span>
+                  <span style="font-weight:500">{{ s.label }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace; color:#6B7078; font-size:12px">{{ s.pct }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace; font-weight:600; min-width:58px; text-align:right">{{ s.count }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+
+          <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; padding:18px 20px">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; gap:10px; flex-wrap:wrap">
+              <h2 style="margin:0; font-size:14px; font-weight:600">Today's progress</h2>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7078">{{ todayHeadline }}</span>
+            </div>
+            <sc-if value="{{ todayEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:13px; color:#6B7078; padding:8px 0 4px">{{ todayEmptyText }}</div>
+            </sc-if>
+            <div style="display:flex; flex-direction:column; gap:0; max-height:240px; overflow-y:auto">
+              <sc-for list="{{ todayRows }}" as="r" hint-placeholder-count="4">
+                <div style="display:flex; flex-direction:column; gap:5px; padding:9px 0; border-bottom:1px solid #F4F3EF">
+                  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px">
+                    <span style="font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ r.file }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600; white-space:nowrap">{{ r.total }}</span>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
+                    <span style="font-size:12px; color:#6B7078; overflow:hidden; text-overflow:ellipsis">{{ r.pics }}</span>
+                    <div style="display:flex; gap:5px; flex-wrap:wrap">
+                      <sc-for list="{{ r.chips }}" as="c" hint-placeholder-count="3">
+                        <span style="display:inline-block; padding:2px 8px; border-radius:20px; font-size:10.5px; font-weight:600; background:{{ c.bg }}; color:{{ c.fg }}">{{ c.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </div>
+
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; overflow:hidden">
+          <div style="padding:14px 20px; border-bottom:1px solid #E4E2DC; display:flex; flex-direction:column; gap:11px">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+              <h2 style="margin:0; font-size:14px; font-weight:600">Detail by test case file</h2>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                <select value="{{ scopeFilter }}" onChange="{{ onScope }}" style="font:inherit; font-size:12.5px; padding:6px 9px; border:1px solid #DFDDD6; border-radius:6px; background:#fff; color:#14171C">
+                  <sc-for list="{{ scopeOptions }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+                </select>
+                <select value="{{ deviceFilter }}" onChange="{{ onDevice }}" style="font:inherit; font-size:12.5px; padding:6px 9px; border:1px solid #DFDDD6; border-radius:6px; background:#fff; color:#14171C">
+                  <sc-for list="{{ deviceOptions }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+                </select>
+                <select value="{{ fileFilter }}" onChange="{{ onFile }}" style="font:inherit; font-size:12.5px; padding:6px 9px; border:1px solid #DFDDD6; border-radius:6px; background:#fff; color:#14171C; max-width:210px">
+                  <sc-for list="{{ fileOptions }}" as="o" hint-placeholder-count="4"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+                </select>
+                <button onClick="{{ toggleGrouping }}" style="cursor:pointer; font:inherit; font-size:12.5px; color:#14171C; background:#fff; border:1px solid #DFDDD6; padding:6px 11px; border-radius:6px; display:flex; align-items:center; gap:7px" style-hover="border-color:#14171C">
+                  <span style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:#6B7078">Rows</span>{{ groupingLabel }}
+                </button>
+              </div>
+            </div>
+            <sc-if value="{{ hasSummaryFilters }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                <span style="font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#6B7078">Filtered</span>
+                <sc-for list="{{ summaryChips }}" as="c" hint-placeholder-count="2">
+                  <button onClick="{{ c.onClear }}" title="Remove filter" style="cursor:pointer; font:inherit; font-size:12px; display:flex; align-items:center; gap:7px; background:#FAF9F6; color:#14171C; border:1px solid #DFDDD6; padding:4px 10px; border-radius:20px" style-hover="border-color:#14171C">{{ c.label }}<span style="color:#8A8F98">×</span></button>
+                </sc-for>
+                <button onClick="{{ clearSummaryFilters }}" style="cursor:pointer; font:inherit; font-size:12px; color:#1F6F5C; font-weight:600; background:transparent; border:0; padding:4px 2px" style-hover="color:#14171C">Clear all</button>
+              </div>
+            </sc-if>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:1040px">
+              <thead>
+                <tr style="background:#FAF9F6">
+                  <th style="text-align:left; padding:10px 20px; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:#6B7078; font-weight:600">File</th>
+                  <th style="text-align:left; padding:10px 10px; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:#6B7078; font-weight:600; width:110px">Device</th>
+                  <th style="text-align:right; padding:10px 8px; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:#6B7078; font-weight:600; width:76px">Total</th>
+                  <th style="text-align:right; padding:10px 8px; font-size:11px; color:#2E7D5B; font-weight:600; width:76px">OK</th>
+                  <th style="text-align:right; padding:10px 8px; font-size:11px; color:#C2413A; font-weight:600; width:76px">NG</th>
+                  <th style="text-align:right; padding:10px 8px; font-size:11px; color:#C98A2B; font-weight:600; width:76px">NG-OK</th>
+                  <th style="text-align:right; padding:10px 8px; font-size:11px; color:#3A6EA5; font-weight:600; width:76px">Pending</th>
+                  <th style="text-align:right; padding:10px 8px; font-size:11px; color:#8A8F98; font-weight:600; width:76px">Cancel</th>
+                  <th style="text-align:right; padding:10px 8px; font-size:11px; color:#8A8F98; font-weight:600; width:76px">NYS</th>
+                  <th style="text-align:left; padding:10px 20px; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:#6B7078; font-weight:600; width:190px">Executed</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ filePageRows }}" as="f" hint-placeholder-count="6">
+                  <tr style="border-top:1px solid #EFEEE9" style-hover="background:#FAF9F6">
+                    <td style="padding:11px 20px; font-weight:500">{{ f.name }}<div style="font-size:11.5px; color:#6B7078; font-weight:400">{{ f.meta }}</div></td>
+                    <td style="padding:11px 10px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#3D434B; white-space:nowrap">{{ f.device }}</td>
+                    <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:600">{{ f.total }}</td>
+                    <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace">{{ f.ok }}</td>
+                    <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace"><span onClick="{{ f.onNg }}" title="Open in Non-OK cases" style="cursor:{{ f.ngCursor }}; color:{{ f.ngColor }}; border-bottom:1px solid {{ f.ngUnderline }}">{{ f.ng }}</span></td>
+                    <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace"><span onClick="{{ f.onNgok }}" title="Open in Non-OK cases" style="cursor:{{ f.ngokCursor }}; color:{{ f.ngokColor }}; border-bottom:1px solid {{ f.ngokUnderline }}">{{ f.ngok }}</span></td>
+                    <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace"><span onClick="{{ f.onPending }}" title="Open in Non-OK cases" style="cursor:{{ f.pendingCursor }}; color:{{ f.pendingColor }}; border-bottom:1px solid {{ f.pendingUnderline }}">{{ f.pending }}</span></td>
+                    <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace"><span onClick="{{ f.onCancel }}" title="Open in Non-OK cases" style="cursor:{{ f.cancelCursor }}; color:{{ f.cancelColor }}; border-bottom:1px solid {{ f.cancelUnderline }}">{{ f.cancel }}</span></td>
+                    <td style="padding:11px 8px; text-align:right; font-family:'IBM Plex Mono',monospace; color:#8A8F98">{{ f.nys }}</td>
+                    <td style="padding:11px 20px">
+                      <div style="display:flex; align-items:center; gap:9px">
+                        <div style="flex:1; height:8px; border-radius:4px; background:#F2F1ED; overflow:hidden; display:flex">
+                          <sc-for list="{{ f.segs }}" as="g" hint-placeholder-count="3"><div style="background:{{ g.color }}; width:{{ g.pct }}"></div></sc-for>
+                        </div>
+                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7078; min-width:38px; text-align:right">{{ f.execPct }}</span>
+                      </div>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <div style="padding:12px 20px; border-top:1px solid #E4E2DC; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7078">{{ fileCountLabel }}</span>
+            <div style="display:flex; align-items:center; gap:8px">
+              <sc-if value="{{ filePaged }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; align-items:center; gap:8px">
+                  <button onClick="{{ filePrev }}" style="cursor:pointer; font:inherit; font-size:12.5px; color:#14171C; background:#fff; border:1px solid #DFDDD6; padding:5px 11px; border-radius:6px" style-hover="border-color:#14171C">Prev</button>
+                  <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6B7078; min-width:56px; text-align:center">{{ filePageLabel }}</span>
+                  <button onClick="{{ fileNext }}" style="cursor:pointer; font:inherit; font-size:12.5px; color:#14171C; background:#fff; border:1px solid #DFDDD6; padding:5px 11px; border-radius:6px" style-hover="border-color:#14171C">Next</button>
+                </div>
+              </sc-if>
+              <button onClick="{{ toggleShowAll }}" style="cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; color:#1F6F5C; background:#fff; border:1px solid #C6DCD3; padding:5px 12px; border-radius:6px" style-hover="background:#F2F8F5">{{ showAllLabel }}</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- DAILY -->
+    <sc-if value="{{ isDaily }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; gap:16px">
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; padding:20px 22px">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px">
+            <h2 style="margin:0; font-size:14px; font-weight:600">Cases executed per day vs. schedule</h2>
+            <div style="display:flex; gap:16px; font-size:12px; color:#6B7078; align-items:center">
+              <span style="display:flex; align-items:center; gap:6px"><span style="width:10px; height:10px; border-radius:2px; background:#1F6F5C"></span>Executed</span>
+              <span style="display:flex; align-items:center; gap:6px"><span style="width:14px; height:2px; background:#C2413A"></span>Plan {{ dailyTargetLabel }}</span>
+            </div>
+          </div>
+          <div style="display:flex; align-items:flex-end; gap:6px; height:220px; padding-bottom:4px; overflow-x:auto">
+            <sc-for list="{{ dayBars }}" as="d" hint-placeholder-count="12">
+              <div style="flex:1; min-width:30px; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end">
+                <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:600; color:{{ d.color }}">{{ d.count }}</span>
+                <div style="width:100%; background:#F2F1ED; border-radius:4px 4px 0 0; position:relative; height:{{ d.trackH }}">
+                  <div style="position:absolute; bottom:0; left:0; right:0; background:{{ d.color }}; border-radius:4px 4px 0 0; height:{{ d.barH }}"></div>
+                  <div style="position:absolute; left:-2px; right:-2px; border-top:2px dashed #C2413A; bottom:{{ d.planBottom }}"></div>
+                </div>
+                <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#6B7078; white-space:nowrap">{{ d.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; overflow:hidden">
+          <div style="padding:16px 20px; border-bottom:1px solid #E4E2DC"><h2 style="margin:0; font-size:14px; font-weight:600">Daily log</h2></div>
+          <div style="overflow-x:auto">
+            <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:760px">
+              <thead><tr style="background:#FAF9F6">
+                <th style="text-align:left; padding:10px 20px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Date</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Executed</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Plan</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Attain</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; color:#C2413A; font-weight:600">NG found</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Members</th>
+                <th style="text-align:left; padding:10px 20px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Cumulative</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ dayRows }}" as="d" hint-placeholder-count="10">
+                  <tr style="border-top:1px solid #EFEEE9" style-hover="background:#FAF9F6">
+                    <td style="padding:10px 20px; font-family:'IBM Plex Mono',monospace">{{ d.date }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:600">{{ d.count }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-family:'IBM Plex Mono',monospace; color:#6B7078">{{ d.plan }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-family:'IBM Plex Mono',monospace; color:{{ d.color }}">{{ d.attain }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-family:'IBM Plex Mono',monospace">{{ d.ng }}</td>
+                    <td style="padding:10px 12px; text-align:right; font-family:'IBM Plex Mono',monospace; color:#6B7078">{{ d.members }}</td>
+                    <td style="padding:10px 20px">
+                      <div style="display:flex; align-items:center; gap:9px">
+                        <div style="flex:1; height:6px; background:#F2F1ED; border-radius:3px; overflow:hidden"><div style="height:100%; background:#1F6F5C; width:{{ d.cumPct }}"></div></div>
+                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7078">{{ d.cum }}</span>
+                      </div>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- TEAM -->
+    <sc-if value="{{ isTeam }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; gap:16px">
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; overflow:hidden">
+          <div style="padding:16px 20px; border-bottom:1px solid #E4E2DC; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px">
+            <h2 style="margin:0; font-size:14px; font-weight:600">Productivity by member</h2>
+            <label style="font-size:12.5px; color:#6B7078; display:flex; align-items:center; gap:8px">Target / person / day
+              <input type="number" value="{{ target }}" onChange="{{ onTarget }}" style="font:inherit; font-family:'IBM Plex Mono',monospace; font-size:12.5px; width:64px; padding:5px 8px; border:1px solid #DFDDD6; border-radius:6px" />
+            </label>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:800px">
+              <thead><tr style="background:#FAF9F6">
+                <th style="text-align:left; padding:10px 20px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">PIC</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Executed</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Days</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600">Avg/day</th>
+                <th style="text-align:right; padding:10px 12px; font-size:11px; color:#C2413A; font-weight:600">NG rate</th>
+                <th style="text-align:left; padding:10px 20px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#6B7078; font-weight:600; width:220px">vs. target</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ memberRows }}" as="m" hint-placeholder-count="6">
+                  <tr style="border-top:1px solid #EFEEE9" style-hover="background:#FAF9F6">
+                    <td style="padding:11px 20px; font-weight:500">{{ m.pic }}</td>
+                    <td style="padding:11px 12px; text-align:right; font-family:'IBM Plex Mono',monospace; font-weight:600">{{ m.total }}</td>
+                    <td style="padding:11px 12px; text-align:right; font-family:'IBM Plex Mono',monospace; color:#6B7078">{{ m.days }}</td>
+                    <td style="padding:11px 12px; text-align:right; font-family:'IBM Plex Mono',monospace">{{ m.avg }}</td>
+                    <td style="padding:11px 12px; text-align:right; font-family:'IBM Plex Mono',monospace">{{ m.ngRate }}</td>
+                    <td style="padding:11px 20px">
+                      <div style="display:flex; align-items:center; gap:9px">
+                        <div style="flex:1; height:8px; background:#F2F1ED; border-radius:4px; overflow:hidden"><div style="height:100%; border-radius:4px; background:{{ m.color }}; width:{{ m.attainW }}"></div></div>
+                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; min-width:44px; text-align:right; color:{{ m.color }}">{{ m.attain }}</span>
+                      </div>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; overflow:hidden">
+          <div style="padding:16px 20px; border-bottom:1px solid #E4E2DC"><h2 style="margin:0; font-size:14px; font-weight:600">Member × day heatmap</h2></div>
+          <div style="overflow-x:auto; padding:6px 20px 20px">
+            <table style="border-collapse:collapse; font-size:12px">
+              <thead><tr>
+                <th style="text-align:left; padding:10px 14px 10px 0; font-size:11px; color:#6B7078; font-weight:600; position:sticky; left:0; background:#fff">PIC</th>
+                <sc-for list="{{ heatDays }}" as="h" hint-placeholder-count="12"><th style="padding:10px 3px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6B7078; font-weight:500">{{ h.label }}</th></sc-for>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ heatRows }}" as="r" hint-placeholder-count="6">
+                  <tr>
+                    <td style="padding:3px 14px 3px 0; font-weight:500; white-space:nowrap; position:sticky; left:0; background:#fff">{{ r.pic }}</td>
+                    <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="12">
+                      <td style="padding:2px 2px"><div title="{{ c.title }}" style="width:34px; height:26px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:10.5px; background:{{ c.bg }}; color:{{ c.fg }}">{{ c.n }}</div></td>
+                    </sc-for>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- ISSUES -->
+    <sc-if value="{{ isIssues }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; flex-direction:column; gap:16px">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px">
+          <sc-for list="{{ issueTabs }}" as="t" hint-placeholder-count="5">
+            <button onClick="{{ t.onClick }}" style="cursor:pointer; font:inherit; text-align:left; padding:13px 15px; border-radius:9px; display:flex; flex-direction:column; gap:5px; background:#fff; border:1px solid {{ t.border }}">
+              <span style="font-size:12px; font-weight:600; color:{{ t.color }}">{{ t.label }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600">{{ t.count }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; overflow:hidden">
+          <div style="padding:14px 20px; border-bottom:1px solid #E4E2DC; display:flex; flex-direction:column; gap:11px">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+              <input type="text" value="{{ search }}" onChange="{{ onSearch }}" placeholder="Search case no, title, ticket, note…" style="font:inherit; font-size:13px; flex:1; min-width:160px; padding:8px 11px; border:1px solid #DFDDD6; border-radius:6px" />
+              <button onClick="{{ toggleFilters }}" style="cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; height:33px; padding:0 12px; border-radius:6px; white-space:nowrap; border:1px solid {{ filtersBorder }}; background:{{ filtersBg }}; color:{{ filtersFg }}">{{ filtersLabel }}</button>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7078">{{ issueCountLabel }}</span>
+            </div>
+            <sc-if value="{{ filtersOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FAF9F6; border:1px solid #EFEEE9; border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; gap:12px">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px 12px">
+                  <sc-for list="{{ issueFilterControls }}" as="c" hint-placeholder-count="8">
+                    <label style="display:flex; flex-direction:column; gap:4px; font-size:10.5px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#6B7078; min-width:0">{{ c.label }}
+                      <sc-if value="{{ c.isSelect }}" hint-placeholder-val="{{ false }}">
+                        <select value="{{ c.value }}" onChange="{{ c.onChange }}" style="font:inherit; font-size:12px; font-weight:400; letter-spacing:0; text-transform:none; width:100%; height:29px; padding:0 7px; border:1px solid #DFDDD6; border-radius:6px; background:#fff; color:#14171C">
+                          <sc-for list="{{ c.options }}" as="o" hint-placeholder-count="3"><option value="{{ o.v }}">{{ o.label }}</option></sc-for>
+                        </select>
+                      </sc-if>
+                      <sc-if value="{{ c.isText }}" hint-placeholder-val="{{ false }}">
+                        <input type="text" value="{{ c.value }}" onChange="{{ c.onChange }}" placeholder="{{ c.placeholder }}" style="font:inherit; font-size:12px; font-weight:400; letter-spacing:0; text-transform:none; width:100%; height:29px; padding:0 8px; border:1px solid #DFDDD6; border-radius:6px; background:#fff; color:#14171C" />
+                      </sc-if>
+                      <sc-if value="{{ c.isDate }}" hint-placeholder-val="{{ false }}">
+                        <input type="date" value="{{ c.value }}" onChange="{{ c.onChange }}" style="font:inherit; font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:400; letter-spacing:0; width:100%; height:29px; padding:0 7px; border:1px solid #DFDDD6; border-radius:6px; background:#fff; color:#14171C" />
+                      </sc-if>
+                    </label>
+                  </sc-for>
+                </div>
+                <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap">
+                  <div style="display:flex; flex-direction:column; gap:4px">
+                    <span style="font-size:10.5px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#6B7078">Result</span>
+                    <div style="display:flex; gap:4px; flex-wrap:wrap">
+                      <sc-for list="{{ resultToggles }}" as="r" hint-placeholder-count="4">
+                        <button onClick="{{ r.onClick }}" title="Toggle {{ r.label }}" style="cursor:pointer; font:inherit; font-size:11px; font-weight:600; height:29px; padding:0 10px; border-radius:6px; border:1px solid {{ r.border }}; background:{{ r.bg }}; color:{{ r.fg }}">{{ r.label }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <button onClick="{{ toggleMissing }}" title="Only cases with no Ticket-ID and no Note" style="cursor:pointer; font:inherit; font-size:12px; font-weight:600; height:29px; padding:0 11px; border-radius:6px; border:1px solid {{ missingBorder }}; background:{{ missingBg }}; color:{{ missingFg }}">Missing ticket &amp; note</button>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ hasIssueFilters }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                <span style="font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#6B7078">Conditions</span>
+                <sc-for list="{{ issueChips }}" as="c" hint-placeholder-count="2">
+                  <button onClick="{{ c.onClear }}" title="Remove condition" style="cursor:pointer; font:inherit; font-size:12px; display:flex; align-items:center; gap:7px; background:#FAF9F6; color:#14171C; border:1px solid #DFDDD6; padding:4px 10px; border-radius:20px" style-hover="border-color:#14171C">{{ c.label }}<span style="color:#8A8F98">×</span></button>
+                </sc-for>
+                <button onClick="{{ clearColFilters }}" style="cursor:pointer; font:inherit; font-size:12px; color:#1F6F5C; font-weight:600; background:transparent; border:0; padding:4px 2px" style-hover="color:#14171C">Clear all</button>
+              </div>
+            </sc-if>
+          </div>
+          <div style="overflow-x:auto; max-height:620px; overflow-y:auto">
+            <table style="width:100%; border-collapse:collapse; font-size:12.5px; min-width:1220px">
+              <thead>
+                <tr style="background:#FAF9F6">
+                  <sc-for list="{{ issueCols }}" as="h" hint-placeholder-count="10">
+                    <th onClick="{{ h.onClick }}" title="{{ h.title }}" style="text-align:left; padding:10px 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; white-space:nowrap; cursor:{{ h.cursor }}; color:{{ h.color }}; position:sticky; top:0; z-index:2; background:#FAF9F6; box-shadow:inset 0 -1px 0 #E4E2DC">{{ h.label }}<span style="font-family:'IBM Plex Mono',monospace; margin-left:5px; color:#1F6F5C">{{ h.arrow }}</span></th>
+                  </sc-for>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ issueRows }}" as="c" hint-placeholder-count="12">
+                  <tr style="border-top:1px solid #EFEEE9" style-hover="background:#FAF9F6">
+                    <td style="padding:10px 10px; color:#6B7078">{{ c.file }}</td>
+                    <td style="padding:10px 10px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; white-space:nowrap"><div style="color:#8A8F98">{{ c.rowLabel }}</div><div style="font-weight:600; color:#14171C">{{ c.caseLabel }}</div></td>
+                    <td style="padding:10px 10px; font-family:'IBM Plex Mono',monospace; font-size:11.5px">{{ c.device }}</td>
+                    <td style="padding:10px 10px"><span style="display:inline-block; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; background:{{ c.chipBg }}; color:{{ c.chipFg }}">{{ c.result }}</span></td>
+                    <td style="padding:10px 10px; font-family:'IBM Plex Mono',monospace; font-size:11.5px">{{ c.scope }}</td>
+                    <td style="padding:10px 10px">{{ c.pic }}</td>
+                    <td style="padding:10px 10px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7078">{{ c.date }}</td>
+                    <td style="padding:10px 10px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; background:{{ c.missBg }}; color:{{ c.missFg }}">{{ c.ticket }}</td>
+                    <td style="padding:10px 20px 10px 10px; max-width:280px; background:{{ c.missBg }}; color:{{ c.missNoteFg }}">{{ c.note }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <sc-if value="{{ issueEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:26px 20px; font-size:13px; color:#6B7078">No cases match these conditions.</div>
+            </sc-if>
+          </div>
+          <div style="padding:12px 20px; border-top:1px solid #E4E2DC; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#6B7078">{{ issueRangeLabel }}</span>
+            <div style="display:flex; align-items:center; gap:8px">
+              <sc-if value="{{ issuePaged }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; align-items:center; gap:8px">
+                  <button onClick="{{ issuePrev }}" style="cursor:pointer; font:inherit; font-size:12.5px; color:#14171C; background:#fff; border:1px solid #DFDDD6; padding:5px 11px; border-radius:6px" style-hover="border-color:#14171C">Prev</button>
+                  <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6B7078; min-width:56px; text-align:center">{{ issuePageLabel }}</span>
+                  <button onClick="{{ issueNext }}" style="cursor:pointer; font:inherit; font-size:12.5px; color:#14171C; background:#fff; border:1px solid #DFDDD6; padding:5px 11px; border-radius:6px" style-hover="border-color:#14171C">Next</button>
+                </div>
+              </sc-if>
+              <button onClick="{{ toggleIssueShowAll }}" style="cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; color:#1F6F5C; background:#fff; border:1px solid #C6DCD3; padding:5px 12px; border-radius:6px" style-hover="background:#F2F8F5">{{ issueShowAllLabel }}</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- TOOLS -->
+    <sc-if value="{{ isTools }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:16px; align-items:start">
+
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; padding:20px 22px; display:flex; flex-direction:column; gap:14px">
+          <div>
+            <h2 style="margin:0 0 5px; font-size:14px; font-weight:600">Sheet config</h2>
+            <p style="margin:0; font-size:12.5px; color:#6B7078; line-height:1.5">Column headers to read from each Excel sheet. Matching is case-insensitive; leave blank to skip a field.</p>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px">
+            <sc-for list="{{ configFields }}" as="f" hint-placeholder-count="9">
+              <label style="display:flex; flex-direction:column; gap:5px; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:#6B7078">{{ f.label }}
+                <input type="text" value="{{ f.value }}" onChange="{{ f.onChange }}" style="font:inherit; font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:400; letter-spacing:0; text-transform:none; color:#14171C; padding:7px 9px; border:1px solid #DFDDD6; border-radius:6px" />
+              </label>
+            </sc-for>
+          </div>
+          <div style="display:flex; gap:16px; flex-wrap:wrap">
+            <label style="display:flex; flex-direction:column; gap:5px; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:#6B7078">Header row
+              <input type="number" value="{{ headerRow }}" onChange="{{ onHeaderRow }}" style="font:inherit; font-family:'IBM Plex Mono',monospace; font-size:12.5px; width:70px; padding:7px 9px; border:1px solid #DFDDD6; border-radius:6px; color:#14171C" />
+            </label>
+            <label style="display:flex; flex-direction:column; gap:5px; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:#6B7078">Sheets to read
+              <input type="text" value="{{ sheetPick }}" onChange="{{ onSheetPick }}" style="font:inherit; font-family:'IBM Plex Mono',monospace; font-size:12.5px; width:150px; padding:7px 9px; border:1px solid #DFDDD6; border-radius:6px; color:#14171C" />
+            </label>
+          </div>
+          <div style="display:flex; gap:9px">
+            <button onClick="{{ saveConfig }}" style="cursor:pointer; font:inherit; font-size:13px; font-weight:600; color:#fff; background:#1F6F5C; border:0; padding:9px 16px; border-radius:7px" style-hover="background:#25866F">Save config</button>
+            <button onClick="{{ resetConfig }}" style="cursor:pointer; font:inherit; font-size:13px; color:#14171C; background:#fff; border:1px solid #DFDDD6; padding:9px 16px; border-radius:7px" style-hover="border-color:#14171C">Reset to default</button>
+          </div>
+          <div style="font-size:12px; color:#1F6F5C; font-family:'IBM Plex Mono',monospace">{{ configMsg }}</div>
+        </section>
+
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; padding:20px 22px; display:flex; flex-direction:column; gap:14px">
+          <div>
+            <h2 style="margin:0 0 5px; font-size:14px; font-weight:600">Scope config (JSON)</h2>
+            <p style="margin:0; font-size:12.5px; color:#6B7078; line-height:1.5">Scopes and their result aliases, in one file. Values here drive the scope filter and the status normaliser.</p>
+          </div>
+          <textarea value="{{ scopeJson }}" onChange="{{ onScopeJson }}" spellcheck="false" style="font-family:'IBM Plex Mono',monospace; font-size:12px; line-height:1.6; min-height:210px; padding:12px; border:1px solid #DFDDD6; border-radius:7px; background:#FAF9F6; color:#14171C; resize:vertical"></textarea>
+          <div style="display:flex; gap:9px; align-items:center">
+            <button onClick="{{ applyScopeJson }}" style="cursor:pointer; font:inherit; font-size:13px; font-weight:600; color:#fff; background:#1F6F5C; border:0; padding:9px 16px; border-radius:7px" style-hover="background:#25866F">Apply</button>
+            <span style="font-size:12px; font-family:'IBM Plex Mono',monospace; color:{{ scopeMsgColor }}">{{ scopeMsg }}</span>
+          </div>
+        </section>
+
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; padding:20px 22px; display:flex; flex-direction:column; gap:14px">
+          <div>
+            <h2 style="margin:0 0 5px; font-size:14px; font-weight:600">Clear result test</h2>
+            <p style="margin:0; font-size:12.5px; color:#6B7078; line-height:1.5">Reset every case to NYS and drop PIC, test date, ticket and note. Case list and file structure are kept.</p>
+          </div>
+          <div style="background:#FAF9F6; border:1px solid #EFEEE9; border-radius:7px; padding:12px 14px; font-size:12.5px; color:#6B7078; display:flex; flex-direction:column; gap:4px">
+            <span>Affected: <strong style="color:#14171C; font-family:'IBM Plex Mono',monospace">{{ allCaseCount }}</strong> cases</span>
+            <span>Executed results lost: <strong style="color:#C2413A; font-family:'IBM Plex Mono',monospace">{{ allExecutedCount }}</strong></span>
+          </div>
+          <div style="display:flex; gap:9px; align-items:center; flex-wrap:wrap">
+            <button onClick="{{ clearResults }}" style="cursor:pointer; font:inherit; font-size:13px; font-weight:600; color:{{ clearFg }}; background:{{ clearBg }}; border:1px solid #C2413A; padding:9px 16px; border-radius:7px">{{ clearLabel }}</button>
+            <sc-if value="{{ confirmClear }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ cancelClear }}" style="cursor:pointer; font:inherit; font-size:13px; color:#14171C; background:#fff; border:1px solid #DFDDD6; padding:9px 16px; border-radius:7px">Cancel</button>
+            </sc-if>
+          </div>
+        </section>
+
+        <section style="background:#fff; border:1px solid #E4E2DC; border-radius:10px; padding:20px 22px; display:flex; flex-direction:column; gap:12px">
+          <h2 style="margin:0; font-size:14px; font-weight:600">Import log</h2>
+          <div style="display:flex; flex-direction:column; gap:8px; max-height:240px; overflow-y:auto">
+            <sc-for list="{{ logRows }}" as="l" hint-placeholder-count="3">
+              <div style="display:flex; gap:10px; font-size:12.5px; padding-bottom:8px; border-bottom:1px solid #F2F1ED">
+                <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6B7078; white-space:nowrap">{{ l.time }}</span>
+                <span style="color:{{ l.color }}">{{ l.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960}}">
+const COLORS = { OK:'#2E7D5B', NG:'#C2413A', 'NG-OK':'#C98A2B', Pending:'#3A6EA5', Cancel:'#8A8F98', NYS:'#C6C4BD' };
+const CHIP = { NG:['#FBEDEC','#A4332C'], 'NG-OK':['#FBF3E4','#8A5C13'], Pending:['#ECF2FA','#2C5580'], Cancel:['#F2F1ED','#61666E'], NYS:['#F2F1ED','#61666E'], OK:['#EAF3EE','#226147'] };
+const ORDER = ['OK','NG','NG-OK','Pending','Cancel','NYS'];
+const NONOK = ['NG','NG-OK','Pending','Cancel'];
+const DEFAULT_CONFIG = { caseNo:'No.', caseId:'Case ID', title:'Test item', device:'Device', result:'Result', scope:'Scope', pic:'PIC', date:'Test date', ticket:'Ticket-ID', note:'Note' };
+const DEFAULT_SCOPE_JSON = JSON.stringify({
+  scopes: [
+    { code:'FPT', label:'FPT (offshore)', members:['Tran Minh','Le Huy','Pham Anh','Nguyen Thao'] },
+    { code:'JP',  label:'JP (onsite)',    members:['K. Sato','Y. Tanaka'] }
+  ],
+  resultAliases: { OK:['ok','pass','passed','o'], NG:['ng','fail','failed','x'], 'NG-OK':['ng-ok','ngok','fixed','retest ok'], Pending:['pending','hold','blocked'], Cancel:['cancel','cancelled','n/a'], NYS:['','nys','not yet','not started'] }
+}, null, 2);
+const EMPTY_COL = { id:'', file:'', device:'', scope:'', pic:'', date:'', ticket:'', note:'' };
+
+function pad(n){ return n < 10 ? '0'+n : ''+n; }
+function iso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function pct(a,b){ return b ? Math.round(a/b*1000)/10 : 0; }
+
+class Component extends DCLogic {
+  constructor(p){
+    super(p);
+    this.state = {
+      sidebarOpen:true, view:'summary', cases: this.demo(), files: this.demoFiles(),
+      /* summary-only filters */
+      sScope:'all', sDevice:'all', sFile:'all', fileGrouping:'combined', filePage:1, filePageSize:10, fileShowAll:false,
+      /* non-OK view filters (independent) */
+      search:'', colFilters:{...EMPTY_COL}, results:[], missingOnly:false, sortKey:null, sortDir:'asc',
+      issuePage:1, issuePageSize:25, issueShowAll:false,
+      target:30, config:{...DEFAULT_CONFIG}, headerRow:1, sheetPick:'first',
+      scopeJson: DEFAULT_SCOPE_JSON, scopeCfg: JSON.parse(DEFAULT_SCOPE_JSON),
+      scopeMsg:'', scopeOk:true, configMsg:'', confirmClear:false,
+      importStatus:'Demo data loaded · 6 files',
+      log:[{ time:this.now(), text:'Demo dataset loaded (6 files)', color:'#6B7078' }]
+    };
+  }
+  now(){ const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes()); }
+
+  demoFiles(){ return ['TC_Login_v3.xlsx','TC_Order_Entry.xlsx','TC_Payment_Gateway.xlsx','TC_Inventory_Sync.xlsx','TC_Report_Export.xlsx','TC_Admin_Settings.xlsx']; }
+  demo(){
+    const files = [
+      ['TC_Login_v3.xlsx', 180, 'Authentication'], ['TC_Order_Entry.xlsx', 340, 'Order module'],
+      ['TC_Payment_Gateway.xlsx', 265, 'Payment'], ['TC_Inventory_Sync.xlsx', 210, 'Inventory'],
+      ['TC_Report_Export.xlsx', 150, 'Reporting'], ['TC_Admin_Settings.xlsx', 120, 'Admin']
+    ];
+    const team = [['Tran Minh','FPT'],['Le Huy','FPT'],['Pham Anh','FPT'],['Nguyen Thao','FPT'],['K. Sato','JP'],['Y. Tanaka','JP']];
+    const today = new Date();
+    const days = [iso(today)]; const d = new Date(today);
+    while (days.length < 12){ d.setDate(d.getDate()-1); if (d.getDay()!==0 && d.getDay()!==6) days.unshift(iso(d)); }
+    const notes = { NG:['Validation message missing','Amount rounded incorrectly','Timeout after 30s','Layout broken on 1366px'], 'NG-OK':['Fixed in build 214, retested','Re-verified after patch'], Pending:['Waiting for test data from JP','Blocked by env down','Awaiting spec confirmation'], Cancel:['Out of scope this phase','Duplicate of previous case'] };
+    let seed = 42; const rnd = () => { seed = (seed*1103515245 + 12345) & 0x7fffffff; return seed/0x7fffffff; };
+    const out = [];
+    files.forEach(([fname,count,mod]) => {
+      const short = fname.replace('TC_','').replace('.xlsx','').replace(/_/g,'').toUpperCase().slice(0,5);
+      for (let i=1;i<=count;i++){
+        const r = rnd();
+        let result = r<0.66?'OK':r<0.735?'NG':r<0.82?'NG-OK':r<0.87?'Pending':r<0.90?'Cancel':'NYS';
+        const m = team[Math.floor(rnd()*team.length)];
+        const done = result !== 'NYS';
+        const day = days[Math.min(days.length-1, Math.floor(Math.pow(rnd(),0.75)*days.length))];
+        const unlogged = result !== 'OK' && result !== 'NYS' && rnd() < 0.13;
+        out.push({
+          id: short+'-'+pad(i), caseNo: String(i), rowNo: i+1, title: mod+' — case '+i, file: fname, result,
+          device: rnd() < 0.58 ? 'iPhone' : 'iPad',
+          scope: m[1], pic: done ? m[0] : '', date: done ? day : '',
+          ticket: (!unlogged && (result==='NG'||result==='NG-OK'||result==='Pending')) ? 'TCK-'+(1000+Math.floor(rnd()*8000)) : '',
+          note: (!unlogged && notes[result]) ? notes[result][Math.floor(rnd()*notes[result].length)] : ''
+        });
+      }
+    });
+    return out;
+  }
+
+  /* ---------- import ---------- */
+  onPickFiles = (e) => this.ingest(Array.from(e.target.files||[]));
+  onPickFolder = (e) => this.ingest(Array.from(e.target.files||[]));
+  folderRef = (el) => { if (el) { el.setAttribute('webkitdirectory',''); el.setAttribute('directory',''); } };
+
+  async ingest(fileList){
+    const wanted = fileList.filter(f => /\.(xlsx|xls|csv)$/i.test(f.name));
+    if (!wanted.length){ this.pushLog('No .xlsx/.csv files found in selection','#C2413A'); return; }
+    if (typeof XLSX === 'undefined'){ this.pushLog('Excel reader still loading — try again in a second','#C2413A'); return; }
+    this.setState({ importStatus:'Reading '+wanted.length+' file(s)…' });
+    const cfg = this.state.config, headerRow = Math.max(1, Number(this.state.headerRow)||1);
+    const aliases = (this.state.scopeCfg && this.state.scopeCfg.resultAliases) || {};
+    const norm = (v) => {
+      const s = String(v==null?'':v).trim(); const low = s.toLowerCase();
+      for (const k of ORDER){ const list = aliases[k]||[]; if (low===k.toLowerCase() || list.some(a => String(a).toLowerCase()===low)) return k; }
+      return s ? s : 'NYS';
+    };
+    const all = [], names = [];
+    for (const f of wanted){
+      try {
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(buf, { cellDates:true });
+        const sheets = this.state.sheetPick === 'all' ? wb.SheetNames : [wb.SheetNames[0]];
+        let n = 0;
+        sheets.forEach(sn => {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, blankrows:false, defval:'' });
+          const head = (rows[headerRow-1]||[]).map(h => String(h).trim().toLowerCase());
+          const col = (name) => { if (!name) return -1; return head.indexOf(String(name).trim().toLowerCase()); };
+          const ix = { caseNo:col(cfg.caseNo), id:col(cfg.caseId), title:col(cfg.title), device:col(cfg.device), result:col(cfg.result), scope:col(cfg.scope), pic:col(cfg.pic), date:col(cfg.date), ticket:col(cfg.ticket), note:col(cfg.note) };
+          const get = (r,i) => i>=0 ? r[i] : '';
+          rows.slice(headerRow).forEach((r,i) => {
+            if (!r || r.every(c => String(c).trim()==='')) return;
+            const dv = get(r, ix.date);
+            all.push({
+              id: String(get(r,ix.id) || (sn+'-'+(i+1))), title: String(get(r,ix.title)||''), file: f.name,
+              caseNo: String(get(r,ix.caseNo) || (i+1)), rowNo: headerRow + i + 1,
+              device: String(get(r,ix.device)||''),
+              result: norm(get(r,ix.result)), scope: String(get(r,ix.scope)||''), pic: String(get(r,ix.pic)||''),
+              date: dv instanceof Date ? iso(dv) : String(dv||'').slice(0,10),
+              ticket: String(get(r,ix.ticket)||''), note: String(get(r,ix.note)||'')
+            });
+            n++;
+          });
+        });
+        names.push(f.name);
+        this.pushLog(f.name+' → '+n+' cases', '#2E7D5B');
+      } catch(err){ this.pushLog(f.name+' → failed: '+err.message, '#C2413A'); }
+    }
+    if (all.length) this.setState({ cases: all, files: names, sFile:'all', sScope:'all', sDevice:'all', filePage:1,
+      colFilters:{...EMPTY_COL}, results:[], search:'', importStatus: names.length+' file(s) · '+all.length+' cases' });
+    else this.setState({ importStatus:'Nothing imported — check Sheet config' });
+  }
+  pushLog(text,color){ this.setState(s => ({ log:[{time:this.now(),text,color}].concat(s.log).slice(0,40) })); }
+
+  jumpToIssues(file, device, result, scope){
+    this.setState({ view:'issues', search:'', sortKey:null,
+      colFilters:{...EMPTY_COL, file: file==='all' ? '' : file, device: device==='all' ? '' : device,
+        scope: (scope && scope!=='all') ? scope : '' },
+      missingOnly:false, results: result ? [result] : [], issuePage:1 });
+  }
+
+  summaryRows(){
+    const { cases, sScope, sDevice, sFile } = this.state;
+    return cases.filter(c => (sScope==='all'||c.scope===sScope) && (sDevice==='all'||c.device===sDevice) && (sFile==='all'||c.file===sFile));
+  }
+
+  renderVals(){
+    const s = this.state;
+    const all = s.cases;
+    const rows = this.summaryRows();
+    const counts = {}; ORDER.forEach(k => counts[k]=0);
+    rows.forEach(c => { counts[c.result] = (counts[c.result]||0)+1; });
+    const total = rows.length;
+    const executed = total - (counts.NYS||0);
+
+    const statusRows = ORDER.map(k => ({ label:k, count:counts[k]||0, pct: pct(counts[k]||0,total)+'%', color:COLORS[k] }));
+    const scopes = Array.from(new Set(all.map(c=>c.scope).filter(Boolean))).sort();
+    const pics = Array.from(new Set(all.map(c=>c.pic).filter(Boolean))).sort();
+    const devices = Array.from(new Set(all.map(c=>c.device).filter(Boolean))).sort();
+
+    /* ---- file detail rows ---- */
+    const keyName = { ng:'NG', ngok:'NG-OK', pending:'Pending', cancel:'Cancel' };
+    const cell = (n, key, file, device) => {
+      const live = n > 0;
+      const cap = key.charAt(0).toUpperCase()+key.slice(1);
+      const o = {};
+      o[key] = n;
+      o[key+'Cursor'] = live ? 'pointer' : 'default';
+      o[key+'Color'] = live ? COLORS[keyName[key]] : '#A8ACB2';
+      o[key+'Underline'] = live ? 'rgba(0,0,0,0.18)' : 'transparent';
+      o['on'+cap] = live ? () => this.jumpToIssues(file, device, keyName[key], s.sScope) : undefined;
+      return o;
+    };
+    const mkRow = (name, deviceLabel, deviceValue, sub) => {
+      const t = sub.length;
+      const c2 = {}; ORDER.forEach(k => c2[k]=sub.filter(x=>x.result===k).length);
+      return Object.assign({
+        name, device: deviceLabel, total:t, ok:c2.OK, nys:c2.NYS,
+        meta: t ? (c2.NYS ? c2.NYS+' not yet started' : 'complete') : 'no matching cases',
+        segs: ORDER.filter(k=>k!=='NYS').map(k => ({ color:COLORS[k], pct: pct(c2[k],t)+'%' })),
+        execPct: pct(t - c2.NYS, t)+'%'
+      },
+        cell(c2.NG,'ng',name,deviceValue), cell(c2['NG-OK'],'ngok',name,deviceValue),
+        cell(c2.Pending,'pending',name,deviceValue), cell(c2.Cancel,'cancel',name,deviceValue));
+    };
+    const split = s.fileGrouping === 'split';
+    let fileRows = [];
+    s.files.forEach(f => {
+      const sub = rows.filter(c => c.file===f);
+      const ds = devices.filter(d => sub.some(c => c.device===d));
+      if (split){
+        if (ds.length) ds.forEach(d => fileRows.push(mkRow(f, d, d, sub.filter(c => c.device===d))));
+        else fileRows.push(mkRow(f, '—', 'all', sub));
+      } else {
+        fileRows.push(mkRow(f, ds.length ? String(ds.length) : '—', s.sDevice, sub));
+      }
+    });
+    fileRows = fileRows.filter(f => f.total > 0 || s.sFile==='all');
+
+    const size = Math.max(1, Number(s.filePageSize)||10);
+    const pageCount = Math.max(1, Math.ceil(fileRows.length/size));
+    const page = Math.min(Math.max(1, s.filePage), pageCount);
+    const filePageRows = s.fileShowAll ? fileRows : fileRows.slice((page-1)*size, page*size);
+
+    /* ---- today, by file ---- */
+    const todayIso = iso(new Date());
+    const todayList = rows.filter(c => c.date === todayIso);
+    const todayFiles = Array.from(new Set(todayList.map(c => c.file)));
+    const todayRows = todayFiles.map(f => {
+      const sub = todayList.filter(c => c.file===f);
+      const names = Array.from(new Set(sub.map(c => c.pic).filter(Boolean)));
+      const c2 = {}; ORDER.forEach(k => c2[k]=sub.filter(x=>x.result===k).length);
+      return {
+        file: f, total: sub.length,
+        pics: names.slice(0,3).join(' / ') + (names.length>3 ? ' +'+(names.length-3) : ''),
+        chips: ORDER.filter(k => k!=='NYS').map(k => ({ label: k+' '+c2[k], bg:(CHIP[k]||CHIP.Cancel)[0], fg:(CHIP[k]||CHIP.Cancel)[1] }))
+      };
+    }).sort((a,b) => b.total-a.total);
+
+    /* ---- days (whole dataset) ---- */
+    const byDay = {};
+    all.forEach(c => { if (!c.date) return; (byDay[c.date] = byDay[c.date] || []).push(c); });
+    const dayKeys = Object.keys(byDay).sort();
+    const plan = Math.max(1, (Number(s.target)||30) * Math.max(1, pics.length));
+    const max = Math.max(plan, ...dayKeys.map(k => byDay[k].length), 1) * 1.12;
+    const allExecuted = all.filter(c => c.result !== 'NYS').length;
+    let cum = 0;
+    const dayRows = dayKeys.map(k => {
+      const list = byDay[k]; cum += list.length;
+      const a = pct(list.length, plan);
+      return { date:k, count:list.length, plan, attain:a+'%', color: a>=100?'#2E7D5B':a>=80?'#C98A2B':'#C2413A',
+        ng: list.filter(c=>c.result==='NG').length, members: new Set(list.map(c=>c.pic)).size,
+        cum, cumPct: pct(cum, all.length)+'%' };
+    });
+    const dayBars = dayRows.map(d => ({ label: d.date.slice(5), count:d.count, color:'#1F6F5C',
+      trackH:'100%', barH: pct(d.count, max)+'%', planBottom: pct(plan, max)+'%' }));
+    const latest = dayKeys.length ? dayKeys[dayKeys.length-1] : '';
+
+    /* ---- members (whole dataset) ---- */
+    const memberRows = pics.map(p => {
+      const sub = all.filter(c => c.pic===p);
+      const days = new Set(sub.map(c=>c.date).filter(Boolean)).size || 1;
+      const avg = Math.round(sub.length/days*10)/10;
+      const a = pct(avg, Number(s.target)||30);
+      return { pic:p, total:sub.length, days, avg,
+        ngRate: pct(sub.filter(c=>c.result==='NG'||c.result==='NG-OK').length, sub.length)+'%',
+        attain: a+'%', attainW: Math.min(100,a)+'%', color: a>=100?'#2E7D5B':a>=80?'#C98A2B':'#C2413A' };
+    }).sort((a,b) => b.total-a.total);
+
+    const heatDays = dayKeys.map(k => ({ label:k.slice(5) }));
+    const heatMax = Math.max(1, ...pics.map(p => Math.max(0, ...dayKeys.map(k => byDay[k].filter(c=>c.pic===p).length))));
+    const heatRows = pics.map(p => ({ pic:p, cells: dayKeys.map(k => {
+      const n = byDay[k].filter(c=>c.pic===p).length; const r = n/heatMax;
+      return { n: n||'', title: p+' · '+k+' · '+n+' cases',
+        bg: n===0 ? '#F7F6F3' : 'rgba(31,111,92,'+(0.12+r*0.75).toFixed(2)+')',
+        fg: r>0.55 ? '#fff' : '#14171C' };
+    }) }));
+
+    /* ---- non-OK view ---- */
+    const nonOkAll = all.filter(c => c.result!=='OK' && c.result!=='NYS');
+    const cf = s.colFilters, res = s.results;
+    const hit = (val, f) => !f || String(val||'').toLowerCase().includes(String(f).toLowerCase());
+    const q = s.search.trim().toLowerCase();
+    const passConditions = (c) => (!q || (c.id+' '+c.caseNo+' '+c.title+' '+c.ticket+' '+c.note+' '+c.pic).toLowerCase().includes(q))
+      && hit(c.id, cf.id) && (!cf.file || c.file===cf.file) && (!cf.device || c.device===cf.device)
+      && (!cf.scope || c.scope===cf.scope) && (!cf.pic || c.pic===cf.pic)
+      && (!cf.date || c.date===cf.date) && hit(c.ticket, cf.ticket) && hit(c.note, cf.note)
+      && (!s.missingOnly || (!String(c.ticket||'').trim() && !String(c.note||'').trim()));
+    const conditioned = nonOkAll.filter(passConditions);
+    let issueAll = conditioned.filter(c => res.length===0 || res.indexOf(c.result)>=0);
+    if (s.sortKey){
+      const dir = s.sortDir === 'desc' ? -1 : 1, key = s.sortKey;
+      issueAll = issueAll.slice().sort((a,b) => {
+        if (key==='result') return (ORDER.indexOf(a.result)-ORDER.indexOf(b.result))*dir;
+        if (key==='caseNo') return ((Number(a.rowNo)||0)-(Number(b.rowNo)||0))*dir;
+        return String(a[key]||'').localeCompare(String(b[key]||''))*dir;
+      });
+    } else {
+      issueAll = issueAll.slice().sort((a,b) => ORDER.indexOf(a.result)-ORDER.indexOf(b.result) || (b.date||'').localeCompare(a.date||''));
+    }
+    const iSize = Math.max(1, Number(s.issuePageSize)||25);
+    const iPageCount = Math.max(1, Math.ceil(issueAll.length/iSize));
+    const iPage = Math.min(Math.max(1, s.issuePage), iPageCount);
+    const issueSlice = s.issueShowAll ? issueAll : issueAll.slice((iPage-1)*iSize, iPage*iSize);
+    const issueRows = issueSlice.map((c) => {
+      const miss = !String(c.ticket||'').trim() && !String(c.note||'').trim();
+      return { ...c,
+        rowLabel: 'row ' + (c.rowNo!=null ? pad(Number(c.rowNo)||0) : '—'),
+        caseLabel: 'case ' + ((c.caseNo!=null && c.caseNo!=='') ? (Number(c.caseNo) ? pad(Number(c.caseNo)) : c.caseNo) : (c.id||'—')),
+        pic: c.pic||'—', date: c.date||'—', device: c.device||'—', ticket: c.ticket||'—', note: c.note||'—', scope: c.scope||'—',
+        missBg: miss ? '#FBEDEC' : 'transparent', missFg: miss ? '#A4332C' : '#1F6F5C', missNoteFg: miss ? '#A4332C' : '#6B7078',
+        chipBg: (CHIP[c.result]||CHIP.Cancel)[0], chipFg: (CHIP[c.result]||CHIP.Cancel)[1] };
+    });
+
+    const sortCol = (key, label) => ({ label, title:'Sort by '+label, cursor:'pointer',
+      color: s.sortKey===key ? '#14171C' : '#6B7078',
+      arrow: s.sortKey===key ? (s.sortDir==='asc' ? '↑' : '↓') : '',
+      onClick: () => this.setState(st => ({ sortKey:key, sortDir: st.sortKey===key && st.sortDir==='asc' ? 'desc' : 'asc' })) });
+    const issueCols = [ sortCol('file','File'), sortCol('caseNo','Row / Case'), sortCol('device','Device'), sortCol('result','Result'),
+      sortCol('scope','Scope'), sortCol('pic','PIC'), sortCol('date','Date'), sortCol('ticket','Ticket'), sortCol('note','Note') ];
+
+    const setCf = (k) => (e) => { const v = e.target.value; this.setState(st => ({ colFilters:{...st.colFilters,[k]:v}, issuePage:1 })); };
+    const none = { isSelect:false, isText:false, isDate:false, isResults:false };
+    const sel = (k, allLabel, list) => ({ ...none, isSelect:true, value: cf[k], onChange: setCf(k),
+      options: [{v:'',label:allLabel}].concat(list.map(x=>({v:x,label:x}))) });
+    const txt = (k, placeholder) => ({ ...none, isText:true, value: cf[k], onChange: setCf(k), placeholder });
+    const toggleRes = (v) => () => this.setState(st => ({ issuePage:1, results: st.results.indexOf(v)>=0 ? st.results.filter(x=>x!==v) : st.results.concat([v]) }));
+    const resultCell = { ...none, isResults:true, items: NONOK.map(v => {
+      const on = res.indexOf(v)>=0;
+      return { label: v, onClick: toggleRes(v), border: on ? COLORS[v] : '#E4E2DC',
+        bg: on ? (CHIP[v]||CHIP.Cancel)[0] : '#fff', fg: on ? (CHIP[v]||CHIP.Cancel)[1] : '#6B7078' };
+    }) };
+    const issueFilterControls = [
+      { ...sel('file','all files', s.files), label:'File' },
+      { ...txt('id','case no'), label:'Case' },
+      { ...sel('device','all', devices), label:'Device' },
+      { ...sel('scope','all', scopes), label:'Scope' },
+      { ...sel('pic','all', pics), label:'PIC' },
+      { ...none, isDate:true, label:'Date', value: cf.date, onChange: setCf('date') },
+      { ...txt('ticket','TCK-'), label:'Ticket' },
+      { ...txt('note','contains'), label:'Note' }
+    ];
+
+    const chip = (label, onClear) => ({ label, onClear });
+    const issueChips = [
+      cf.file ? chip(cf.file, () => this.setState(st => ({ colFilters:{...st.colFilters, file:''} }))) : null,
+      cf.device ? chip(cf.device, () => this.setState(st => ({ colFilters:{...st.colFilters, device:''} }))) : null,
+      res.length ? chip('Result · '+res.join(', '), () => this.setState({ results:[] })) : null,
+      cf.scope ? chip('Scope · '+cf.scope, () => this.setState(st => ({ colFilters:{...st.colFilters, scope:''} }))) : null,
+      cf.pic ? chip('PIC · '+cf.pic, () => this.setState(st => ({ colFilters:{...st.colFilters, pic:''} }))) : null,
+      cf.date ? chip('Date · '+cf.date, () => this.setState(st => ({ colFilters:{...st.colFilters, date:''} }))) : null,
+      cf.id ? chip('Case · '+cf.id, () => this.setState(st => ({ colFilters:{...st.colFilters, id:''} }))) : null,
+      cf.ticket ? chip('Ticket · '+cf.ticket, () => this.setState(st => ({ colFilters:{...st.colFilters, ticket:''} }))) : null,
+      cf.note ? chip('Note · '+cf.note, () => this.setState(st => ({ colFilters:{...st.colFilters, note:''} }))) : null,
+      s.missingOnly ? chip('Missing ticket & note', () => this.setState({ missingOnly:false })) : null
+    ].filter(Boolean);
+
+    const tabDefs = [['all','All non-OK']].concat(NONOK.map(v => [v,v]));
+    const issueTabs = tabDefs.map(([v,label]) => {
+      const isAll = v==='all';
+      const activeTab = isAll ? res.length===0 : (res.length===1 && res[0]===v);
+      return { label, count: isAll ? conditioned.length : conditioned.filter(c=>c.result===v).length,
+        color: isAll ? '#14171C' : COLORS[v], border: activeTab ? (isAll?'#14171C':COLORS[v]) : '#E4E2DC',
+        onClick: () => this.setState({ results: isAll ? [] : [v], issuePage:1 }) };
+    });
+
+    const titles = { summary:['Summary','Overview of every test case file'], daily:['Daily Tracking','Cases executed per day against plan'],
+      team:['Productivity','Team and per-member throughput'], issues:['Non-OK cases','Every case not passing, grouped and searchable'], tools:['Tools','Configuration and maintenance'] };
+    const t = titles[s.view];
+    const active = '#242931';
+    const cfgLabels = [['caseNo','No.'],['caseId','Case ID'],['title','Test item'],['device','Device'],['result','Result'],['scope','Scope'],['pic','PIC'],['date','Test date'],['ticket','Ticket-ID'],['note','Note']];
+
+    return {
+      sidebarOpen: s.sidebarOpen !== false, railClosed: s.sidebarOpen === false,
+      gridCols: s.sidebarOpen === false ? '64px' : '236px',
+      toggleSidebar: () => this.setState(st => ({ sidebarOpen: st.sidebarOpen === false })),
+      todayLabel: todayIso,
+      todayExec: todayList.length ? todayList.length + ' cases executed today' : (latest ? 'no activity · last: ' + latest : 'no activity yet'),
+      navSummary: s.view==='summary'?active:'transparent', navDaily: s.view==='daily'?active:'transparent',
+      navTeam: s.view==='team'?active:'transparent', navIssues: s.view==='issues'?active:'transparent', navTools: s.view==='tools'?active:'transparent',
+      goSummary:()=>this.setState({view:'summary'}), goDaily:()=>this.setState({view:'daily'}),
+      goTeam:()=>this.setState({view:'team'}), goIssues:()=>this.setState({view:'issues'}), goTools:()=>this.setState({view:'tools'}),
+      isSummary: s.view==='summary', isDaily: s.view==='daily', isTeam: s.view==='team', isIssues: s.view==='issues', isTools: s.view==='tools',
+      viewTitle: t[0], viewSub: t[1],
+      totalCases: total.toLocaleString(), nonOkCount: nonOkAll.length,
+      allCaseCount: all.length.toLocaleString(), allExecutedCount: allExecuted.toLocaleString(),
+      importStatus: s.importStatus,
+      onPickFiles: this.onPickFiles, onPickFolder: this.onPickFolder, folderRef: this.folderRef,
+
+      scopeFilter: s.sScope, fileFilter: s.sFile, deviceFilter: s.sDevice,
+      scopeOptions: [{v:'all',label:'All scopes'}].concat(scopes.map(x=>({v:x,label:x}))),
+      fileOptions: [{v:'all',label:'All files'}].concat(s.files.map(x=>({v:x,label:x}))),
+      deviceOptions: [{v:'all',label:'All devices'}].concat(devices.map(x=>({v:x,label:x}))),
+      onScope: e => this.setState({sScope:e.target.value, filePage:1}),
+      onFile: e => this.setState({sFile:e.target.value, filePage:1}),
+      onDevice: e => this.setState({sDevice:e.target.value, filePage:1}),
+      hasSummaryFilters: s.sScope!=='all' || s.sDevice!=='all' || s.sFile!=='all',
+      summaryChips: [
+        s.sFile!=='all' ? chip(s.sFile, () => this.setState({ sFile:'all', filePage:1 })) : null,
+        s.sDevice!=='all' ? chip(s.sDevice, () => this.setState({ sDevice:'all', filePage:1 })) : null,
+        s.sScope!=='all' ? chip('Scope · '+s.sScope, () => this.setState({ sScope:'all', filePage:1 })) : null
+      ].filter(Boolean),
+      clearSummaryFilters: () => this.setState({ sScope:'all', sDevice:'all', sFile:'all', filePage:1 }),
+      groupingLabel: split ? 'File + device per row' : 'File + total devices per row',
+      toggleGrouping: () => this.setState(st => ({ fileGrouping: st.fileGrouping==='split' ? 'combined' : 'split', filePage:1 })),
+
+      kpis: [
+        { label:'Total cases', value: total.toLocaleString(), sub: s.files.length+' files', color:'#14171C', cursor:'default', action:'', hint:'' },
+        { label:'Executed', value: pct(executed,total)+'%', sub: executed.toLocaleString()+' of '+total.toLocaleString(), color:'#1F6F5C', cursor:'default', action:'', hint:'' },
+        { label:'Pass rate', value: pct(counts.OK||0, executed)+'%', sub:(counts.OK||0).toLocaleString()+' OK', color:'#2E7D5B', cursor:'default', action:'', hint:'' },
+        { label:'Open NG', value: (counts.NG||0).toLocaleString(), sub:(counts['NG-OK']||0)+' retested OK', color:'#C2413A',
+          cursor:'pointer', action:'View →', hint:'Open NG in Non-OK cases',
+          onClick: () => this.jumpToIssues(s.sFile, s.sDevice, 'NG', s.sScope) },
+        { label:'Pending', value:(counts.Pending||0).toLocaleString(), sub:(counts.Cancel||0)+' cancelled', color:'#3A6EA5',
+          cursor:'pointer', action:'View →', hint:'Open Pending in Non-OK cases',
+          onClick: () => this.jumpToIssues(s.sFile, s.sDevice, 'Pending', s.sScope) }
+      ],
+      statusRows,
+      todayRows, todayEmpty: todayRows.length===0,
+      todayEmptyText: latest ? 'No cases executed today. Last activity ' + latest + '.' : 'No execution recorded yet.',
+      todayHeadline: todayList.length ? todayList.length+' cases · '+todayFiles.length+' files' : todayIso,
+
+      filePageRows, filePaged: !s.fileShowAll && pageCount > 1,
+      filePageLabel: page+' / '+pageCount,
+      filePrev: () => this.setState(st => ({ filePage: Math.max(1, st.filePage-1) })),
+      fileNext: () => this.setState({ filePage: Math.min(pageCount, page+1) }),
+      toggleShowAll: () => this.setState(st => ({ fileShowAll: !st.fileShowAll, filePage:1 })),
+      showAllLabel: s.fileShowAll ? 'Paginate · 10 / page' : 'Show all rows',
+      fileCountLabel: s.fileShowAll ? fileRows.length+' rows' : 'rows '+((page-1)*size+1)+'–'+Math.min(page*size, fileRows.length)+' of '+fileRows.length,
+
+      dayRows, dayBars, dailyTargetLabel: plan+'/day',
+      target: s.target, onTarget: e => this.setState({ target: Number(e.target.value)||0 }),
+      memberRows, heatDays, heatRows,
+
+      issueTabs, issueRows, issueCols, issueFilterControls, issueChips, issueEmpty: issueRows.length===0,
+      resultToggles: resultCell.items,
+      filtersOpen: !!s.filtersOpen,
+      toggleFilters: () => this.setState(st => ({ filtersOpen: !st.filtersOpen })),
+      filtersLabel: issueChips.length ? 'Filters · '+issueChips.length : 'Filters',
+      filtersBorder: s.filtersOpen ? '#14171C' : '#DFDDD6',
+      filtersBg: s.filtersOpen ? '#14171C' : '#fff',
+      filtersFg: s.filtersOpen ? '#fff' : '#14171C',
+      toggleMissing: () => this.setState(st => ({ missingOnly: !st.missingOnly, issuePage:1 })),
+      missingBorder: s.missingOnly ? '#C2413A' : '#DFDDD6',
+      missingBg: s.missingOnly ? '#FBEDEC' : '#fff',
+      missingFg: s.missingOnly ? '#A4332C' : '#6B7078',
+      hasIssueFilters: issueChips.length > 0,
+      search: s.search, onSearch: e => this.setState({ search:e.target.value, issuePage:1 }),
+      issuePaged: !s.issueShowAll && iPageCount > 1,
+      issuePageLabel: iPage+' / '+iPageCount,
+      issuePrev: () => this.setState(st => ({ issuePage: Math.max(1, st.issuePage-1) })),
+      issueNext: () => this.setState({ issuePage: Math.min(iPageCount, iPage+1) }),
+      toggleIssueShowAll: () => this.setState(st => ({ issueShowAll: !st.issueShowAll, issuePage:1 })),
+      issueShowAllLabel: s.issueShowAll ? 'Paginate · 25 / page' : 'Show all rows',
+      issueRangeLabel: issueAll.length === 0 ? 'no rows'
+        : (s.issueShowAll ? issueAll.length+' rows' : 'rows '+((iPage-1)*iSize+1)+'–'+Math.min(iPage*iSize, issueAll.length)+' of '+issueAll.length),
+      clearColFilters: () => this.setState({ colFilters:{...EMPTY_COL}, results:[], missingOnly:false, search:'', sortKey:null, issuePage:1 }),
+      issueCountLabel: 'showing '+issueRows.length+' of '+issueAll.length,
+
+      configFields: cfgLabels.map(([k,label]) => ({ label, value: s.config[k],
+        onChange: e => { const v = e.target.value; this.setState(st => ({ config:{...st.config,[k]:v}, configMsg:'' })); } })),
+      headerRow: s.headerRow, onHeaderRow: e => this.setState({ headerRow:e.target.value }),
+      sheetPick: s.sheetPick, onSheetPick: e => this.setState({ sheetPick: e.target.value.trim().toLowerCase()==='all' ? 'all' : 'first' }),
+      saveConfig: () => { this.setState({ configMsg:'Config saved — applies to the next import' }); this.pushLog('Sheet config updated','#6B7078'); },
+      resetConfig: () => this.setState({ config:{...DEFAULT_CONFIG}, headerRow:1, sheetPick:'first', configMsg:'Reset to default' }),
+      configMsg: s.configMsg,
+
+      scopeJson: s.scopeJson, onScopeJson: e => this.setState({ scopeJson: e.target.value, scopeMsg:'' }),
+      applyScopeJson: () => { try { const o = JSON.parse(s.scopeJson); this.setState({ scopeCfg:o, scopeMsg:'Valid — applied', scopeOk:true }); this.pushLog('Scope config applied','#2E7D5B'); }
+        catch(err){ this.setState({ scopeMsg:'Invalid JSON: '+err.message, scopeOk:false }); } },
+      scopeMsg: s.scopeMsg, scopeMsgColor: s.scopeOk ? '#1F6F5C' : '#C2413A',
+
+      confirmClear: s.confirmClear,
+      clearLabel: s.confirmClear ? 'Confirm — clear all results' : 'Clear result test',
+      clearBg: s.confirmClear ? '#C2413A' : '#fff', clearFg: s.confirmClear ? '#fff' : '#C2413A',
+      cancelClear: () => this.setState({ confirmClear:false }),
+      clearResults: () => {
+        if (!s.confirmClear) { this.setState({ confirmClear:true }); return; }
+        this.setState(st => ({ confirmClear:false, cases: st.cases.map(c => ({...c, result:'NYS', pic:'', date:'', ticket:'', note:''})) }));
+        this.pushLog('All results cleared → NYS','#C2413A');
+      },
+      logRows: s.log
+    };
+  }
+}
+</script>
+</body>
+</html>

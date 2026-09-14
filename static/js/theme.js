@@ -92,7 +92,10 @@ function apply(theme) {
     if (btn) {
         const next = currentTheme() === "dark" ? "light" : "dark";
         btn.setAttribute("aria-label", `Switch to ${next} theme`);
-        btn.textContent = currentTheme() === "dark" ? "◑" : "◐";
+        // Named, not just a glyph: the button sits in the rail among labelled
+        // controls, and a lone ◐ there reads as an unfinished icon rather than
+        // a switch. The word is the theme it moves TO, as the aria-label is.
+        btn.textContent = currentTheme() === "dark" ? "◑ Light" : "◐ Dark";
     }
     listeners.forEach((fn) => fn());
 }

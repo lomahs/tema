@@ -197,3 +197,39 @@ export async function postPublishReport(url, runDate) {
     });
     return { ok: res.ok, json: await res.json() };
 }
+
+/**
+ * Every editable config file, plus the vocabularies the editor draws from.
+ *
+ * The tones, the derive conditions and the sheet-label field names come down
+ * with the data rather than being listed in `views/config.js`, for the same
+ * reason status keys never are: they are the backend's closed sets, and a
+ * second copy here would offer choices the validator refuses.
+ *
+ * @returns {Promise<{configs: Object, vocabulary: Object}>}
+ */
+export async function getConfig() {
+    const res = await fetch("/api/config");
+    return res.json();
+}
+
+/**
+ * Save one config file.
+ *
+ * A rejected edit changes nothing — the server validates before it writes — so
+ * a failed call leaves both the file and the running app as they were, and the
+ * form can simply show `json.error` and stay as the user left it.
+ *
+ * @param {string} name One of the keys `getConfig` returned under `configs`.
+ * @param {Object} data The whole config object to write.
+ * @returns {Promise<ApiResponse>} On success `json` is `{path, data, error}`
+ *   re-read from disk; on failure `{error}` in the validator's own words.
+ */
+export async function putConfig(name, data) {
+    const res = await fetch(`/api/config/${encodeURIComponent(name)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data }),
+    });
+    return { ok: res.ok, json: await res.json() };
+}

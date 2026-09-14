@@ -8,7 +8,7 @@
  * A grouped table pages over *groups* rather than rows, which needs no change
  * here — the caller simply passes the group count as `totalItems`.
  */
-import { $ } from "./dom.js";
+import { $, esc } from "./dom.js";
 
 /** Pages shown either side of the current one before an ellipsis takes over. */
 const PAGE_WINDOW = 2;
@@ -77,5 +77,61 @@ export function renderPagination({ totalItems, pageSize, currentPage, onPageChan
     nav.querySelectorAll("button[data-page]").forEach((b) => b.addEventListener("click", () => {
         if (b.disabled) return;
         onPageChange(parseInt(b.dataset.page, 10));
+    }));
+}
+
+/**
+ * A card's footer: how many rows there are, and the way through them.
+ *
+ * Prev/Next with a page label rather than the numbered pager above, plus a
+ * Show-all that drops paging entirely — the design's footer. With several
+ * tables on one screen a row of numbered buttons under each reads as a lot of
+ * chrome for ten rows.
+ *
+ * Show all does not make the page taller: the pane it sits under is capped at
+ * about ten rows and scrolls, which is the whole reason showing everything is
+ * a reasonable thing to offer.
+ *
+ * Self-contained like the rest of this module — it takes state and reports
+ * back, and imports no view.
+ *
+ * @param {Object} opts
+ * @param {string} opts.container Selector for the footer element to fill.
+ * @param {number} opts.totalItems Rows or groups, whichever is being paged.
+ * @param {number} opts.pageSize
+ * @param {number} opts.currentPage
+ * @param {boolean} [opts.showAll] Whether paging is currently off.
+ * @param {string} [opts.unit] Singular noun for the count, e.g. `"file"`.
+ * @param {(page: number) => void} opts.onPageChange
+ * @param {(showAll: boolean) => void} opts.onToggleAll
+ */
+export function renderPageFooter({
+    container, totalItems, pageSize, currentPage, showAll = false,
+    unit = "row", onPageChange, onToggleAll,
+}) {
+    const foot = $(container);
+    const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+    const page = Math.min(Math.max(1, currentPage), pageCount);
+    const paged = !showAll && pageCount > 1;
+
+    foot.innerHTML = `
+        <span class="count">${totalItems.toLocaleString()} `
+            + `${esc(unit)}${totalItems === 1 ? "" : "s"}</span>
+        <div class="card-foot-end">
+            ${paged ? `
+                <button type="button" class="btn btn-sm" data-step="prev"
+                        ${page === 1 ? "disabled" : ""}>Prev</button>
+                <span class="count">${page} / ${pageCount}</span>
+                <button type="button" class="btn btn-sm" data-step="next"
+                        ${page === pageCount ? "disabled" : ""}>Next</button>` : ""}
+            ${pageCount > 1 ? `<button type="button" class="btn btn-sm" data-step="all">`
+                + `${showAll ? "Show pages" : "Show all"}</button>` : ""}
+        </div>`;
+
+    foot.querySelectorAll("button[data-step]").forEach((b) => b.addEventListener("click", () => {
+        if (b.disabled) return;
+        if (b.dataset.step === "prev") onPageChange(page - 1);
+        else if (b.dataset.step === "next") onPageChange(page + 1);
+        else onToggleAll(!showAll);
     }));
 }

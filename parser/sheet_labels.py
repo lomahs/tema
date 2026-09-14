@@ -56,9 +56,14 @@ def _positive_int(raw: dict, field: str, source: str) -> int:
     return value
 
 
-@dataclass(frozen=True)
+@dataclass
 class SheetLabels:
-    """The vocabulary `tool_data_builder` matches sheet cells against."""
+    """The vocabulary `tool_data_builder` matches sheet cells against.
+
+    Not frozen, because `adopt` changes it in place: the Config view can edit
+    these labels while the app is running, and config you can edit at runtime
+    is not frozen. Nothing else writes to an instance.
+    """
 
     header: dict[str, tuple[str, ...]]
     result_columns: dict[str, tuple[str, ...]]
@@ -71,6 +76,10 @@ class SheetLabels:
         with open(path, encoding="utf-8") as f:
             raw = json.load(f)
         return cls.from_dict(raw, source=path)
+
+    def adopt(self, other: "SheetLabels") -> None:
+        """Become `other`, in place — see `StatusSet.adopt` for why."""
+        self.__dict__.update(other.__dict__)
 
     @classmethod
     def from_dict(cls, raw: dict, source: str = "<dict>") -> "SheetLabels":

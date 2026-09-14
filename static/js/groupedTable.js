@@ -138,8 +138,11 @@ export function setAllGroups(expanded, rows, groupBy, labelOf, open) {
  *   row; defaults to reading the key straight off the row.
  * @param {(rows: Object[]) => Object} [opts.aggregate] Roll-up for a group row
  *   in `"values"` mode.
- * @param {(row: Object, index: number) => string} opts.renderValues Cells after
- *   the label columns, for a leaf.
+ * @param {(row: Object, index: number, depth: number) => string} opts.renderValues
+ *   Cells after the label columns. `index` is -1 on a group row; `depth` is the
+ *   group's nesting level, and `groupBy.length` on a leaf. Depth is what lets a
+ *   caller put a column on the outermost rows only — Daily's plan and
+ *   cumulative figures mean something per day and nothing per device.
  * @param {(row: Object) => string} [opts.renderLabelCells] The leading label
  *   cells for a leaf; must emit exactly `labelCols` of them.
  * @param {(row: Object, index: number) => string} [opts.leafAttrs] Extra
@@ -188,7 +191,7 @@ export function renderGroupedTable({
                 ? renderLabelCells(node.row)
                 : `<td class="cell-label"><span class="twisty twisty--leaf"></span>${esc(node.row[groupBy[0]])}</td>`;
             const attrs = leafAttrs ? " " + leafAttrs(node.row, index) : "";
-            html.push(`<tr${attrs}>${labels}${renderValues(node.row, index++)}</tr>`);
+            html.push(`<tr${attrs}>${labels}${renderValues(node.row, index++, groupBy.length)}</tr>`);
             return;
         }
 
@@ -207,7 +210,7 @@ export function renderGroupedTable({
             html.push(
                 `<tr data-depth="${node.depth}" data-group="${gid}"${style}>`
                 + `<td class="cell-label" colspan="${labelCols}">${twisty(open)}${esc(node.label)}</td>`
-                + renderValues(aggregate(node.rows), -1)
+                + renderValues(aggregate(node.rows), -1, node.depth)
                 + `</tr>`);
         }
 

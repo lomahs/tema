@@ -49,6 +49,10 @@ class ScopeSet:
             raw = json.load(f)
         return cls.from_dict(raw, source=path)
 
+    def adopt(self, other: "ScopeSet") -> None:
+        """Become `other`, in place — see `StatusSet.adopt` for why."""
+        self.__dict__.update(other.__dict__)
+
     @classmethod
     def from_dict(cls, raw: dict, source: str = "<dict>") -> "ScopeSet":
         entries = raw.get("groups")

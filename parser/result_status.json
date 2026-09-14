@@ -1,13 +1,98 @@
 {
-  "statuses": [
-    {"key": "OK",      "label": "OK",             "match": ["OK"],    "executed": true, "tone": "success", "badge": "bg-success",           "text": "text-success"},
-    {"key": "NG",      "label": "NG",             "match": ["NG"],    "executed": true, "issue": true, "review": true, "tone": "danger",  "badge": "bg-danger",            "text": "text-danger"},
-    {"key": "NG-OK",   "label": "NG-OK",          "match": ["NG-OK"], "executed": true, "review": true, "tone": "warn",    "badge": "bg-warning text-dark", "text": "text-success"},
-    {"key": "Pending", "label": "Pending (保留)",   "match": ["保留"],   "issue": true, "review": true, "tone": "warn",    "badge": "bg-warning text-dark", "text": "text-warning-emphasis"},
-    {"key": "Cancel",  "label": "Cancel (対象外)",  "match": ["対象外"], "issue": true, "review": true, "tone": "neutral", "badge": "bg-secondary",         "text": "text-secondary"},
-    {"key": "NYS",     "label": "NYS",            "empty": true,      "tone": "neutral", "badge": "bg-secondary",         "text": ""},
-    {"key": "OOS",     "label": "Out Of Scope",   "derive": {"from": "Cancel", "when": "no_pic"}, "excluded": true, "tone": "muted", "badge": "bg-dark", "text": ""},
-    {"key": "Other",   "label": "Other",          "fallback": true,   "tone": "muted",   "badge": "bg-dark",              "text": ""}
+  "needs_reason": [
+    "NG",
+    "NG-OK",
+    "Pending",
+    "Cancel"
   ],
-  "needs_reason": ["NG", "NG-OK", "Pending", "Cancel", "Other"]
+  "statuses": [
+    {
+      "badge": "bg-success",
+      "executed": true,
+      "key": "OK",
+      "label": "OK",
+      "match": [
+        "OK"
+      ],
+      "text": "text-success",
+      "tone": "success"
+    },
+    {
+      "badge": "bg-danger",
+      "executed": true,
+      "issue": true,
+      "key": "NG",
+      "label": "NG",
+      "match": [
+        "NG"
+      ],
+      "review": true,
+      "text": "text-danger",
+      "tone": "danger"
+    },
+    {
+      "badge": "bg-warning text-dark",
+      "executed": true,
+      "key": "NG-OK",
+      "label": "NG-OK",
+      "match": [
+        "NG-OK"
+      ],
+      "review": true,
+      "text": "text-success",
+      "tone": "success"
+    },
+    {
+      "badge": "bg-warning text-dark",
+      "issue": true,
+      "key": "Pending",
+      "label": "Pending (保留)",
+      "match": [
+        "保留"
+      ],
+      "review": true,
+      "text": "text-warning-emphasis",
+      "tone": "warn"
+    },
+    {
+      "badge": "bg-secondary",
+      "issue": true,
+      "key": "Cancel",
+      "label": "Cancel (対象外)",
+      "match": [
+        "対象外"
+      ],
+      "review": true,
+      "text": "text-secondary",
+      "tone": "neutral"
+    },
+    {
+      "badge": "bg-secondary",
+      "empty": true,
+      "key": "NYS",
+      "label": "NYS",
+      "text": "",
+      "tone": "neutral"
+    },
+    {
+      "badge": "bg-dark",
+      "derive": {
+        "from": "Cancel",
+        "when": "no_pic"
+      },
+      "excluded": true,
+      "key": "OOS",
+      "label": "Out Of Scope",
+      "text": "",
+      "tone": "muted"
+    },
+    {
+      "badge": "bg-dark",
+      "fallback": true,
+      "key": "Other",
+      "label": "Other",
+      "text": "",
+      "tone": "muted"
+    }
+  ]
 }
