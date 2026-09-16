@@ -143,6 +143,7 @@
     --rail-w-closed: 64px;
     --band-w:   116px;  /* one width for every status column;
                             wide enough that "Cancel (対象外)" stays on one line */
+    --progress-w: 190px; /* the Executed column: bar plus its percentage */
 
     /* --- geometry ----------------------------------------------------------
      * Distance from the data sets the curvature. See rule 3 above.

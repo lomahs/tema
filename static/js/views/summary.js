@@ -130,6 +130,16 @@ export function initSummaryView({ onOpenFile: open = () => {} } = {}) {
         render();
     });
 
+    // The columns are fitted to the pane, so the pane changing size is a reason
+    // to fit them again — the measured widths themselves do not depend on the
+    // viewport, but how much room there is for them does. Debounced, because a
+    // drag fires this continuously and each pass is a forced layout.
+    let refit;
+    window.addEventListener("resize", () => {
+        clearTimeout(refit);
+        refit = setTimeout(alignColumns, 120);
+    });
+
     $("#btnClearSummaryFilters").addEventListener("click", () => {
         FILTERS.forEach((sel) => { $(sel).value = ""; });
         paging.clear();
@@ -358,6 +368,8 @@ function alignColumns() {
         });
     });
 
+    fitToPane(widths, tables[0].parentElement.clientWidth);
+
     const total = widths.reduce((a, w) => a + w, 0);
     tables.forEach((table) => {
         table.style.tableLayout = "fixed";
@@ -369,6 +381,127 @@ function alignColumns() {
             cell.style.width = `${widths[i]}px`;
         });
     });
+}
+
+/**
+ * Which columns may give, in the order they are asked, and how far each may be
+ * squeezed before it stops giving.
+ *
+ * A table wider than its pane scrolls sideways, and a horizontal scrollbar
+ * under a band of figures is the one thing that stops you reading down a
+ * column — which is the whole reason these columns were aligned to begin with.
+ * So the table is fitted to the page, and something has to give. The order is
+ * what decides *what*, and the band is asked first on purpose:
+ *
+ * 1. The status band. These columns are as wide as their *headings*, not their
+ *    figures — "Pending (保留)" against a one-digit count — so most of that
+ *    width is whitespace, and `.ledger th.band` already sets `white-space:
+ *    normal` so a heading wraps rather than clips. Squeezing here costs a line
+ *    of header height. The floor is the room a four-figure count needs, which
+ *    is the point where squeezing would start costing a figure instead.
+ * 2. The two columns of freehand text and the progress bar. A file name that
+ *    runs out of room ellipsizes — recoverable from the cell's title, but only
+ *    by hovering it, so this is asked second rather than first.
+ * 3. The band again, down to what a two-figure count needs. This is the last
+ *    resort on a genuinely narrow window, where the choice is between a
+ *    heading wrapping onto a third line and a sideways scrollbar. Kept apart
+ *    from the first tier so that a wide screen never reaches it: the band
+ *    settles at a comfortable width long before anything is this tight.
+ *
+ * Surplus goes the other way round: to the text tier only. A wide screen
+ * spent on whitespace around two-digit numbers is a wide screen wasted, and
+ * the column holding file names is the one that can use it.
+ *
+ * @param {number} n The column count: File, Device, the band, then Executed.
+ * @returns {{i: number, floor: number}[][]}
+ */
+function giveTiers(n) {
+    const band = (floor) => {
+        const cols = [];
+        for (let i = 2; i < n - 1; i += 1) cols.push({ i, floor });
+        return cols;
+    };
+    return [
+        band(76),
+        [{ i: 0, floor: 100 }, { i: 1, floor: 80 }, { i: n - 1, floor: 110 }],
+        band(56),
+    ];
+}
+
+/** The Executed column's declared width, read from the token that sets it. */
+function progressWidth() {
+    const declared = getComputedStyle(document.documentElement)
+        .getPropertyValue("--progress-w");
+    return parseInt(declared, 10) || 0;
+}
+
+/**
+ * Stretch or squeeze `widths` in place so the row fits `available`.
+ *
+ * The measured widths are what the columns *want*; this is what there is room
+ * for. Within a tier the change is shared in proportion to what each column
+ * already has, so the widest gives — or takes — the most.
+ *
+ * If every tier is at its floor and it still does not fit, the pane scrolls:
+ * at that point there genuinely is no room, and the alternative is clipping
+ * the figures themselves.
+ *
+ * @param {number[]} widths Measured column widths, mutated in place.
+ * @param {number} available The pane's content width.
+ */
+function fitToPane(widths, available) {
+    if (!available || widths.length < 3) return;
+
+    // Auto layout inflates the last column to soak up whatever slack the table
+    // had, which is how Executed ends up half as wide again as the width it
+    // declares. Held to that width first, so the squeeze below is spent on
+    // columns that actually need the room.
+    const declared = progressWidth();
+    const last = widths.length - 1;
+    if (declared) widths[last] = Math.min(widths[last], declared);
+
+    const tiers = giveTiers(widths.length)
+        .map((tier) => tier.filter((c) => c.i >= 0 && c.i < widths.length))
+        .filter((tier) => tier.length);
+
+    let slack = available - widths.reduce((a, w) => a + w, 0);
+    // Only the text tier takes a surplus; the band tiers exist to give.
+    const asked = slack > 0 ? tiers.slice(1, 2) : tiers;
+
+    asked.forEach((tier) => {
+        // More than one pass: a column that reaches its floor stops absorbing,
+        // and what it could not take is offered to the rest of its tier rather
+        // than quietly dropped.
+        for (let pass = 0; pass < 4 && Math.round(slack) !== 0; pass += 1) {
+            const open = tier.filter((c) => slack > 0 || widths[c.i] > c.floor);
+            const pool = open.reduce((a, c) => a + widths[c.i], 0);
+            if (!open.length || !pool) break;
+
+            const before = slack;
+            open.forEach((c) => {
+                const want = widths[c.i] + (widths[c.i] / pool) * before;
+                const got = Math.max(c.floor, Math.round(want));
+                slack -= got - widths[c.i];
+                widths[c.i] = got;
+            });
+            if (slack === before) break;   // nothing moved; no point going again
+        }
+    });
+
+    // Rounding each share to a whole pixel leaves a pixel or two of drift, and
+    // a table one pixel wider than its pane is still a table with a scrollbar.
+    // Take the remainder off whichever column has the most room above its
+    // floor, which is the one least likely to notice losing it.
+    const spare = (c) => widths[c.i] - c.floor;
+    const columns = tiers.flat();
+    let over = widths.reduce((a, w) => a + w, 0) - available;
+    while (over > 0) {
+        const roomiest = columns.reduce((a, c) => (spare(c) > spare(a) ? c : a), columns[0]);
+        if (!roomiest || spare(roomiest) <= 0) break;   // nothing left to give
+        const take = Math.min(over, spare(roomiest));
+        widths[roomiest.i] -= take;
+        over -= take;
+    }
 }
 
 /**
@@ -432,7 +565,9 @@ function renderTable(i, scope, rows) {
         renderLabelCells: (r) =>
             `<td><button type="button" class="cell-link" data-file="${esc(r.file)}"`
             + ` title="Open ${esc(r.file)}">${esc(r.file)}</button></td>`
-            + `<td>${esc(r.device)}</td>`,
+            // Titled because the column is fitted to the page and a long device
+            // name ellipsizes; the File cell's own title covers the same thing.
+            + `<td title="${esc(r.device)}">${esc(r.device)}</td>`,
         labelCols: 2,
         renderValues: (r) => statusCells(r, { blankZeros: true }) + progressCell(r),
         onToggle: () => {},

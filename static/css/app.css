@@ -1017,12 +1017,31 @@ textarea.input {
  * One treatment, because they are the same idea three times.
  */
 
-.progress-col { width: 190px; }
+.progress-col { width: var(--progress-w); }
 .ledger th.progress-col { text-transform: uppercase; letter-spacing: var(--ls-eyebrow); }
 
 .progress-cell { display: flex; align-items: center; gap: var(--sp-2); }
 .progress-cell .progress { flex: 1; }
 .progress-cell .num { min-width: 44px; text-align: right; font-size: var(--fs-xs); color: var(--ink-soft); }
+
+/* Summary's tables are fitted to the width of the page rather than left to
+   hug their columns, so the one thing that must give is freehand text: a file
+   name longer than the room available shortens with an ellipsis instead of
+   pushing the status band out past the right edge into a sideways scroll. The
+   full name is on the cell's `title` either way. Scoped to Summary, because
+   every other table here still hugs its columns and has nothing to clip. */
+#summaryTables .ledger th, #summaryTables .ledger td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#summaryTables .cell-link {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: left;
+}
 
 /* --- the folded filter panel --------------------------------------------- */
 
