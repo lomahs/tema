@@ -9,8 +9,8 @@ This module automates that first pass:
 2. The header row is the one holding both a test-number cell and a scope cell.
 3. Each device's five result columns are read from the header row itself or
    the row directly below it - sheets do both across the sample set.
-4. Data starts two rows below the header row and runs to the sheet's last
-   non-blank row.
+4. Data starts at the first row below the header whose test-number cell is
+   filled, and runs to the sheet's last non-blank row.
 
 Every label matched along the way comes from `parser/sheet_labels.json`
 via `parser.sheet_labels`, so adapting to differently-headed sheets is a
@@ -123,6 +123,35 @@ def _scan_sub_columns(rows: list[tuple], header_idx: int, start_col: int, end_co
     return found
 
 
+def _first_data_row(rows: list[tuple], header_idx: int, no_col: int) -> int:
+    """1-based Excel row number of the first case below the header row.
+
+    The gap between a header and its first case is not a constant. Some sheets
+    carry a sub-header row holding the per-device column labels, some start
+    immediately under the header, and some leave a spacer or two. So the start
+    is *found*, not offset: the first row below the header whose test-number
+    cell carries something.
+
+    A sub-header row is stepped over because it repeats the header's own label
+    rather than numbering a case — the same `matches_header` test that found the
+    header in the first place. Anything else in that column is taken as a case:
+    opening the span a row early costs nothing (`_cases_for_config` drops rows
+    with no scope), whereas opening it a row late loses a case outright.
+    """
+
+    for row_idx in range(header_idx + 1, len(rows)):
+        row = rows[row_idx]
+        if no_col >= len(row):
+            continue
+        value = row[no_col]
+        if _norm(value) and not _is_header_label("test_no_col", value):
+            return row_idx + 1
+
+    # Nothing below the header: the row under it, which is what `_last_data_row`
+    # reports for the same sheet, so the pair still describes a 1-row span.
+    return header_idx + 2
+
+
 def _last_data_row(rows: list[tuple], after_idx: int, columns: range) -> int:
     """1-based Excel row number of the last non-blank row within `columns`."""
 
@@ -151,7 +180,7 @@ def detect_sheet_configs(sheet_name: str, rows: list[tuple]) -> tuple[list[Sheet
             continue
 
         row_width = max(len(rows[header_idx]), len(rows[header_idx + 1]) if header_idx + 1 < len(rows) else 0)
-        start_row = excel_header_row + 2
+        start_row = _first_data_row(rows, header_idx, no_col)
         end_row = None  # computed lazily, shared by every device in this section
 
         for position, (device_col, device_name) in enumerate(devices):

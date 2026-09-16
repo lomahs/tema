@@ -92,6 +92,63 @@ def test_detect_file_spans_the_rows_below_the_header(bare):
     assert (configs[0].start_row, configs[0].end_row) == (5, 6)
 
 
+def one_device_sheet(header_row, data_rows):
+    """A one-device sheet with its data rows placed exactly where asked.
+
+    The gap between a header row and the first case is not fixed in real
+    workbooks — some sheets carry a sub-header row, some start immediately,
+    some leave a spacer or two — so the tests below vary it.
+    """
+    cells = {
+        (header_row - 1, "C"): "Pad(Flex)",
+        (header_row, "A"): "No.", (header_row, "B"): "担当者",
+        (header_row, "C"): "結果", (header_row, "D"): "確認日",
+        (header_row, "E"): "確認者",
+        (header_row, "F"): "チケットNo.", (header_row, "G"): "備考",
+    }
+    for row in data_rows:
+        cells[(row, "A")] = f"TC-{row}"
+        cells[(row, "B")] = "FPT"
+        cells[(row, "C")] = "OK"
+    return cells
+
+
+def span(tmp_path, cells, name="TC.xlsx"):
+    path = write_workbook(tmp_path / name, None, {"Login": cells})
+    configs, _ = detect_file(path)
+    return configs[0].start_row, configs[0].end_row
+
+
+def test_detect_starts_on_the_first_case_when_it_sits_under_the_header(tmp_path):
+    """No sub-header, no spacer: row 4 is a case and must not be skipped."""
+    cells = one_device_sheet(header_row=3, data_rows=[4, 5, 6])
+
+    assert span(tmp_path, cells) == (4, 6)
+
+
+def test_detect_starts_on_the_first_case_below_a_wider_gap(tmp_path):
+    """Two spacer rows, not one. The span must not open above the data."""
+    cells = one_device_sheet(header_row=3, data_rows=[6, 7, 8])
+
+    assert span(tmp_path, cells) == (6, 8)
+
+
+def test_detect_steps_over_a_sub_header_row(tmp_path):
+    """The row under the header repeats "No." rather than numbering a case."""
+    cells = one_device_sheet(header_row=3, data_rows=[5, 6])
+    cells[(4, "A")] = "No."
+
+    assert span(tmp_path, cells) == (5, 6)
+
+
+def test_a_sheet_with_no_cases_gets_a_span_that_is_not_inverted(tmp_path):
+    """A header describing nothing yet still has to name a readable span."""
+    cells = one_device_sheet(header_row=3, data_rows=[])
+
+    start_row, end_row = span(tmp_path, cells)
+    assert start_row <= end_row
+
+
 # --- writing ---------------------------------------------------------------
 
 def test_write_adds_a_tool_data_sheet_a_workbook_lacked(bare):
