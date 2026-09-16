@@ -29,7 +29,7 @@
  * `summaryOverview.js` — it owns none of that state and re-renders on a
  * different trigger, so it is kept out of here.
  */
-import { $, esc } from "../dom.js";
+import { $, $$, esc } from "../dom.js";
 import { populateSelect, uniqueOf } from "../filters.js";
 import { groupPath, renderGroupedTable } from "../groupedTable.js";
 import { renderPageFooter } from "../pagination.js";
@@ -91,12 +91,33 @@ const noExpansion = new Set();
 const FILTERS = ["#summaryFilterDevice", "#summaryFilterFile"];
 
 /**
+ * Called with a file name when one is clicked.
+ *
+ * A file cell is a way into the file view, but this module must not import it —
+ * `main.js` owns the views, the same arrangement that keeps `views/detail.js`
+ * out of here for the Missing reason jump.
+ */
+let onOpenFile = () => {};
+
+/**
  * Wire the shared controls. Call once, at startup.
  *
  * They live in the static template, so unlike the sortable headers they are
  * never replaced and must only be bound a single time.
+ *
+ * @param {{onOpenFile?: (file: string) => void}} [opts] What to do when a file
+ *   name is clicked. This module does not know there is a file view.
  */
-export function initSummaryView() {
+export function initSummaryView({ onOpenFile: open = () => {} } = {}) {
+    onOpenFile = open;
+
+    // One listener for every table: the cards are regenerated per scope group
+    // on each render, and a file cell is the same link in all of them.
+    $("#summaryTables").addEventListener("click", (e) => {
+        const cell = e.target.closest("button[data-file]");
+        if (cell) onOpenFile(cell.dataset.file);
+    });
+
     FILTERS.forEach((sel) => $(sel).addEventListener("change", () => {
         paging.clear();
         render();
@@ -296,6 +317,68 @@ function render() {
     if (clearAll) clearAll.addEventListener("click", () => $("#btnClearSummaryFilters").click());
 
     present.forEach(({ scope, rows: r }, i) => renderTable(i, scope, r));
+    alignColumns();
+}
+
+/**
+ * Give every scope group's table the same column widths.
+ *
+ * Each card is its own `<table>`, so a browser sizes each one to its own
+ * content: FPT's File column is as wide as FPT's longest file name and JP's is
+ * as wide as JP's. The status bands then start at different offsets and stop
+ * lining up down the page — and the whole reason these are separate tables is
+ * that a reader compares them, which means reading down a column.
+ *
+ * So: let the browser size them naturally, measure what each column came out
+ * as, take the widest across the cards and pin every table to it. Measuring
+ * rather than choosing widths is what keeps this honest when the taxonomy
+ * changes — a status added in the Config view widens its column here the same
+ * way it widens a single table, and nothing has to be told how wide a column
+ * called "Pending (保留)" is.
+ *
+ * Pinning needs `table-layout: fixed`, under which the first row's widths
+ * govern the whole table, so the header cells are the only ones set. The
+ * container is rebuilt on every `render`, so the measurement is always of
+ * freshly auto-sized tables and never of the last pass's pinned ones.
+ *
+ * A hidden view measures as zero — `render` runs before `showView` on the load
+ * path — so this bails rather than pinning every column to nothing, and
+ * `main.js` calls `alignSummaryColumns` when the view is shown. That is the
+ * same arrangement `resizeCharts` needs and for the same reason.
+ */
+function alignColumns() {
+    const tables = [...$$("#summaryTables table.ledger")];
+    if (tables.length < 2) return;   // one table is already consistent with itself
+    if (!tables[0].offsetParent) return;   // hidden: nothing has a width yet
+
+    const widths = [];
+    tables.forEach((table) => {
+        [...table.tHead.rows[0].cells].forEach((cell, i) => {
+            widths[i] = Math.max(widths[i] || 0, Math.ceil(cell.getBoundingClientRect().width));
+        });
+    });
+
+    const total = widths.reduce((a, w) => a + w, 0);
+    tables.forEach((table) => {
+        table.style.tableLayout = "fixed";
+        // Stated explicitly: a fixed-layout table left to size itself is not
+        // obliged to add its columns up, and the pane's `overflow` still wants
+        // something definite to decide whether it has to scroll.
+        table.style.width = `${total}px`;
+        [...table.tHead.rows[0].cells].forEach((cell, i) => {
+            cell.style.width = `${widths[i]}px`;
+        });
+    });
+}
+
+/**
+ * Align the tables now that they can be measured.
+ *
+ * `main.js` calls this when Summary is shown: the load path renders while the
+ * view is still hidden, where every column measures zero.
+ */
+export function alignSummaryColumns() {
+    alignColumns();
 }
 
 /** One scope group's rows at the granularity the Rows button is set to. */
@@ -343,7 +426,13 @@ function renderTable(i, scope, rows) {
         expanded: noExpansion,
         // Every row stands on its own: both identity columns are filled in, so
         // a copied selection is complete without the header above it.
-        renderLabelCells: (r) => `<td>${esc(r.file)}</td><td>${esc(r.device)}</td>`,
+        // The file name is the way into that workbook's own page. A name is
+        // plain text with no separator to lose, so unlike a group path it can
+        // ride in the attribute; `esc` covers the quoting.
+        renderLabelCells: (r) =>
+            `<td><button type="button" class="cell-link" data-file="${esc(r.file)}"`
+            + ` title="Open ${esc(r.file)}">${esc(r.file)}</button></td>`
+            + `<td>${esc(r.device)}</td>`,
         labelCols: 2,
         renderValues: (r) => statusCells(r, { blankZeros: true }) + progressCell(r),
         onToggle: () => {},

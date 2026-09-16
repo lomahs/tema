@@ -243,6 +243,34 @@ def get_summary():
                     "device_families": DEVICES.to_dict()["families"]})
 
 
+@api.route("/api/file")
+def get_file():
+    """GET /api/file?name=<basename> — one workbook, sheet by sheet.
+
+    The drill-in behind a file name, and the one read endpoint that is *not*
+    about everything loaded. It reports every scope group, including one the
+    plan excludes, because the page draws a Scope column and a Scope filter —
+    see `aggregate.file_rows`. That makes its coverage Summary's rather than
+    Review's, so the figures here can legitimately exceed Review's.
+
+    The name is a query parameter rather than a path segment because workbook
+    names carry spaces and Japanese, and `?name=` keeps the escaping the
+    browser's business rather than the router's.
+
+    A name nothing loaded answers to is a 404: the reader followed a link to a
+    file this source does not have, and an empty table would read as a workbook
+    with no cases in it.
+    """
+    name = request.args.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "No file name given."}), 400
+
+    data = aggregate.file_rows(_data["cases"], name)
+    if not data["cases"]:
+        return jsonify({"error": f"No loaded file is called {name}."}), 404
+    return jsonify(data)
+
+
 @api.route("/api/daily")
 def get_daily():
     """Stats grouped by file, device, PIC, and test_date."""

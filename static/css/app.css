@@ -1478,3 +1478,41 @@ textarea.input {
 /* Seven columns and two buttons a row: wider than half the Tools grid, and a
    clipped "Clear results" reads as broken rather than as scrollable. */
 #sourceSection { grid-column: 1 / -1; }
+
+/* --- the file view -------------------------------------------------------- */
+/* A drill-in, so it carries its own way out: nothing in the rail is lit while
+   it is showing, and the Back button names the view the reader came from. */
+.file-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+}
+
+/* A file name that opens that workbook's page. Text, not a button: it sits in a
+   ledger cell, and a control drawn inside a run of figures reads as noise. The
+   underline is what says it is a way somewhere — there is no accent colour to
+   say it with, and colour on screen means status. */
+.cell-link {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--rule-strong);
+    text-underline-offset: 3px;
+}
+.cell-link:hover { text-decoration-color: var(--ink); }
+.cell-link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* A status left out of the total keeps its card, marked the way its column and
+   its scope chip are — one dashed rule saying "counted, but not in the sum". */
+.stat--aside {
+    border-style: dashed;
+    border-color: var(--rule-strong);
+    background: none;
+}

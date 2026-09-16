@@ -42,7 +42,9 @@ let actionsEnabled = false;
 /**
  * Wire up the table. Call once, at startup.
  * @param {Object} opts
- * @param {(path: string, action: "tool-data"|"clear") => void} opts.onAction
+ * @param {(path: string, action: "tool-data"|"clear"|"open", file: string) => void}
+ *   opts.onAction  `"open"` is the file name itself, which is navigation rather
+ *   than something done to the workbook; the panels handle the other two.
  */
 export function initFilesTable({ onAction: action }) {
     wrapper = $("#sourceFilesWrapper");
@@ -58,7 +60,11 @@ export function initFilesTable({ onAction: action }) {
         // not a lossless channel, and a path is the one thing here that has to
         // survive a click intact.
         const entry = rows()[Number(btn.dataset.row)];
-        if (entry) onAction(entry.path, btn.dataset.act);
+        // The basename rides along with the path: the row actions write to a
+        // workbook and need the path, while opening its page needs the name the
+        // cases are keyed by, and deriving one from the other at the far end
+        // would put that rule in two places.
+        if (entry) onAction(entry.path, btn.dataset.act, entry.file);
     });
 }
 
@@ -165,6 +171,20 @@ function actionCell(prepare, index) {
     </td>`;
 }
 
+/**
+ * The file name, as a way into that workbook's own page.
+ *
+ * Only for a workbook the loader actually read: a file that failed to load has
+ * no cases, so its page would be an empty table explaining nothing. That one
+ * stays plain text, with the error already beside it.
+ */
+function nameCell(entry, index) {
+    const loaded = entry.load && entry.load.status === "OK";
+    if (!loaded) return `<td class="clip" title="${esc(entry.path)}">${esc(entry.file)}</td>`;
+    return `<td class="clip"><button type="button" class="cell-link" data-act="open"`
+         + ` data-row="${index}" title="Open ${esc(entry.file)}">${esc(entry.file)}</button></td>`;
+}
+
 /** Draw the table, or hide it when there is nothing in it. */
 function render() {
     const entries = rows();
@@ -172,7 +192,7 @@ function render() {
 
     body.innerHTML = entries.map((entry, index) => `<tr>
         <td class="num muted">${index + 1}</td>
-        <td class="clip" title="${esc(entry.path)}">${esc(entry.file)}</td>
+        ${nameCell(entry, index)}
         ${loadCells(entry.load)}
         ${toolDataCell(entry.prepare)}
         ${actionCell(entry.prepare, index)}

@@ -5,7 +5,7 @@
  * parsed and the Chart.js global is available before anything here executes.
  */
 import { $ } from "./dom.js";
-import { fetchAll, postReload } from "./api.js";
+import { fetchAll, getFile, postReload } from "./api.js";
 import { refreshChartTheme, resizeCharts } from "./charts.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import {
@@ -17,7 +17,10 @@ import { initPreparePanel, refreshPrepare, runFileAction } from "./preparePanel.
 import { initFilesTable } from "./filesTable.js";
 import { initConfigView } from "./views/config.js";
 import { getReviewStatuses, renderStatCards, setTaxonomy } from "./taxonomy.js";
-import { initSummaryView, renderSummary } from "./views/summary.js";
+import { alignSummaryColumns, initSummaryView, renderSummary } from "./views/summary.js";
+import {
+    currentFile, initFileView, renderFileHeads, showFile,
+} from "./views/file.js";
 import { setJumpHandler } from "./views/summaryOverview.js";
 import { initDaily, initDailyView, renderDailyHead } from "./views/daily.js";
 import {
@@ -60,6 +63,13 @@ const VIEWS = {
                 : "Open work only.";
         },
     },
+    file: {
+        // The only title that is not a constant: this view is about a subject
+        // the reader picked, so the heading is that subject.
+        title: () => openFileName || "File",
+        sub: () => "Every case in this workbook, sheet by sheet. Includes scope groups "
+                 + "outside the plan, so its figures can exceed Review's.",
+    },
     tools: {
         title: "Tools",
         sub: () => "Where the cases come from, what gets written back to the workbooks, "
@@ -83,19 +93,68 @@ const VIEWS = {
 let lastLoad = null;
 
 /**
+ * The workbook the file view has open, and the view to go back to.
+ *
+ * Held here rather than in `views/file.js` because it is navigation: this module
+ * owns which view is showing, and the back button names wherever the reader
+ * came from — a file opened from Tools returns to Tools, not to Summary.
+ */
+let openFileName = "";
+let fileOrigin = "summary";
+
+/**
+ * A view's heading. Constant for every view but the file one, whose subject is
+ * whichever workbook was clicked.
+ * @param {keyof VIEWS} view
+ * @returns {string}
+ */
+function titleOf(view) {
+    const t = VIEWS[view].title;
+    return typeof t === "function" ? t() : t;
+}
+
+/**
  * Show one view and hide the others.
  * @param {keyof VIEWS} view
  */
 function showView(view) {
     Object.keys(VIEWS).forEach((v) => { $(`#${v}View`).hidden = v !== view; });
     setActiveView(view);
-    setPageHead(VIEWS[view].title, VIEWS[view].sub());
+    setPageHead(titleOf(view), VIEWS[view].sub());
     // Back to the top. The rail is the only fixed thing on screen now, so a
     // view change that kept the scroll position landed the reader halfway down
     // a table they had not seen the head of.
     window.scrollTo({ top: 0 });
     // Chart.js sizes to the container, which is 0x0 while the view is hidden.
     if (view === "detail") resizeCharts();
+    // Summary's tables are measured against each other so their columns line
+    // up, and a hidden table measures zero — same reason, same moment.
+    if (view === "summary") alignSummaryColumns();
+}
+
+/**
+ * Open the file view on one workbook.
+ *
+ * The only view fetched on demand: its data is one file, so pulling it with
+ * every load would carry per-sheet rows and every case of every workbook
+ * whether or not anybody clicked one.
+ *
+ * A 404 means the source changed under the reader — a workbook cleared and
+ * reloaded, say — so the link they followed no longer names anything. Leaving
+ * them where they are is the honest answer; the file list they clicked from is
+ * about to be redrawn anyway.
+ *
+ * @param {string} name Basename of the workbook, as the rows spell it.
+ * @param {keyof VIEWS} origin The view clicked from, which the Back button names.
+ */
+async function openFile(name, origin) {
+    const { ok, json } = await getFile(name);
+    if (!ok) return;
+
+    openFileName = name;
+    fileOrigin = origin;
+    showFile(json, { backTo: titleOf(origin) });
+    showView("file");
 }
 
 /**
@@ -122,6 +181,7 @@ async function refreshViews(loadResult, { show = true } = {}) {
     renderProductivityHead();
     renderDetailHead();
     renderResultToggles();
+    renderFileHeads();
 
     initDetail(cases);
     // Summary's overview reports the last day anyone tested, which lives in the
@@ -138,6 +198,21 @@ async function refreshViews(loadResult, { show = true } = {}) {
     setNavEnabled(true);
 
     if (show) showView("summary");
+
+    // The file view is the one view `fetchAll` cannot redraw, because its data
+    // is a single workbook fetched on demand. Re-pull it so a reload or a
+    // taxonomy edit reaches the page the reader is actually looking at. Its
+    // filters reset deliberately: a config save can remove the very status
+    // their card had pressed.
+    if (openFileName) {
+        const { ok, json } = await getFile(openFileName);
+        if (ok) showFile(json, { backTo: titleOf(fileOrigin) });
+        else {
+            // The workbook is no longer in the source at all.
+            openFileName = "";
+            if (!$("#fileView").hidden) showView("summary");
+        }
+    }
 
     // The prepare panel works from the loaded source's file list, so it only
     // has something to show once a load has succeeded.
@@ -183,16 +258,23 @@ setJumpHandler((view, filter) => {
     if (filter === "missing") showMissingReason();
     showView(view);
 });
+// Clicking a file name is navigation, so it comes back through here rather than
+// either module importing the file view: `views/summary.js` and `filesTable.js`
+// report the name, this decides what to do with it and what Back should say.
+initFileView({ onBack: () => showView(fileOrigin) });
 initSourcePanel({ onLoaded: refreshViews });
 initReportPanel();
 initPreparePanel({ onApplied: reloadAfterPrepare });
 // The two Tools panels share one table of workbooks; it reports a pressed row
 // button to whichever of them owns that action.
-initFilesTable({ onAction: runFileAction });
+initFilesTable({
+    onAction: (path, action, file) =>
+        (action === "open" ? openFile(file, "tools") : runFileAction(path, action)),
+});
 initConfigView({ onSaved: refreshAfterConfigSave });
 initDetailView();
 initDailyView();
-initSummaryView();
+initSummaryView({ onOpenFile: (name) => openFile(name, "summary") });
 initProductivityView();
 
 // Nothing is loaded yet, so the only view that can answer anything is Tools.

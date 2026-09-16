@@ -23,25 +23,11 @@ import { populateSelect, uniqueOf } from "../filters.js";
 import { renderGroupedTable, toggleGroup } from "../groupedTable.js";
 import { renderPageFooter } from "../pagination.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortGrouped, sortRows } from "../sorting.js";
-import { getReviewStatuses, isExcluded, isReview, requiresReason, toneFor } from "../taxonomy.js";
+import {
+    getReviewStatuses, isExcluded, isReview, lacksReason, toneFor,
+} from "../taxonomy.js";
 
 const PAGE_SIZE = 50;
-
-/**
- * A case whose status obliges the tester to record a ticket id or a note, and
- * which carries neither.
- *
- * The same predicate marks the cells red and drives the Missing reason filter,
- * and it is the browser-side twin of what `/api/summary` reports under
- * `missing_reason`. Which statuses oblige an explanation is the taxonomy's
- * business — `needs_reason` in `parser/result_status.json` — never named here.
- *
- * @param {Object} d A case row.
- * @returns {boolean}
- */
-function lacksReason(d) {
-    return requiresReason(d.status) && !d.ticket_id && !d.note;
-}
 
 /** Groups per page once grouping is on. */
 const GROUP_PAGE_SIZE = 8;

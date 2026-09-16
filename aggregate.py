@@ -127,6 +127,79 @@ def summary_rows(cases, by_scope=False):
     return groups, missing_reason
 
 
+
+def file_rows(cases, file_name):
+    """One workbook, read sheet by sheet: the drill-in behind a file name.
+
+    Summary answers "how do the files compare"; this answers "what is in this
+    one". So it is `summary_rows(by_scope=True)` cut once more, by the sheet each
+    case was read from — a file's sheet rows add up to its Summary rows, which
+    `tests/test_aggregate.py` asserts directly, the same property that stops the
+    scope rows and the unscoped ones drifting.
+
+    Two things differ from every other aggregate here, and both follow from the
+    page being *about one file* rather than about progress:
+
+    - **Every scope group is kept, including one the plan excludes.** `daily_rows`,
+      `productivity_rows` and `issue_rows` all run through `in_plan` because a
+      figure read as progress must not count work nobody committed to. This page
+      draws a Scope column and a Scope filter, and a filter whose only option is
+      FPT is not one. Summary keeps excluded groups for the same reason.
+    - **Sheets stay in the order the workbook names them**, not alphabetically,
+      so the table reads alongside the file's own tabs — the reasoning behind
+      `issue_rows` keeping source order. Within a sheet, rows follow the scope
+      group order the config file sets (the fallback last, as always) and then
+      the device name. The view's sortable headers reorder from there.
+
+    `total` keeps the meaning it has everywhere else: the sum of `STATUS.counted`,
+    so an excluded status such as Out Of Scope gets its column but cannot inflate
+    the denominator.
+
+    Args:
+        cases: The loaded `TestCase` list — every file, as the store holds it.
+        file_name: Basename of the workbook to report on. A basename, not a path,
+            because that is what a `TestCase` carries and how Summary and Daily
+            already key a file; two workbooks of the same name in different
+            folders merge here exactly as they merge there.
+
+    Returns:
+        `{"file", "rows", "cases"}`. `cases` is that file's cases in source
+        order, each a plain dict carrying the `status` it classified as and the
+        `scope_group` it belongs to, so the view can list and filter them
+        without a second round trip. An unknown file gives
+        empty lists rather than an error: the aggregate reports what is loaded,
+        and whether that is worth a 404 is the endpoint's business.
+    """
+    mine = [c for c in cases if c.file_name == file_name]
+
+    sheet_order = {}
+    for c in mine:
+        sheet_order.setdefault(c.sheet, len(sheet_order))
+    scope_order = {key: i for i, key in enumerate(SCOPES.keys)}
+
+    def key_fn(c):
+        return (c.sheet, SCOPES.classify(c.scope), c.device)
+
+    rows = [
+        {"sheet": sheet, "scope": scope, "device": device,
+         "device_family": DEVICES.classify(device),
+         "total": _counted_total(counts), **counts}
+        for (sheet, scope, device), _group, counts in _group_counts(mine, key_fn)
+    ]
+    rows.sort(key=lambda r: (sheet_order[r["sheet"]], scope_order[r["scope"]], r["device"]))
+
+    return {
+        "file": file_name,
+        "rows": rows,
+        # `scope_group` rides along beside the raw Scope for the reason
+        # `device_family` does: the rows above are keyed by group, so a page
+        # filtering rows by group and cases by the string in the cell would be
+        # filtering its two halves through two different vocabularies.
+        "cases": [{**c.to_dict(), "status": STATUS.classify_case(c),
+                   "scope_group": SCOPES.classify(c.scope)} for c in mine],
+    }
+
+
 def daily_rows(cases):
     """Stats grouped by file, device, PIC, and test_date.
 

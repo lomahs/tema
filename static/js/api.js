@@ -84,6 +84,22 @@ export async function fetchAll() {
 }
 
 /**
+ * One workbook, sheet by sheet: the drill-in behind a file name.
+ *
+ * Deliberately not part of {@link fetchAll}. Every load would otherwise carry
+ * per-sheet rows and every case of every file whether or not anybody opened
+ * one; fetched here, the cost is proportional to the file actually clicked.
+ *
+ * @param {string} name Basename of the workbook, as the rows spell it.
+ * @returns {Promise<ApiResponse>} On success `json` is `{file, rows, cases}`;
+ *   a name nothing loaded answers to is a 404 with `{error}`.
+ */
+export async function getFile(name) {
+    const res = await fetch(`/api/file?name=${encodeURIComponent(name)}`);
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
  * The result taxonomy on its own.
  *
  * `fetchAll` also pulls it, but the prepare panel needs its status keys before

@@ -213,14 +213,29 @@ export function statusHeadCells(th) {
 }
 
 /**
- * Build the detail view's stat cards: the review total, one per review status,
- * then Files.
+ * Build a strip of stat cards: a total, one per status, then any inert cards.
  *
- * Only the review statuses, because those are the only cases Review holds — a
- * card reading "OK 0" would be a permanent, meaningless zero. The first card is
- * labelled "To review" rather than "Total" for the same reason: it counts the
- * cases on this screen, which is deliberately not the Total that Summary
- * reports, and two figures both called Total would read as a bug.
+ * Defaults to Review's strip — the review statuses only, because those are the
+ * only cases Review holds, and a card reading "OK 0" would be a permanent,
+ * meaningless zero. Its first card is labelled "To review" rather than "Total"
+ * for the same reason: it counts the cases on that screen, which is deliberately
+ * not the Total that Summary reports, and two figures both called Total would
+ * read as a bug.
+ *
+ * The file page passes the whole taxonomy and its own labels instead: it reports
+ * on one workbook, where every status is a real bucket someone may want to see.
+ * A status the taxonomy excludes from the total is marked `stat--aside`, the
+ * card-strip form of the dashed rule the status band draws.
+ *
+ * @param {Object} [opts]
+ * @param {string} [opts.container] Selector for the strip.
+ * @param {Status[]} [opts.statuses] Which statuses get a card.
+ * @param {string} [opts.totalLabel] Label for the leading card, which clears the
+ *   status choice rather than setting one.
+ * @param {string} [opts.totalId] Element id for the leading card's figure.
+ * @param {string} [opts.idPrefix] Prefixed to each status key to make its id.
+ * @param {Array<{label: string, id: string}>} [opts.inert] Cards that report
+ *   something no status filter can express, and so are not buttons.
  *
  * **They are controls, not readouts.** Each card filters the table to its own
  * status, and the first clears that filter — the design's tab row, which is the
@@ -230,21 +245,48 @@ export function statusHeadCells(th) {
  *
  * {@link setTaxonomy} must have run first.
  */
-export function renderStatCards() {
-    const cell = (label, id, tone, status) => `
-        <button type="button" class="stat" data-status-card="${esc(status)}"
-                aria-pressed="false">
+export function renderStatCards({
+    container = "#statsRow",
+    statuses: list = getReviewStatuses(),
+    totalLabel = "To review",
+    totalId = "statTotal",
+    idPrefix = "stat-",
+    inert = [{ label: "Files", id: "statFiles" }],
+} = {}) {
+    const cell = (label, id, tone, status, aside) => `
+        <button type="button" class="stat${aside ? " stat--aside" : ""}"
+                data-status-card="${esc(status)}" aria-pressed="false">
             <span class="stat-label">${esc(label)}</span>
             <span class="stat-value"${tone ? ` data-tone="${esc(tone)}"` : ""} id="${esc(id)}">0</span>
         </button>`;
 
-    $("#statsRow").innerHTML = cell("To review", "statTotal", "", "")
-        + getReviewStatuses()
-            .map((s) => cell(s.label, `stat-${s.key}`, toneFor(s.key), s.key)).join("")
+    $(container).innerHTML = cell(totalLabel, totalId, "", "", false)
+        + list.map((s) => cell(s.label, `${idPrefix}${s.key}`, toneFor(s.key), s.key,
+                               isExcluded(s.key))).join("")
         // Files is a fact about the selection, not a status anyone can filter
         // to, so it is the one card that stays inert.
-        + `<div class="stat stat--inert">
-               <span class="stat-label">Files</span>
-               <span class="stat-value" id="statFiles">0</span>
-           </div>`;
+        + inert.map((c) => `<div class="stat stat--inert">
+               <span class="stat-label">${esc(c.label)}</span>
+               <span class="stat-value" id="${esc(c.id)}">0</span>
+           </div>`).join("");
+}
+
+
+/**
+ * A case whose status obliges the tester to record a ticket id or a note, and
+ * which carries neither.
+ *
+ * The same predicate marks the Ticket ID and Note cells red and drives every
+ * Missing reason filter, and it is the browser-side twin of what `/api/summary`
+ * reports under `missing_reason`. It lives here, with the taxonomy it reads,
+ * because two views ask it now — Review and the file page — and two copies of
+ * this rule is exactly how they would come to disagree. Which statuses oblige
+ * an explanation stays `needs_reason` in `parser/result_status.json`, never
+ * named in the JS.
+ *
+ * @param {Object} d A case row carrying `status`, `ticket_id` and `note`.
+ * @returns {boolean}
+ */
+export function lacksReason(d) {
+    return requiresReason(d.status) && !d.ticket_id && !d.note;
 }

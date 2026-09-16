@@ -191,6 +191,23 @@ view shows — is already net of them. Filtering later, per view, is what would 
 count and Summary's total disagree. `SCOPES.classify` stays total and still maps a blank onto the
 fallback, so no caller can manufacture a case belonging to no table; it simply never sees one.
 
+**`file_rows(cases, file_name)` is Summary cut one level finer, and the only aggregate that
+keeps work outside the plan.** It groups one workbook by (sheet, scope, device), which is
+`summary_rows(by_scope=True)` with the sheet added, so a file's sheet rows add up to its
+Summary rows — `tests/test_aggregate.py` asserts it directly, the same property that pins the
+scope rows to the unscoped one. Two things differ from every other aggregate, and both follow
+from the page being *about one workbook* rather than about progress: it does not run through
+`in_plan`, because the file page draws a Scope column and a Scope filter and a filter whose
+only option is FPT is not one; and its sheets stay in the order the workbook names them rather
+than sorted, the way `issue_rows` keeps source order, so the table reads alongside the file's
+own tabs. It returns that file's cases too, each carrying the `status` it classified as and
+the `scope_group` it belongs to — `scope_group` rides along for the reason `device_family`
+does, so the page filters its rows and its cases through one vocabulary instead of two.
+`/api/file?name=<basename>` is the `jsonify` wrapper; the name is a query parameter because
+workbook names carry spaces and Japanese, and a name nothing loaded answers to is a 404. It is
+deliberately **not** part of `fetchAll`: fetched on demand, its cost is the one file clicked
+rather than every case of every workbook on every load.
+
 `summary_rows(cases, by_scope=False)` is one function serving two granularities. `/api/summary`
 passes `by_scope=True` and each row gains a `scope` key; the report publisher does not, so its
 sheet keeps one row per (file, device) and the SharePoint workbook needs no new column. They
@@ -265,12 +282,22 @@ which forgets it on reload — a standing figure retyped every morning is how it
 `planFor(members)` returns 0 when nobody worked, so a day with no named PIC has no plan rather
 than a plan of zero it can never meet.
 
-**The shell is a rail and six views.** `shell.js` owns the dark sidebar — nav, the loaded-source
+**The shell is a rail and seven views, one of which is not in the rail.** `shell.js` owns the dark sidebar — nav, the loaded-source
 card, the two counts it carries, and the page heading — and nothing else; it does not know what a
 view contains, so `main.js` hands it an `onNavigate` callback and it reports clicks back through
 that. `main.js` owns `VIEWS`, which is the single list of what exists: Summary, Daily,
-Productivity, Review, Tools and Config. Adding a view means adding an entry there and a
-`<section class="view" id="<name>View">`, and nothing else. `ALWAYS_ENABLED` in `shell.js` is the
+Productivity, Review, File, Tools and Config. Adding a view means adding an entry there and a
+`<section class="view" id="<name>View">`, and nothing else.
+
+**File is the one view with no nav item.** It is a drill-in: it reports on a workbook you
+picked, so it is entered by clicking a file name and left through the Back button it draws
+itself, and nothing in the rail is lit while it shows. That is also why its `title` is a
+function rather than a string — the heading is the workbook — and why `main.js`, which owns
+navigation, holds the open file name and the view to go back to rather than `views/file.js`
+holding them. Two places name a file: Summary's File cells and the Tools table. Neither
+imports the file view; each reports the name back through a callback (`onOpenFile`, and
+`filesTable`'s existing `onAction` with an `"open"` action), the same rule that keeps
+`views/detail.js` out of `views/summary.js`. `ALWAYS_ENABLED` in `shell.js` is the
 other half of that list: Tools and Config answer something with nothing loaded, so they are never
 disabled, and the four data views are.
 
@@ -408,10 +435,11 @@ Behavior worth preserving when touching the UI:
   that navigates is not a reason to put the import back. A card may also name a *filter*
   (`data-filter`), which `main.js` translates into a call on whichever module owns that view's
   state — `showMissingReason()` in `views/detail.js`.
-- **`lacksReason(d)` in `views/detail.js` is the one definition of "owes a reason and has
+- **`lacksReason(d)` in `taxonomy.js` is the one definition of "owes a reason and has
   none"**: `requiresReason(status) && !ticket_id && !note`. It paints the Ticket ID and Note
   cells red *and* drives the Missing reason filter, and it is the browser-side twin of what
-  `/api/summary` computes for `missing_reason`. Which statuses oblige an explanation stays the
+  `/api/summary` computes for `missing_reason`. It lives with the taxonomy it reads because
+  Review and the file page both ask it, and two copies is how they would come to disagree. Which statuses oblige an explanation stays the
   taxonomy's business (`needs_reason`), never named in the JS. The filter is a **condition, not a
   status choice** — it narrows within whatever results are chosen, so it lives beside the Result
   toggles and is applied to `conditioned`, which is why the status cards keep counting correctly
@@ -442,7 +470,7 @@ Behavior worth preserving when touching the UI:
 
 **Aggregation is shared, not owned by the routes.** [aggregate.py](aggregate.py) holds
 `summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` as plain functions over
-`TestCase` lists. The four GET endpoints are `jsonify` wrappers around them, and the report
+`TestCase` lists. The five GET endpoints are `jsonify` wrappers around them, and the report
 publisher calls the same functions — so the numbers on screen and the numbers in the
 SharePoint report cannot drift. Put new aggregation here, not in a route.
 

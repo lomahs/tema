@@ -307,6 +307,73 @@
             </section>
         </section>
 
+        <!-- ==================== File ====================
+             The drill-in behind a file name, and the only view not in the rail:
+             it is about a subject you pick first, so it is entered by clicking a
+             file and left through the Back button it draws itself. Unlike
+             Review it reports every scope group, including one the plan
+             excludes — the Scope filter is half the point of the page. -->
+        <section class="view" id="fileView" hidden>
+            <div class="file-bar">
+                <button class="btn btn-quiet" id="btnFileBack">&lsaquo; Back</button>
+            </div>
+
+            <!-- Controls, not readouts, like Review's: each card narrows both
+                 tables to its own status and the first clears that choice.
+                 Built from the whole taxonomy in `renderFileHeads` — on one
+                 workbook every status is a real bucket, so unlike Review none
+                 of them is a permanent zero. -->
+            <div class="stats" id="fileStatsRow"></div>
+
+            <div class="toolbar">
+                <div class="field">
+                    <label for="fileFilterScope">Scope</label>
+                    <select id="fileFilterScope" class="select"><option value="">All scopes</option></select>
+                </div>
+                <button class="btn" id="btnClearFileFilters">Clear</button>
+            </div>
+
+            <section class="card card--table">
+                <div class="card-head card-head--row">
+                    <h2>By sheet</h2>
+                </div>
+                <div class="scroll-x scroll-x--flush scroll-x--rows">
+                    <table class="ledger">
+                        <thead><tr id="fileSheetHead"></tr></thead>
+                        <tbody id="fileSheetBody"></tbody>
+                        <tfoot id="fileSheetFoot"></tfoot>
+                    </table>
+                </div>
+                <div class="card-foot" id="fileSheetFooter"></div>
+            </section>
+
+            <!-- The work outstanding in this workbook, drawn the way Review
+                 draws it: a case owing a ticket or a note and carrying neither
+                 has both cells painted red, by the same predicate the button
+                 above counts with. -->
+            <section class="card card--table">
+                <div class="card-head card-head--row">
+                    <h2 id="fileCasesTitle">Open work</h2>
+                    <!-- The same control Review draws, so it is the same
+                         `toggle` with the same tone: one condition, one
+                         appearance. The count rides in the label rather than in
+                         a pill, which would be ink on ink once pressed. -->
+                    <button type="button" class="toggle" id="btnFileMissingReason"
+                            aria-pressed="false" data-tone="danger"
+                            title="Only cases that owe a ticket id or a note and carry neither">
+                        Missing reason
+                    </button>
+                </div>
+                <div class="scroll-x scroll-x--flush scroll-x--rows">
+                    <table class="ledger">
+                        <thead><tr id="fileCaseHead"></tr></thead>
+                        <tbody id="fileCaseBody"></tbody>
+                    </table>
+                </div>
+                <div class="card-foot" id="fileCaseFooter"></div>
+            </section>
+        </section>
+
         <!-- ==================== Tools ====================
              Where the data comes from, what gets written back to the workbooks,
              and where the report goes. This was a drawer; it is a view now, and

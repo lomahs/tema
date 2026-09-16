@@ -8,6 +8,7 @@ import pytest
 
 import aggregate
 from parser import models
+from parser.scope import SCOPES
 
 
 def case(**kwargs):
@@ -360,3 +361,140 @@ def test_summary_rows_still_report_an_excluded_scope(jp_is_not_in_the_plan):
 
     assert sorted(r["scope"] for r in rows) == ["FPT", "JP"]
     assert all(r["total"] == 1 for r in rows)
+
+
+# --- One workbook, read sheet by sheet -------------------------------------
+#
+# `file_rows` is Summary one level finer: the same (scope, device) split, cut
+# again by the sheet each case was read from. It answers a different question --
+# "what is in this file" rather than "how do the files compare" -- so unlike
+# `daily_rows` and `issue_rows` it keeps every scope group, including one the
+# plan excludes. A Scope column that could only ever say FPT would not be one.
+
+
+def test_file_rows_group_by_sheet_scope_and_device():
+    data = aggregate.file_rows([
+        case(sheet="Login", scope="FPT", result="OK"),
+        case(sheet="Login", scope="FPT", result="NG", device="iPad"),
+        case(sheet="Login", scope="JP", result="OK", row_num=5),
+        case(sheet="Search", scope="FPT", result="OK"),
+    ], "TC.xlsx")
+
+    assert [(r["sheet"], r["scope"], r["device"], r["total"]) for r in data["rows"]] == [
+        ("Login", "FPT", "iPad", 1),
+        ("Login", "FPT", "iPhone", 1),
+        ("Login", "JP", "iPhone", 1),
+        ("Search", "FPT", "iPhone", 1),
+    ]
+
+
+def test_file_rows_hold_only_the_file_asked_for():
+    data = aggregate.file_rows([
+        case(file_name="TC.xlsx", result="OK"),
+        case(file_name="Other.xlsx", result="NG"),
+    ], "TC.xlsx")
+
+    assert data["file"] == "TC.xlsx"
+    assert [r["total"] for r in data["rows"]] == [1]
+    assert [c["file_name"] for c in data["cases"]] == ["TC.xlsx"]
+
+
+def test_file_rows_keep_the_sheets_in_the_order_the_workbook_names_them():
+    """Not alphabetical: the table should read alongside the file's own tabs."""
+    data = aggregate.file_rows([
+        case(sheet="Payment", scope="FPT", result="OK"),
+        case(sheet="Login", scope="FPT", result="OK"),
+        case(sheet="Account", scope="FPT", result="OK"),
+    ], "TC.xlsx")
+
+    assert [r["sheet"] for r in data["rows"]] == ["Payment", "Login", "Account"]
+
+
+def test_the_sheet_rows_of_a_file_add_up_to_its_summary_rows():
+    """The property that stops this page disagreeing with Summary."""
+    cases = [
+        case(sheet="Login", scope="FPT", result="OK"),
+        case(sheet="Login", scope="JP", result="NG", row_num=5),
+        case(sheet="Search", scope="FPT", result="保留", row_num=6),
+        case(sheet="Search", scope="FPT", result=None, row_num=7),
+        case(sheet="Search", scope="JP", result="対象外", pic=None, row_num=8),
+    ]
+
+    summary, _ = aggregate.summary_rows(cases, by_scope=True)
+    rows = aggregate.file_rows(cases, "TC.xlsx")["rows"]
+
+    for want in summary:
+        mine = [r for r in rows if r["scope"] == want["scope"] and r["device"] == want["device"]]
+        assert sum(r["total"] for r in mine) == want["total"]
+        for key in aggregate.STATUS.keys:
+            assert sum(r[key] for r in mine) == want[key]
+
+
+def test_file_rows_report_a_scope_group_outside_the_plan(jp_is_not_in_the_plan):
+    """Unlike Daily and Review: the Scope filter is half the point of the page."""
+    data = aggregate.file_rows([
+        case(scope="FPT", result="OK"),
+        case(scope="JP", result="OK", row_num=5),
+    ], "TC.xlsx")
+
+    assert [r["scope"] for r in data["rows"]] == ["FPT", "JP"]
+    assert [c["scope"] for c in data["cases"]] == ["FPT", "JP"]
+
+
+def test_an_out_of_scope_case_is_counted_in_its_column_but_not_in_a_sheet_total():
+    data = aggregate.file_rows([
+        case(scope="FPT", result="OK"),
+        case(scope="FPT", result="対象外", pic=None, row_num=5),
+    ], "TC.xlsx")
+
+    row = data["rows"][0]
+    assert row["OOS"] == 1
+    assert row["total"] == 1, "a case outside the plan cannot inflate the denominator"
+
+
+def test_every_file_case_carries_the_status_it_was_classified_as():
+    """Derived statuses included -- the row, not the Result cell, decides."""
+    data = aggregate.file_rows([
+        case(case_no="TC-1", scope="FPT", result="対象外", pic="lee"),
+        case(case_no="TC-2", scope="FPT", result="対象外", pic=None, row_num=5),
+    ], "TC.xlsx")
+
+    assert [(c["case_no"], c["status"]) for c in data["cases"]] == [
+        ("TC-1", "Cancel"), ("TC-2", "OOS"),
+    ]
+
+
+def test_every_file_row_names_the_device_family_it_belongs_to():
+    data = aggregate.file_rows([
+        case(device="iPhone Min size", result="OK"),
+        case(device="iPhone Max size", result="NG"),
+        case(device="Android 14", result="OK"),
+    ], "TC.xlsx")
+
+    assert {r["device"]: r["device_family"] for r in data["rows"]} == {
+        "iPhone Min size": "iPhone",
+        "iPhone Max size": "iPhone",
+        "Android 14": "Android 14",
+    }
+
+
+def test_an_unknown_file_has_no_rows_and_no_cases():
+    data = aggregate.file_rows([case(result="OK")], "Nope.xlsx")
+
+    assert data == {"file": "Nope.xlsx", "rows": [], "cases": []}
+
+
+def test_every_file_case_names_the_scope_group_it_was_classified_into():
+    """The rows are keyed by group and the cases carry a raw Scope string, so
+    the page would filter the two halves by two different vocabularies unless
+    the classification rides along — the reasoning behind `device_family`."""
+    data = aggregate.file_rows([
+        case(scope="FPT (JM Support)", result="OK"),
+        case(scope="Vendor", result="OK", row_num=5),
+    ], "TC.xlsx")
+
+    assert [(c["scope"], c["scope_group"]) for c in data["cases"]] == [
+        ("FPT (JM Support)", "FPT"),
+        ("Vendor", SCOPES.classify("Vendor")),
+    ]
+    assert {c["scope_group"] for c in data["cases"]} == {r["scope"] for r in data["rows"]}

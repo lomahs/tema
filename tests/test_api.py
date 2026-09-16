@@ -505,3 +505,55 @@ def test_missing_reason_drops_a_scope_group_outside_the_plan(client, workbook_di
     load(client, workbook_dir)
 
     assert client.get("/api/summary").get_json()["missing_reason"] == []
+
+
+# --- /api/file -------------------------------------------------------------
+# The drill-in behind a file name. Keyed on the basename, which is what a case
+# carries and how Summary and Daily already key a file.
+
+def test_file_endpoint_reports_one_workbook_sheet_by_sheet(client, workbook_dir):
+    load(client, workbook_dir)
+    body = client.get("/api/file?name=TC.xlsx").get_json()
+
+    assert body["file"] == "TC.xlsx"
+    assert {(r["sheet"], r["device"]) for r in body["rows"]} == {
+        ("Login", "iPhone"), ("Login", "iPad"),
+    }
+    for row in body["rows"]:
+        assert set(STATUS.keys) <= set(row), "every status must be a column"
+        assert sum(row[key] for key in STATUS.counted) == row["total"]
+
+
+def test_the_file_rows_add_up_to_what_summary_says_about_that_file(client, workbook_dir):
+    load(client, workbook_dir)
+    summary = client.get("/api/summary").get_json()["groups"]
+    rows = client.get("/api/file?name=TC.xlsx").get_json()["rows"]
+
+    for want in (g for g in summary if g["file"] == "TC.xlsx"):
+        mine = [r for r in rows
+                if r["scope"] == want["scope"] and r["device"] == want["device"]]
+        assert sum(r["total"] for r in mine) == want["total"]
+
+
+def test_every_file_case_carries_its_status(client, workbook_dir):
+    load(client, workbook_dir)
+    cases = client.get("/api/file?name=TC.xlsx").get_json()["cases"]
+
+    by_case = {(c["device"], c["case_no"]): c["status"] for c in cases}
+    assert by_case[("iPhone", "TC-1")] == "OK"
+    assert by_case[("iPhone", "TC-4")] == "Other", "an unknown result still lands somewhere"
+    assert by_case[("iPhone", "TC-5")] == "NYS"
+    assert by_case[("iPad", "TC-1")] == "Pending"
+
+
+def test_the_file_endpoint_does_not_know_a_file_that_is_not_loaded(client, workbook_dir):
+    load(client, workbook_dir)
+    res = client.get("/api/file?name=Nope.xlsx")
+
+    assert res.status_code == 404
+    assert "error" in res.get_json()
+
+
+def test_the_file_endpoint_needs_a_name(client, workbook_dir):
+    load(client, workbook_dir)
+    assert client.get("/api/file").status_code == 400
