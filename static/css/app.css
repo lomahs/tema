@@ -1144,6 +1144,18 @@ textarea.input {
     background: none;
 }
 
+/* A pane that fills its container instead of hugging its columns.
+ *
+ * The rule above is written for a table read on its own, where a frame out
+ * past the last column reads as a floating border. The Tools file list is read
+ * against the panel controls stacked above it, so a frame stopping short of
+ * theirs is the thing that looks unfinished instead. The ledger is stretched
+ * with the pane, or the header band would end before the pane's right edge and
+ * bring the mismatch back one level down.
+ */
+.scroll-x--wide { width: 100%; }
+.scroll-x--wide .ledger { min-width: 100%; }
+
 /* A pane the height of about ten rows, whatever is inside it.
  *
  * This is what makes "Show all" a reasonable offer: every row is rendered, but

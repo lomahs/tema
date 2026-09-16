@@ -75,7 +75,8 @@ export function setLoadResults(results) {
 /**
  * Report each workbook's TOOL_DATA state.
  * @param {Array<{file: string, path: string, has_tool_data: boolean,
- *   blocks: ?number, error?: string}>} files
+ *   blocks: ?number, error?: string}>} files  `blocks` is a count of device
+ *   blocks, and is shown in the table as a device count.
  */
 export function setPrepareFiles(files) {
     prepareFiles = new Map((files || []).map((f) => [f.path, f]));
@@ -124,13 +125,20 @@ function loadCells(load) {
          + `<td class="num">${load.cases != null ? load.cases : "—"}</td>`;
 }
 
-/** What the workbook's TOOL_DATA sheet looks like, in one cell. */
+/**
+ * What the workbook's TOOL_DATA sheet looks like, in one cell.
+ *
+ * The count is reported as devices, not blocks. A TOOL_DATA row *is* a device
+ * block — the wire field is still `blocks`, and the term is the right one in
+ * `prepare/` where the subject is the sheet's geometry. Here the subject is the
+ * workbook, and what the reader wants to know is how many devices it covers.
+ */
 function toolDataCell(prepare) {
     if (!prepare) return `<td class="muted">—</td>`;
     if (prepare.error) return `<td class="is-error">${esc(prepare.error)}</td>`;
     if (!prepare.has_tool_data) return `<td class="muted">none</td>`;
     return `<td><span class="mono">${prepare.blocks}`
-         + ` block${prepare.blocks === 1 ? "" : "s"}</span></td>`;
+         + ` device${prepare.blocks === 1 ? "" : "s"}</span></td>`;
 }
 
 /**
