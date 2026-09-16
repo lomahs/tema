@@ -32,6 +32,20 @@ def _group_counts(cases, key_fn):
         yield key, group, counts
 
 
+def in_plan(cases):
+    """The cases whose scope group counts toward the total.
+
+    A scope group marked `"excluded": true` names work that is reported but not
+    committed to, so it must not move any figure read as progress. Summary is
+    the one screen that still shows it — it draws a table per group, and a group
+    with no table would simply vanish — so `summary_rows` does not filter and
+    the report publisher passes its cases through here instead. Everything that
+    adds groups together calls this, which is why the definition lives in one
+    place rather than being repeated at each of them.
+    """
+    return [c for c in cases if SCOPES.is_counted(c.scope)]
+
+
 def _counted_total(counts):
     """A group's total: the statuses in the plan, and only those.
 
@@ -99,6 +113,11 @@ def summary_rows(cases, by_scope=False):
                 "file": c.file_name,
                 "sheet": c.sheet,
                 "device": c.device,
+                # The raw Scope, as `issue_rows` carries it: the caller decides
+                # whether a group outside the plan owes anybody an explanation,
+                # and cannot do so from a row that does not say where it came
+                # from.
+                "scope": c.scope,
                 "row": c.row_num,
                 "case_no": c.case_no,
                 "result": c.result,
@@ -111,13 +130,15 @@ def summary_rows(cases, by_scope=False):
 def daily_rows(cases):
     """Stats grouped by file, device, PIC, and test_date.
 
-    Cases with no date belong to no day and are left out entirely.
+    Cases with no date belong to no day and are left out entirely, and so are
+    cases in a scope group outside the plan — see `in_plan`.
     """
     def key_fn(c):
         if not c.test_date:
             return None
         return (c.file_name, c.device, c.pic or "N/A", c.test_date)
 
+    cases = in_plan(cases)
     return [
         {"file": file_name, "device": device, "pic": pic, "date": date,
          "total": _counted_total(counts), **counts}
@@ -133,11 +154,12 @@ def productivity_rows(cases):
     OK/NG list. A day only counts as worked when it carries at least one
     executed case: a day spent on cases that ended Pending would otherwise
     dilute the rate. Undated cases belong to no day, so they are left out
-    entirely — the same rule `daily_rows` follows.
+    entirely — the same rule `daily_rows` follows, as are cases in a scope group
+    outside the plan.
     """
     executed_keys = STATUS.executed
     buckets = defaultdict(list)
-    for c in cases:
+    for c in in_plan(cases):
         if not c.test_date:
             continue
         buckets[c.pic or "N/A"].append(c)
@@ -171,10 +193,12 @@ def issue_rows(cases):
 
     Source order is kept deliberately: the rows then read in the same sequence
     as the workbooks they came from, so a tester can walk the sheet alongside.
+
+    Cases in a scope group outside the plan are left out — see `in_plan`.
     """
     wanted = set(STATUS.issue)
     rows = []
-    for c in cases:
+    for c in in_plan(cases):
         status = STATUS.classify_case(c)
         if status not in wanted:
             continue

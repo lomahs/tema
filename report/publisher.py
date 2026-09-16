@@ -20,8 +20,13 @@ log = logging.getLogger(__name__)
 EXCEL_EPOCH = date(1899, 12, 30)
 
 #: Which aggregate builds each dataset's rows.
+#:
+#: Summary is the one that filters here rather than inside: `summary_rows` stays
+#: total so the Summary view can draw a table for a scope group outside the plan,
+#: and the published report — which is figures, not tables — takes `in_plan`
+#: cases. `daily_rows` and `issue_rows` apply it themselves.
 DATASET_ROWS = {
-    "summary": lambda cases: aggregate.summary_rows(cases)[0],
+    "summary": lambda cases: aggregate.summary_rows(aggregate.in_plan(cases))[0],
     "daily": aggregate.daily_rows,
     "issues": aggregate.issue_rows,
 }

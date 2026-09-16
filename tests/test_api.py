@@ -420,12 +420,20 @@ def test_the_two_fpt_scopes_share_one_table(client, scoped_dir):
 
 
 def test_the_scope_tables_account_for_every_loaded_case(client, scoped_dir):
-    load(client, scoped_dir)
+    """Measured against what was loaded, not against `/api/data`.
+
+    Review is no longer a stand-in for "every case": a scope group marked
+    `excluded` keeps its Summary table but leaves that endpoint, so reconciling
+    the two would assert the opposite of what this invariant says. The tables
+    still account for every loaded case, which is the claim that matters — a
+    typo'd scope has to surface in the Other table rather than vanish.
+    """
+    loaded = load(client, scoped_dir)["loaded"]
     body = client.get("/api/summary").get_json()
 
     counted = sum(r["total"] for r in body["groups"])
     excluded = sum(r[k] for r in body["groups"] for k in STATUS.excluded)
-    assert counted + excluded == len(client.get("/api/data").get_json())
+    assert counted + excluded == loaded
 
 
 def test_the_scope_group_list_is_served_for_the_view_to_title_its_tables(client, scoped_dir):
@@ -452,3 +460,48 @@ def test_missing_reason_survives_the_scope_split(client, scoped_dir):
     body = client.get("/api/summary").get_json()
 
     assert "missing_reason" in body
+
+
+@pytest.fixture
+def fpt_is_not_in_the_plan():
+    """The fixture workbook is all FPT work, reported but not committed to."""
+    from parser.scope import ScopeSet
+
+    saved = dict(SCOPES.__dict__)
+    SCOPES.adopt(ScopeSet.from_dict({
+        "groups": [{"key": "FPT", "match": ["FPT"], "excluded": True}],
+        "fallback": {"key": "Other"},
+    }))
+    yield
+    SCOPES.__dict__.clear()
+    SCOPES.__dict__.update(saved)
+
+
+def test_review_drops_a_scope_group_outside_the_plan(client, workbook_dir,
+                                                     fpt_is_not_in_the_plan):
+    """A case outside the plan is not work to review — the same rule that
+    forbids a status being both `excluded` and `review`."""
+    load(client, workbook_dir)
+
+    assert client.get("/api/data").get_json() == []
+    assert client.get("/api/daily").get_json() == []
+    assert client.get("/api/productivity").get_json() == []
+
+
+def test_summary_still_reports_a_scope_group_outside_the_plan(client, workbook_dir,
+                                                              fpt_is_not_in_the_plan):
+    """Its table is the only place the count stays visible, so it must be there."""
+    load(client, workbook_dir)
+    body = client.get("/api/summary").get_json()
+
+    assert [r["scope"] for r in body["groups"]] == ["FPT", "FPT"]
+    assert {g["key"]: g["counted"] for g in body["scopes"]} == {"FPT": False, "Other": True}
+
+
+def test_missing_reason_drops_a_scope_group_outside_the_plan(client, workbook_dir,
+                                                             fpt_is_not_in_the_plan):
+    """The KPI is a link into Review. Counting cases Review cannot show would
+    send the reader to an empty table."""
+    load(client, workbook_dir)
+
+    assert client.get("/api/summary").get_json()["missing_reason"] == []

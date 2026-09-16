@@ -404,7 +404,7 @@ câu hỏi nào.
 {
   "groups": [
     {"key": "FPT", "label": "FPT", "match": ["FPT", "FPT (JM Support)"]},
-    {"key": "JP",  "label": "JP",  "match": ["JP"]}
+    {"key": "JP",  "label": "JP",  "match": ["JP"], "excluded": true}
   ],
   "fallback": {"key": "Other", "label": "Other"}
 }
@@ -415,7 +415,18 @@ câu hỏi nào.
 | `groups[].key` | Tên nhóm (dùng nội bộ, và là giá trị cột `scope` trong `/api/summary`) |
 | `groups[].label` | Tiêu đề hiển thị trên bảng |
 | `groups[].match` | Các giá trị Scope thuộc nhóm này (không phân biệt hoa thường, tự cắt khoảng trắng) |
+| `groups[].excluded` | Không bắt buộc. `true` = nhóm này **không tính vào tổng** (xem bên dưới) |
 | `fallback` | **Bắt buộc.** Nhóm hứng mọi Scope có giá trị nhưng không khớp nhóm nào |
+
+**`"excluded": true` — phần việc có báo cáo nhưng không cam kết.** Nhóm vẫn giữ nguyên bảng
+Summary của mình (con số phải nhìn thấy được, và tiêu đề bảng có nhãn *Not in total*), nhưng
+bị loại khỏi **mọi con số cộng chung các nhóm lại**: dải KPI phía trên, tab Daily, tab
+Productivity, tab Review, và cả báo cáo đẩy lên SharePoint. Cùng một chữ và cùng một ý nghĩa
+với `"excluded": true` của status trong `parser/result_status.json`.
+
+`fallback` **không được** đặt `excluded` — đó là nơi Scope gõ sai rơi vào, loại nó đi đồng
+nghĩa với việc một lỗi chính tả biến mất khỏi mọi con số mà không báo gì. Cấu hình như vậy
+bị từ chối ngay lúc lưu.
 
 `fallback` luôn đứng cuối. Scope gõ sai hay Scope chưa cấu hình rơi vào đây, nên **tổng các
 bảng luôn bằng đúng số case đã load** — không có case nào âm thầm biến mất. Bảng nào không có

@@ -211,9 +211,15 @@ def get_data():
 
     `status` is derived here rather than stored on the case, so editing the
     result taxonomy takes effect without re-reading the workbooks.
+
+    Review is a list of work outstanding, so it holds only cases that are in the
+    plan: a scope group marked `excluded` is reported but not committed to, and
+    a case outside the plan is not work to review — the same reasoning that
+    forbids a status being both `excluded` and `review`. Summary is where such a
+    group stays visible.
     """
     cases = []
-    for c in _data["cases"]:
+    for c in aggregate.in_plan(_data["cases"]):
         row = c.to_dict()
         row["status"] = STATUS.classify_case(c)
         cases.append(row)
@@ -223,6 +229,11 @@ def get_data():
 @api.route("/api/summary")
 def get_summary():
     groups, missing_reason = aggregate.summary_rows(_data["cases"], by_scope=True)
+    # The rows stay whole — Summary draws a table per group, including one that
+    # is out of the plan — but the "Missing reason" figure is a link into
+    # Review, and Review holds only cases in the plan. A count of rows the
+    # destination cannot show would send the reader to an empty table.
+    missing_reason = [r for r in missing_reason if SCOPES.is_counted(r["scope"])]
     # The group definitions ride along so the view can title its tables and order
     # them, including the ones that happen to be empty for this dataset.
     # The device families ride along for the same reason: the "By device type"

@@ -29,9 +29,15 @@ DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "scope_groups.json
 class ScopeGroup:
     key: str
     label: str
+    #: Whether this group's cases are part of the plan the figures are read
+    #: against. False keeps the group's own Summary table -- the count has to
+    #: stay visible -- and leaves it out of everything that adds groups
+    #: together. Absent from a config means True, so nothing changes for a
+    #: config written before the field existed.
+    counted: bool = True
 
     def to_dict(self) -> dict:
-        return {"key": self.key, "label": self.label}
+        return {"key": self.key, "label": self.label, "counted": self.counted}
 
 
 class ScopeSet:
@@ -40,6 +46,12 @@ class ScopeSet:
     def __init__(self, groups: list[ScopeGroup], lookup: dict[str, str], fallback_key: str):
         self.groups = groups
         self.keys = [g.key for g in groups]
+        #: The groups whose cases the cross-cutting figures add up, and its
+        #: complement -- the same pair, and the same reasoning, as
+        #: `StatusSet.counted` / `StatusSet.excluded`. `keys` says what exists;
+        #: this says what the denominator is made of.
+        self.counted = [g.key for g in groups if g.counted]
+        self.excluded = [g.key for g in groups if not g.counted]
         self._lookup = lookup
         self._fallback_key = fallback_key
 
@@ -72,7 +84,8 @@ class ScopeSet:
             if any(g.key == key for g in groups):
                 raise ValueError(f"{source}: duplicate scope group key '{key}'")
 
-            groups.append(ScopeGroup(key=key, label=str(entry.get("label") or key)))
+            groups.append(ScopeGroup(key=key, label=str(entry.get("label") or key),
+                                     counted=not entry.get("excluded")))
 
             values = entry.get("match")
             if not isinstance(values, list) or not values:
@@ -102,6 +115,11 @@ class ScopeSet:
             raise ValueError(f"{source}: fallback key '{fb_key}' duplicates a configured group")
         if fb_key.casefold() in lookup:
             raise ValueError(f"{source}: fallback '{fb_key}' is also a 'match' value")
+        # The fallback is the group a typo lands in. Excluding it would let a
+        # misspelled scope drop out of every figure in the app without saying
+        # so, which is precisely the silence the fallback exists to prevent.
+        if fallback.get("excluded"):
+            raise ValueError(f"{source}: the fallback group may not be 'excluded'")
 
         groups.append(ScopeGroup(key=fb_key, label=str(fallback.get("label") or fb_key)))
         return cls(groups, lookup, fb_key)
@@ -128,6 +146,15 @@ class ScopeSet:
         if self.is_unscoped(scope):
             return self._fallback_key
         return self._lookup.get(str(scope).strip().casefold(), self._fallback_key)
+
+    def is_counted(self, scope) -> bool:
+        """True when a raw Scope cell belongs to a group that is in the plan.
+
+        Takes the cell rather than the group key, so callers filtering cases
+        classify in one step and cannot classify one way here and another way
+        in the tables.
+        """
+        return self.classify(scope) in set(self.counted)
 
     def to_dict(self) -> dict:
         return {"groups": [g.to_dict() for g in self.groups]}

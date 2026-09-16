@@ -260,6 +260,16 @@ function render() {
         <section class="card card--table">
             <div class="card-head card-head--row">
                 <h2>${esc(scope.label)}</h2>
+                <!-- A group outside the plan says so on its own heading. Its
+                     table and its bar are drawn in full — the count has to stay
+                     visible — but nothing in it reaches the figures above, and
+                     a reader comparing the two would otherwise find them short
+                     by this table with nothing on screen explaining why. The
+                     dashed rule is the one the band draws where a status
+                     column stops counting. -->
+                ${scope.counted === false
+                    ? `<span class="chip chip--aside" title="Reported, but not counted toward the totals above">Not in total</span>`
+                    : ""}
                 <!-- Each group carries its own bar: FPT and JP are separate
                      commitments, so one of them running behind is a fact the
                      combined figure above would hide. -->

@@ -140,6 +140,31 @@ one nobody has configured yet, lands there rather than vanishing, so **the table
 every case loaded**. `views/summary.js` names no scope itself — it draws a block per group from the
 `scopes` list `/api/summary` serves alongside the rows.
 
+**`"excluded": true` on a scope group is the same word, and the same idea, as it is on a status:
+work that is reported but not committed to.** It keeps its Summary table — the count has to stay
+visible, so the card is drawn in full and marked `chip--aside`, the dashed rule that means "the
+sum stops here" — and it leaves *every figure that adds groups together*: the KPI strip, Daily,
+Productivity, Review and the published report. `in_plan(cases)` in [aggregate.py](aggregate.py)
+is the one definition of "counts toward the total", and `SCOPES.counted` / `SCOPES.is_counted`
+the one definition of which groups do. Three things follow, and each is enforced rather than
+trusted:
+
+- **`summary_rows` does not filter, and must not start.** It is the only aggregate whose output
+  is drawn per group, so filtering it would delete the table instead of the figure. The report
+  publisher passes `in_plan(cases)` at the call site instead; `daily_rows`, `productivity_rows`
+  and `issue_rows` apply it themselves, because a figure is all they produce. That also keeps
+  the invariant `tests/test_aggregate.py` asserts — a file's scope rows add up to its unscoped
+  row — true of whatever list `summary_rows` is handed.
+- **Review drops those cases too**, which is the direct reading of the rule that a status may
+  not be both `excluded` and `review`: a case outside the plan is not work to review. `/api/data`
+  is where that happens. For the same reason `/api/summary` filters `missing_reason` — the KPI is
+  a *link* into Review, and a count of rows the destination cannot show would send the reader to
+  an empty table. That is why `missing_reason` rows now carry `scope`, as `issue_rows` always did.
+- **The fallback group may not be excluded.** It is where a typo'd or unconfigured scope lands, so
+  excluding it would let a mistake drop out of every figure in the app without saying so — the
+  precise silence the fallback exists to prevent. It is also what guarantees at least one group
+  always counts.
+
 **Device families are data too, and they are the one config with no fallback.**
 [parser/device_groups.json](parser/device_groups.json) says which device names Summary's
 "By device type" rows add together — `iPhone Min size` and `iPhone Max size` are two device

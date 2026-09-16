@@ -352,6 +352,17 @@ textarea.input {
     font-weight: 500;
 }
 
+/* A chip that marks something deliberately left out of a sum. The dashed rule
+   is `band--aside`'s, so a scope group outside the plan and a status column
+   outside the total are marked the same way rather than two ways. */
+.chip--aside {
+    border-style: dashed;
+    border-color: var(--rule-strong);
+    background: none;
+    color: var(--ink-soft);
+    font-weight: 400;
+}
+
 .chip button {
     appearance: none; border: 0; background: none; padding: 0;
     color: var(--ink-soft); cursor: pointer; font: inherit; line-height: 1;

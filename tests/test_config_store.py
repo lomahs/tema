@@ -237,3 +237,31 @@ def test_an_invalid_device_config_is_refused_and_leaves_the_file_untouched(confi
         ]})
 
     assert config_paths["devices"].read_text(encoding="utf-8") == before
+
+
+def test_marking_a_scope_group_excluded_takes_effect_without_a_restart(config_paths):
+    """`adopt` copies the whole validated state onto the live singleton, so the
+    counted list has to travel with the keys — every figure is read off it."""
+    config_store.save("scopes", {
+        "groups": [
+            {"key": "FPT", "label": "FPT", "match": ["FPT"]},
+            {"key": "JP", "label": "JP", "match": ["JP"], "excluded": True},
+        ],
+        "fallback": {"key": "Other", "label": "Other"},
+    })
+
+    assert SCOPES.counted == ["FPT", "Other"]
+    assert SCOPES.is_counted("JP") is False
+
+
+def test_an_excluded_fallback_is_refused_rather_than_written(config_paths):
+    """A typo'd scope lands there; it must never leave the figures silently."""
+    before = config_paths["scopes"].read_text(encoding="utf-8")
+
+    with pytest.raises(ValueError, match="fallback"):
+        config_store.save("scopes", {
+            "groups": [{"key": "FPT", "match": ["FPT"]}],
+            "fallback": {"key": "Other", "excluded": True},
+        })
+
+    assert config_paths["scopes"].read_text(encoding="utf-8") == before

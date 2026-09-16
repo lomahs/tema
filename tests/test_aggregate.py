@@ -4,6 +4,8 @@
 these tests pin the functions themselves, because the report publisher consumes
 them without going anywhere near HTTP.
 """
+import pytest
+
 import aggregate
 from parser import models
 
@@ -288,3 +290,73 @@ def test_the_device_families_of_a_file_add_up_to_its_combined_row():
 
     assert by_family == {"iPhone": 2, "iPad": 1}
     assert sum(by_family.values()) == sum(r["total"] for r in rows)
+
+
+@pytest.fixture
+def jp_is_not_in_the_plan():
+    """A taxonomy where JP work is reported but not counted toward the total."""
+    from parser.scope import SCOPES, ScopeSet
+
+    saved = dict(SCOPES.__dict__)
+    SCOPES.adopt(ScopeSet.from_dict({
+        "groups": [
+            {"key": "FPT", "match": ["FPT"]},
+            {"key": "JP", "match": ["JP"], "excluded": True},
+        ],
+        "fallback": {"key": "Other"},
+    }))
+    yield
+    SCOPES.__dict__.clear()
+    SCOPES.__dict__.update(saved)
+
+
+def test_in_plan_keeps_only_the_cases_whose_scope_group_counts(jp_is_not_in_the_plan):
+    kept = aggregate.in_plan([
+        case(result="OK", scope="FPT"),
+        case(result="OK", scope="JP", row_num=5),
+        case(result="OK", scope="Vendor", row_num=6),
+    ])
+
+    assert [c.scope for c in kept] == ["FPT", "Vendor"], "the fallback is in the plan"
+
+
+def test_daily_rows_leave_out_an_excluded_scope(jp_is_not_in_the_plan):
+    rows = aggregate.daily_rows([
+        case(result="OK", scope="FPT", pic="lee", test_date="2026-09-01"),
+        case(result="OK", scope="JP", pic="lee", test_date="2026-09-01", row_num=5),
+    ])
+
+    assert len(rows) == 1
+    assert rows[0]["total"] == 1
+
+
+def test_productivity_rows_leave_out_an_excluded_scope(jp_is_not_in_the_plan):
+    """Work outside the plan must not flatter -- or dilute -- anyone's rate."""
+    rows = aggregate.productivity_rows([
+        case(result="OK", scope="FPT", pic="lee", test_date="2026-09-01"),
+        case(result="OK", scope="JP", pic="lee", test_date="2026-09-01", row_num=5),
+        case(result="OK", scope="JP", pic="lee", test_date="2026-09-02", row_num=6),
+    ])
+
+    assert [(r["pic"], r["executed"], r["days"]) for r in rows] == [("lee", 1, 1)]
+
+
+def test_issue_rows_leave_out_an_excluded_scope(jp_is_not_in_the_plan):
+    rows = aggregate.issue_rows([
+        case(result="NG", scope="FPT"),
+        case(result="NG", scope="JP", row_num=5),
+    ])
+
+    assert [r["scope"] for r in rows] == ["FPT"]
+
+
+def test_summary_rows_still_report_an_excluded_scope(jp_is_not_in_the_plan):
+    """Summary is the one screen that shows it: the count has to stay visible,
+    the same way an excluded status keeps its column."""
+    rows, _ = aggregate.summary_rows([
+        case(result="OK", scope="FPT"),
+        case(result="OK", scope="JP", row_num=5),
+    ], by_scope=True)
+
+    assert sorted(r["scope"] for r in rows) == ["FPT", "JP"]
+    assert all(r["total"] == 1 for r in rows)

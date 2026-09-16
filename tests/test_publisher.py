@@ -370,3 +370,29 @@ def test_publishing_to_a_url_resolves_the_link_and_names_the_file():
     assert result["file"] == "QA Report.xlsx"
     assert result["sheets"][0]["appended"] == 1
     assert data_rows(wb) == [["2026-09-06", "TC.xlsx", "iPhone", 1]]
+
+
+def test_a_scope_group_outside_the_plan_reaches_no_sheet():
+    """Summary's own table still shows it; the published report does not, or the
+    report's totals would not be the ones the app reports progress against."""
+    from parser.scope import SCOPES, ScopeSet
+
+    saved = dict(SCOPES.__dict__)
+    SCOPES.adopt(ScopeSet.from_dict({
+        "groups": [
+            {"key": "FPT", "match": ["FPT"]},
+            {"key": "JP", "match": ["JP"], "excluded": True},
+        ],
+        "fallback": {"key": "Other"},
+    }))
+    try:
+        wb = FakeWorkbook({"Summary": [HEADER]})
+        publish([
+            case(result="OK", scope="FPT"),
+            case(result="OK", scope="JP", device="iPad"),
+        ], wb, layout(), run_date="2026-09-06")
+    finally:
+        SCOPES.__dict__.clear()
+        SCOPES.__dict__.update(saved)
+
+    assert data_rows(wb) == [["2026-09-06", "TC.xlsx", "iPhone", 1]]

@@ -58,9 +58,10 @@ def test_the_shipped_config_labels_every_group():
 
 def test_to_dict_carries_what_the_view_needs_to_title_its_tables():
     assert SCOPES.to_dict() == {"groups": [
-        {"key": "FPT", "label": "FPT"},
-        {"key": "JP", "label": "JP"},
-        {"key": "Other", "label": "Other"},
+        {"key": "FPT", "label": "FPT", "counted": True},
+        # JP work is reported but not committed to — see `scope_groups.json`.
+        {"key": "JP", "label": "JP", "counted": False},
+        {"key": "Other", "label": "Other", "counted": True},
     ]}
 
 
@@ -100,3 +101,61 @@ def test_the_error_message_names_the_file_it_came_from(tmp_path):
     path.write_text(json.dumps({"groups": []}), encoding="utf-8")
     with pytest.raises(ValueError, match=str(path)):
         ScopeSet.load(str(path))
+
+
+def test_a_group_counts_toward_the_total_unless_it_says_otherwise():
+    """Every config that predates the field keeps every group in the plan."""
+    plain = ScopeSet.from_dict(MINIMAL)
+    assert plain.counted == ["FPT", "JP", "Other"]
+    assert plain.excluded == []
+
+
+def test_an_excluded_group_keeps_its_place_but_leaves_the_counted_list():
+    """It still has a table to be drawn in; it is only out of the figures."""
+    custom = ScopeSet.from_dict({
+        "groups": [
+            {"key": "FPT", "match": ["FPT"]},
+            {"key": "JP", "match": ["JP"], "excluded": True},
+        ],
+        "fallback": {"key": "Other"},
+    })
+    assert custom.keys == ["FPT", "JP", "Other"]
+    assert custom.counted == ["FPT", "Other"]
+    assert custom.excluded == ["JP"]
+
+
+def test_is_counted_answers_for_a_raw_scope_cell_the_way_classify_does():
+    custom = ScopeSet.from_dict({
+        "groups": [
+            {"key": "FPT", "match": ["FPT"]},
+            {"key": "JP", "match": ["JP"], "excluded": True},
+        ],
+        "fallback": {"key": "Other"},
+    })
+    assert custom.is_counted("FPT") is True
+    assert custom.is_counted("  jp ") is False
+    assert custom.is_counted("Vendor") is True, "the fallback always counts"
+
+
+def test_the_fallback_group_may_not_be_excluded():
+    """It is where a typo'd scope lands. Excluding it would let a mistake vanish
+    from every figure, which is the opposite of what the fallback is for."""
+    with pytest.raises(ValueError, match="fallback"):
+        ScopeSet.from_dict({
+            "groups": [{"key": "FPT", "match": ["FPT"]}],
+            "fallback": {"key": "Other", "excluded": True},
+        })
+
+
+def test_to_dict_tells_the_view_which_groups_the_figures_include():
+    assert ScopeSet.from_dict({
+        "groups": [
+            {"key": "FPT", "match": ["FPT"]},
+            {"key": "JP", "match": ["JP"], "excluded": True},
+        ],
+        "fallback": {"key": "Other"},
+    }).to_dict() == {"groups": [
+        {"key": "FPT", "label": "FPT", "counted": True},
+        {"key": "JP", "label": "JP", "counted": False},
+        {"key": "Other", "label": "Other", "counted": True},
+    ]}

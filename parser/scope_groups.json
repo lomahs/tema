@@ -1,7 +1,7 @@
 {
   "groups": [
     {"key": "FPT", "label": "FPT", "match": ["FPT", "FPT (JM Support)"]},
-    {"key": "JP",  "label": "JP",  "match": ["JP"]}
+    {"key": "JP",  "label": "JP",  "match": ["JP"], "excluded": true}
   ],
   "fallback": {"key": "Other", "label": "Other"}
 }

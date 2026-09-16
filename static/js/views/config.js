@@ -288,7 +288,10 @@ function renderScopes(data) {
 
     return `<div class="scroll-x scroll-x--flush config-pane">
     <table class="ledger config-grid">
-        <thead><tr><th></th><th>Key</th><th>Label</th><th>Matches these scopes</th><th></th></tr></thead>
+        <thead><tr>
+            <th></th><th>Key</th><th>Label</th><th>Matches these scopes</th>
+            <th>Counts as</th><th></th>
+        </tr></thead>
         <tbody>${groups.map((g, i) => `<tr data-row="${i}">
             <td class="config-move">
                 <button type="button" class="btn btn-sm" data-act="up" data-row="${i}"
@@ -302,6 +305,11 @@ function renderScopes(data) {
             <td><input class="input" data-field="match" data-row="${i}"
                        value="${esc((g.match || []).join(", "))}"
                        placeholder="FPT, FPT (JM Support)"></td>
+            <td><div class="config-flags">
+                ${flag(i, "excluded", "excl.", g.excluded,
+                       "Reported in its own Summary table, but left out of the totals, "
+                     + "the Daily and Productivity figures, Review and the published report")}
+            </div></td>
             <td class="actions">
                 <button type="button" class="btn btn-sm" data-act="remove" data-row="${i}"
                         title="Remove this group">✕</button>
@@ -310,7 +318,8 @@ function renderScopes(data) {
     </table></div>
     <div class="config-add">
         <button type="button" class="btn btn-sm" data-act="add">Add group</button>
-        <span class="muted">Summary draws one table per group, in this order.</span>
+        <span class="muted">Summary draws one table per group, in this order. An excluded
+              group keeps its table but leaves every figure that adds groups together.</span>
     </div>
     <div class="config-fallback">
         <span class="eyebrow">Catch-all group</span>
@@ -553,6 +562,7 @@ function editScopes(data, el, field) {
     if (field === "key") row.key = el.value.trim();
     else if (field === "label") row.label = el.value;
     else if (field === "match") row.match = readList(el.value);
+    else if (field === "excluded") setFlag(row, field, el.checked);
 }
 
 function editSheetLabels(data, el, field) {

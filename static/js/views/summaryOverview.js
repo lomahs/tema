@@ -271,14 +271,32 @@ function todayPanel(dailyRows, activity) {
 }
 
 /**
+ * The rows the figures above the tables are allowed to add up.
+ *
+ * A scope group the config marks `excluded` is reported but not committed to,
+ * so it keeps its own card below and stays out of everything here — the same
+ * distinction `countedStatuses` draws between a column and the total it sits
+ * beside. The scope keys come from `/api/summary`, never named in this file.
+ *
+ * @param {Object[]} rows Rows from `/api/summary`, each carrying `scope`.
+ * @param {{key: string, counted: boolean}[]} scopes
+ * @returns {Object[]}
+ */
+function countedRows(rows, scopes) {
+    const out = new Set((scopes || []).filter((s) => !s.counted).map((s) => s.key));
+    return out.size ? rows.filter((r) => !out.has(r.scope)) : rows;
+}
+
+/**
  * Draw the overview.
  *
- * @param {{groups: Object[], missing_reason: Object[]}} data `/api/summary`.
+ * @param {{groups: Object[], scopes: Object[], missing_reason: Object[]}} data
+ *   `/api/summary`.
  * @param {Object[]} dailyRows `/api/daily`, for the activity line.
  */
 export function renderOverview(data, dailyRows) {
     const host = $("#summaryOverview");
-    const groups = data.groups || [];
+    const groups = countedRows(data.groups || [], data.scopes);
 
     if (!groups.length) {
         host.innerHTML = "";
