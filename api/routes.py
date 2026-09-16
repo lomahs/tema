@@ -9,6 +9,7 @@ import config
 import config_store
 from api.filedialog import DialogError, pick_files, pick_folder
 from parser.excel_reader import load_from_folder, load_from_files
+from parser.device import DEVICES
 from parser.scope import SCOPES
 from parser.status import STATUS
 from prepare import runner
@@ -224,8 +225,11 @@ def get_summary():
     groups, missing_reason = aggregate.summary_rows(_data["cases"], by_scope=True)
     # The group definitions ride along so the view can title its tables and order
     # them, including the ones that happen to be empty for this dataset.
+    # The device families ride along for the same reason: the "By device type"
+    # rows are labelled from them, so the view names no device of its own.
     return jsonify({"groups": groups, "missing_reason": missing_reason,
-                    "scopes": SCOPES.to_dict()["groups"]})
+                    "scopes": SCOPES.to_dict()["groups"],
+                    "device_families": DEVICES.to_dict()["families"]})
 
 
 @api.route("/api/daily")

@@ -9,7 +9,7 @@
  *
  * That is the one place this screen departs from the design canvas, which has a
  * single table and a Scope dropdown. Everything else it draws is the design's:
- * the Device and File selects, the Rows combined/split toggle, the Executed
+ * the Device and File selects, the Rows toggle, the Executed
  * progress column, the condition chips and the Prev/Next/Show-all footer. The
  * Scope select is the one control that would be meaningless here — the scope is
  * the heading of the card you are already reading.
@@ -31,7 +31,7 @@
  */
 import { $, esc } from "../dom.js";
 import { populateSelect, uniqueOf } from "../filters.js";
-import { renderGroupedTable } from "../groupedTable.js";
+import { groupPath, renderGroupedTable } from "../groupedTable.js";
 import { renderPageFooter } from "../pagination.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortRows } from "../sorting.js";
 import { getStatuses, statusCells, statusHeadCells, sumRows } from "../taxonomy.js";
@@ -51,16 +51,36 @@ let scopes = [];
 const sort = { col: null, asc: true };
 
 /**
- * Rows per (file, device) — the granularity the backend serves and the report
- * writes — or one row per file with the devices summed.
+ * How many rows a file gets.
+ *
+ * - `split` — one per (file, device): the granularity the backend serves and
+ *   the report writes.
+ * - `family` — one per (file, device family): "iPhone Min size" and "iPhone Max
+ *   size" are two device blocks in the workbook but one handset to anyone
+ *   reading the totals. Which names make a family is configured in
+ *   `parser/device_groups.json` and arrives on the row as `device_family`, so
+ *   this module names no device of its own.
+ * - `combined` — one per file, every device summed.
  *
  * The design defaults to combined. This defaults to split, because per-device
  * is what this table has always shown and what the published report is keyed
  * on; collapsing it silently would be a change of meaning, not of layout.
  *
- * @type {"split"|"combined"}
+ * None of the three changes a total — only how many rows carry it.
+ *
+ * @type {"split"|"family"|"combined"}
  */
 let grouping = "split";
+
+/** The cycle the Rows button walks, and what it reads in each state. */
+const GROUPINGS = [
+    { key: "split", label: "Split" },
+    { key: "family", label: "By device type" },
+    { key: "combined", label: "Combined" },
+];
+
+/** @type {{key: string, label: string}[]} from /api/summary, for naming a family */
+let families = [];
 
 /** @type {Map<string, {page: number, showAll: boolean}>} keyed by scope key */
 const paging = new Map();
@@ -83,7 +103,8 @@ export function initSummaryView() {
     }));
 
     $("#btnSummaryGrouping").addEventListener("click", () => {
-        grouping = grouping === "split" ? "combined" : "split";
+        const at = GROUPINGS.findIndex((g) => g.key === grouping);
+        grouping = GROUPINGS[(at + 1) % GROUPINGS.length].key;
         paging.clear();
         render();
     });
@@ -109,6 +130,7 @@ export function initSummaryView() {
 export function renderSummary(data, dailyRows) {
     groups = data.groups || [];
     scopes = data.scopes || [];
+    families = data.device_families || [];
     paging.clear();
 
     populateSelect("#summaryFilterDevice", uniqueOf(groups, "device"));
@@ -151,6 +173,42 @@ function combine(rows) {
     });
 }
 
+/**
+ * Collapse a scope group's rows to one per (file, device family).
+ *
+ * The rows arrive already carrying `device_family` — the backend classifies a
+ * device name once, so the merged rows here and the published report cannot
+ * disagree about which block is which handset. A device no family claims is its
+ * own family, keyed by its own name, so this hides nothing: the rows still add
+ * up to exactly what Split shows.
+ *
+ * The Device cell reads the family's configured label and says how many devices
+ * it merged when it merged more than one — unlike `combine`, naming the family
+ * is not a lie, but "iPhone" standing for two blocks is worth knowing.
+ *
+ * @param {Object[]} rows
+ * @returns {Object[]}
+ */
+function combineByFamily(rows) {
+    const byKey = new Map();
+    rows.forEach((r) => {
+        const key = groupPath(r.file, r.device_family ?? r.device);
+        if (!byKey.has(key)) byKey.set(key, []);
+        byKey.get(key).push(r);
+    });
+    return [...byKey.values()].map((sub) => {
+        const family = sub[0].device_family ?? sub[0].device;
+        const label = families.find((f) => f.key === family)?.label || family;
+        const devices = new Set(sub.map((r) => r.device).filter(Boolean)).size;
+        return {
+            ...sumRows(sub),
+            file: sub[0].file,
+            device_family: family,
+            device: devices > 1 ? `${label} (${devices} devices)` : label,
+        };
+    });
+}
+
 /** The chips describing what is filtered out, and how to put it back. */
 function chips() {
     const active = [
@@ -181,14 +239,15 @@ function render() {
     const container = $("#summaryTables");
     const rows = filtered();
 
-    $("#btnSummaryGrouping").textContent = grouping === "split" ? "Split" : "Combined";
+    $("#btnSummaryGrouping").textContent =
+        GROUPINGS.find((g) => g.key === grouping).label;
 
     // An empty group is not drawn: a team with no JP work should not have to
     // scroll past an empty JP table to reach the numbers it does have.
     const present = scopes
         .map((s) => ({ scope: s, rows: rows.filter((r) => r.scope === s.key) }))
         .filter((p) => p.rows.length)
-        .map((p) => ({ ...p, rows: grouping === "combined" ? combine(p.rows) : p.rows }));
+        .map((p) => ({ ...p, rows: regroup(p.rows) }));
 
     if (!present.length) {
         container.innerHTML = `<p class="empty-note">No test cases match these filters.</p>`;
@@ -227,6 +286,13 @@ function render() {
     if (clearAll) clearAll.addEventListener("click", () => $("#btnClearSummaryFilters").click());
 
     present.forEach(({ scope, rows: r }, i) => renderTable(i, scope, r));
+}
+
+/** One scope group's rows at the granularity the Rows button is set to. */
+function regroup(rows) {
+    if (grouping === "combined") return combine(rows);
+    if (grouping === "family") return combineByFamily(rows);
+    return rows;
 }
 
 /**

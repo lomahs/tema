@@ -4,6 +4,7 @@ import pytest
 
 from api import routes
 from app import create_app
+from parser.device import DEVICES
 from parser.scope import SCOPES
 from parser.status import STATUS
 from tests.conftest import config_row, write_workbook
@@ -433,6 +434,16 @@ def test_the_scope_group_list_is_served_for_the_view_to_title_its_tables(client,
 
     assert [g["key"] for g in body["scopes"]] == SCOPES.keys
     assert all(g["label"] for g in body["scopes"])
+
+
+def test_the_device_family_list_is_served_for_the_view_to_label_merged_rows(client, workbook_dir):
+    """Summary's "By device type" rows are titled from this, so the JS names no
+    device of its own — the same rule that keeps status keys out of it."""
+    load(client, workbook_dir)
+    body = client.get("/api/summary").get_json()
+
+    assert [f["key"] for f in body["device_families"]] == DEVICES.keys
+    assert all(f["label"] for f in body["device_families"])
 
 
 def test_missing_reason_survives_the_scope_split(client, scoped_dir):

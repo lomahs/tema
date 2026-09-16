@@ -28,6 +28,8 @@ test-case-management/
 │   ├── result_status.json  # cấu hình phân loại kết quả
 │   ├── scope.py            # ScopeSet: Scope -> nhóm bảng Summary
 │   ├── scope_groups.json   # cấu hình nhóm Scope (Summary tách bảng)
+│   ├── device.py           # DeviceSet: tên device -> dòng device
+│   ├── device_groups.json  # cấu hình gộp device (iPhone Min/Max -> iPhone)
 │   ├── excel_reader.py     # đọc TOOL_DATA + test case từ .xlsx
 │   ├── sheet_labels.py     # SheetLabels: nhãn cột mà dò layout tìm
 │   ├── sheet_labels.json   # cấu hình nhãn ("結果", "確認日", "Pad"/"Phone"…)
@@ -430,6 +432,46 @@ ra. Nói cách khác: **muốn một dòng được tính, dòng đó phải có
 Báo cáo SharePoint **không** đổi: `summary_rows` chỉ tách theo scope khi được gọi với
 `by_scope=True` (chỉ `/api/summary` làm vậy). Sheet Summary trong báo cáo vẫn là một dòng cho
 mỗi (file, device), nên không phải thêm cột nào trên SharePoint.
+
+## Nhóm device (Summary gộp dòng theo loại máy)
+
+Định nghĩa trong `parser/device_groups.json`. Một bộ test thường chạy cùng một máy ở hai cỡ
+màn hình — `iPhone Min size` và `iPhone Max size` là hai block device trong file Excel, nhưng
+với người đọc tổng số thì chỉ là một chiếc iPhone. Nút **Rows** trên tab Summary có ba trạng
+thái: `Split` (một dòng cho mỗi file + device), `By device type` (gộp theo cấu hình này) và
+`Combined` (một dòng cho mỗi file).
+
+```json
+{
+  "families": [
+    {"key": "iPhone", "label": "iPhone", "match": ["iPhone"]},
+    {"key": "iPad",   "label": "iPad",   "match": ["iPad"]}
+  ]
+}
+```
+
+| Key | Ý nghĩa |
+|-----|---------|
+| `families[].key` | Tên nhóm (là giá trị cột `device_family` trong `/api/summary`) |
+| `families[].label` | Tên hiển thị ở ô Device khi các dòng đã gộp |
+| `families[].match` | Các chuỗi **nằm trong** tên device thì thuộc nhóm này (không phân biệt hoa thường) |
+
+Khác với nhóm Scope ở hai điểm, và cả hai đều do bản chất của tên device mà ra:
+
+- **Khớp theo chuỗi con, không phải cả ô.** Tên device viết tự do, có cả model lẫn cỡ màn hình,
+  nên không ai liệt kê hết được. Vì vậy **thứ tự có ý nghĩa**: nhóm đầu tiên có chữ khớp sẽ
+  thắng, nên đặt `iPad mini` **trên** `iPad` là một cấu hình có nghĩa. Nếu một chữ không bao giờ
+  khớp được (ví dụ `Phone` đứng trên `iPhone`), app **từ chối lưu** thay vì im lặng bỏ qua.
+- **Không có `fallback`.** Device không thuộc nhóm nào thì tự nó là một nhóm, giữ nguyên tên của
+  mình. Nhờ vậy bảng sau khi gộp vẫn **bằng đúng tổng của bảng Split** — không giấu gì cả, và
+  cũng không dồn một máy Android với một máy Windows vào chung một dòng.
+
+Sửa được ngay trong tab **Config** (thẻ "Device families"), lưu là áp dụng luôn, không cần khởi
+động lại. Hoặc đổi env `DEVICE_GROUPS_CONFIG` để trỏ sang file khác.
+
+Báo cáo SharePoint **không** đổi: việc gộp chỉ xảy ra trên màn hình. `summary_rows` vẫn trả một
+dòng cho mỗi (file, device); nó chỉ gắn thêm `device_family` vào mỗi dòng để màn hình và báo cáo
+không thể hiểu khác nhau về chuyện device nào là máy nào.
 
 ## Tab Detail: chỉ hiển thị case cần xử lý
 

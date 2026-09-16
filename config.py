@@ -20,6 +20,15 @@ SCOPE_GROUPS_CONFIG = os.environ.get(
     os.path.join(_HERE, "parser", "scope_groups.json"),
 )
 
+# Which device names belong to which device family, for Summary's "By device
+# type" rows: "iPhone Min size" and "iPhone Max size" are two device blocks in
+# the workbook but one handset to anyone reading the totals. Same idea as
+# SCOPE_GROUPS_CONFIG — testing a new model is a config edit, not a code change.
+DEVICE_GROUPS_CONFIG = os.environ.get(
+    "DEVICE_GROUPS_CONFIG",
+    os.path.join(_HERE, "parser", "device_groups.json"),
+)
+
 # Which column of the SharePoint report workbook holds which value. Same idea as
 # RESULT_STATUS_CONFIG: point at your own file to match your report's shape.
 REPORT_LAYOUT_CONFIG = os.environ.get(

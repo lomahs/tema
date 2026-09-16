@@ -107,7 +107,7 @@
                 <div class="field">
                     <span class="label">Rows</span>
                     <button class="btn" id="btnSummaryGrouping"
-                            title="One row per file and device, or one per file">Split</button>
+                            title="One row per file and device, one per device type, or one per file">Split</button>
                 </div>
                 <button class="btn" id="btnClearSummaryFilters">Clear</button>
             </div>
@@ -463,6 +463,27 @@
                     <div class="row">
                         <button id="configSave-scopes" type="button" class="btn btn-primary" disabled>Save</button>
                         <button id="configRevert-scopes" type="button" class="btn btn-quiet" disabled>Revert</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="configCard-devices">
+                <div class="card-head card-head--row">
+                    <h2>Device families</h2>
+                    <span class="pill" id="configDirty-devices" hidden>unsaved</span>
+                </div>
+                <div class="card-head">
+                    <p>Which device names Summary's "By device type" rows add together. Two screen
+                       sizes of one handset are two blocks in the workbook but one device to
+                       anyone reading the totals.
+                       <span class="mono" id="configPath-devices"></span></p>
+                </div>
+                <div class="stack">
+                    <div id="configDevices"></div>
+                    <div class="status-line" id="configStatus-devices"></div>
+                    <div class="row">
+                        <button id="configSave-devices" type="button" class="btn btn-primary" disabled>Save</button>
+                        <button id="configRevert-devices" type="button" class="btn btn-quiet" disabled>Revert</button>
                     </div>
                 </div>
             </section>

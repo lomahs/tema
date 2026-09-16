@@ -7,6 +7,7 @@ taxonomy stays the single place where the vocabulary is defined.
 """
 from collections import Counter, defaultdict
 
+from parser.device import DEVICES
 from parser.scope import SCOPES
 from parser.status import STATUS
 
@@ -73,7 +74,12 @@ def summary_rows(cases, by_scope=False):
 
     for key, group, counts in _group_counts(cases, key_fn):
         scope, file_name, device = key if by_scope else (None, *key)
+        # `device_family` rides along beside `device` rather than being worked
+        # out in the browser: Summary's "By device type" rows and the published
+        # report then read one classification, so neither can disagree with the
+        # other about which handset a block belongs to.
         row = {"file": file_name, "device": device,
+               "device_family": DEVICES.classify(device),
                "total": _counted_total(counts), **counts}
         if by_scope:
             # Ahead of the counts, so a row reads scope -> file -> device -> the

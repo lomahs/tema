@@ -39,7 +39,7 @@ def test_get_config_serves_every_editable_file(client, config_paths):
 
     assert res.status_code == 200
     configs = res.get_json()["configs"]
-    assert set(configs) == {"statuses", "scopes", "sheet_labels"}
+    assert set(configs) == {"statuses", "scopes", "devices", "sheet_labels"}
     assert configs["sheet_labels"]["data"]["device_keywords"] == ["pad", "phone"]
 
 

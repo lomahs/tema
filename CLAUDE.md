@@ -117,8 +117,9 @@ same arrangement as `aggregate.py` and `prepare/runner.py`. Four things about it
   `result_status.json` does not make the taxonomy wrong, it stops the app booting —
   `_load_default` raises at import. So the text goes to a temp file beside the target and
   `os.replace` swaps it in.
-- **`adopt` is why one save reaches everything.** `STATUS`, `SCOPES` and `LABELS` are imported *by
-  name* into eight modules, and rebinding the name in `parser.status` would reach none of them.
+- **`adopt` is why one save reaches everything.** `STATUS`, `SCOPES`, `DEVICES` and `LABELS`
+  are imported *by name* into eight modules, and rebinding the name in `parser.status` would
+  reach none of them.
   So each class has an `adopt(other)` that copies the validated state onto `self`: the singleton
   stays the singleton and its contents change. `SheetLabels` is no longer a frozen dataclass for
   this reason — config you can edit at runtime is not frozen. No source re-read is needed, because
@@ -138,6 +139,23 @@ adding them together. The `fallback` group is mandatory and always sorts last: a
 one nobody has configured yet, lands there rather than vanishing, so **the tables always add up to
 every case loaded**. `views/summary.js` names no scope itself — it draws a block per group from the
 `scopes` list `/api/summary` serves alongside the rows.
+
+**Device families are data too, and they are the one config with no fallback.**
+[parser/device_groups.json](parser/device_groups.json) says which device names Summary's
+"By device type" rows add together — `iPhone Min size` and `iPhone Max size` are two device
+blocks in a workbook but one handset to anyone reading the totals — validated at import by
+`DeviceSet` in [parser/device.py](parser/device.py) the way `ScopeSet` validates the scopes.
+Two things differ from `ScopeSet`, and both follow from what a device name is. **Matching is by
+substring**, because a device name is written freehand and carries the model, the size and
+sometimes the OS version, so nobody will enumerate the spellings; order therefore decides, and
+a token that *contains* an earlier one is refused rather than shipped as a rule that can never
+fire (`Phone` above `iPhone` is a typo — `iPad mini` above `iPad` is not, and is allowed).
+**There is no fallback family**: a device no family claims is its own family, keyed and
+labelled by its own name, so the merged table names every device it did not merge and still
+adds up to exactly what Split shows. A catch-all would put an Android and a Windows box on one
+row and call the result a device. `summary_rows` attaches `device_family` to **every** row,
+beside `device` and regardless of `by_scope`, so the screen and the published report read one
+classification; the merge itself is client-side, in `combineByFamily`.
 
 **A blank Scope is not an unrecognised scope — it is not a case.** A section heading, a spacer, or
 the slack at the end of a generously sized `start_row`–`end_row` block carries no Scope, and
@@ -312,7 +330,7 @@ Behavior worth preserving when touching the UI:
   the app opens on Tools, because with nothing loaded it is the only screen that can answer
   anything. `sourcePanel.js`, `reportPanel.js` and `preparePanel.js` still know nothing about it,
   or about each other.
-- **Config is a view, not a fourth Tools card**, because all three files are editable whether or
+- **Config is a view, not a fifth Tools card**, because all four files are editable whether or
   not anything is loaded. `views/config.js` follows the panels' rule and knows nothing about the
   other views: saving the taxonomy changes what every figure on screen *means*, so `main.js` owns
   that consequence through `onSaved` and redraws with `{show: false}` — which is why it now holds
@@ -329,14 +347,19 @@ Behavior worth preserving when touching the UI:
     which one mattered, and they cost the Derives-from column its place on screen.
 - **Summary is laid out as the design canvas draws it**: five KPI cards, a grid of panels
   (result breakdown, today's progress, what owes a reason), then one card per scope group. Each
-  card carries the design's chrome — Device and File selects, a Rows combined/split toggle, an
+  card carries the design's chrome — Device and File selects, a three-state Rows toggle, an
   Executed progress column, condition chips and a Prev/Next/Show-all footer. **The one control
   the design has and this does not is the Scope select**, because the scope is the heading of the
   card you are already reading; collapsing FPT and JP into one filtered table is the thing the
   scope-group rule forbids. The filters are shared across cards for the reason the sort is —
   "iPad only" should mean the same thing in both — and paging is not, because a page number only
-  means something inside one table. `combine()` sums the devices of a file and reports how many
-  it summed; a Device cell reading "iPad" on a row that also counts an iPhone would be a lie.
+  means something inside one table. **Rows cycles Split → By device type → Combined**, and none
+  of the three changes a total — only how many rows carry it. `combine()` sums every device of a
+  file; `combineByFamily()` sums the ones sharing a `device_family` and titles the row from the
+  `device_families` list `/api/summary` serves, so the view names no device of its own — the same
+  rule that keeps status keys out of the JS. Both report how many devices they summed: a Device
+  cell reading "iPad" on a row that also counts an iPhone would be a lie, and "iPhone" standing
+  for two blocks is true but worth knowing.
 - **Daily leads with a CSS bar chart, not Chart.js.** Executed per day against a dashed plan
   line, drawn as divs: it repaints on every filter change and every theme change, and a canvas
   that resolves its colours at construction is what `charts.js` exists to work around. Unlike the

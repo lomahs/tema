@@ -48,14 +48,22 @@ let vocabulary = { tones: [], derive_conditions: [], header_fields: [], result_c
 const state = {
     statuses: { data: null, saved: "", path: "", error: null },
     scopes: { data: null, saved: "", path: "", error: null },
+    devices: { data: null, saved: "", path: "", error: null },
     sheet_labels: { data: null, saved: "", path: "", error: null },
 };
 
-/** Which card each config draws into. */
+/**
+ * Which card each config draws into, and where its reorderable rows live.
+ *
+ * `list` is named rather than assumed because the row buttons — add, remove,
+ * move — are one handler over every card: each config calls its list something
+ * different, and `sheet_labels` has no list at all.
+ */
 const CARDS = {
-    statuses: { body: "#configStatuses", render: renderStatuses },
-    scopes: { body: "#configScopes", render: renderScopes },
-    sheet_labels: { body: "#configSheetLabels", render: renderSheetLabels },
+    statuses: { body: "#configStatuses", render: renderStatuses, list: (d) => d.statuses },
+    scopes: { body: "#configScopes", render: renderScopes, list: (d) => d.groups },
+    devices: { body: "#configDevices", render: renderDevices, list: (d) => d.families },
+    sheet_labels: { body: "#configSheetLabels", render: renderSheetLabels, list: () => null },
 };
 
 /**
@@ -82,7 +90,7 @@ export function initConfigView({ onSaved: saved }) {
     refreshConfig();
 }
 
-/** Re-read all three configs from disk and redraw. */
+/** Re-read every config from disk and redraw. */
 export async function refreshConfig() {
     let got;
     try {
@@ -324,6 +332,47 @@ function renderScopes(data) {
 }
 
 /**
+ * One row per device family, and no fallback row — deliberately.
+ *
+ * A device no family claims is its own family, named by itself, so the merged
+ * table still accounts for every device. That is the one way this differs from
+ * the scope groups above, and it is why the caption talks about order instead:
+ * matching is by *substring*, so the first family whose word appears in the
+ * device name wins, and "iPad mini" above "iPad" is a meaningful thing to set.
+ */
+function renderDevices(data) {
+    const families = data.families || [];
+
+    return `<div class="scroll-x scroll-x--flush config-pane">
+    <table class="ledger config-grid">
+        <thead><tr><th></th><th>Key</th><th>Label</th><th>Device name contains</th><th></th></tr></thead>
+        <tbody>${families.map((f, i) => `<tr data-row="${i}">
+            <td class="config-move">
+                <button type="button" class="btn btn-sm" data-act="up" data-row="${i}"
+                        title="Move up"${i === 0 ? " disabled" : ""}>↑</button>
+                <button type="button" class="btn btn-sm" data-act="down" data-row="${i}"
+                        title="Move down"${i === families.length - 1 ? " disabled" : ""}>↓</button>
+            </td>
+            <td><input class="input input-mono config-key" data-field="key" data-row="${i}"
+                       value="${esc(f.key)}"></td>
+            <td><input class="input" data-field="label" data-row="${i}" value="${esc(f.label || "")}"></td>
+            <td><input class="input" data-field="match" data-row="${i}"
+                       value="${esc((f.match || []).join(", "))}"
+                       placeholder="iPhone"></td>
+            <td class="actions">
+                <button type="button" class="btn btn-sm" data-act="remove" data-row="${i}"
+                        title="Remove this family">✕</button>
+            </td>
+        </tr>`).join("")}</tbody>
+    </table></div>
+    <div class="config-add">
+        <button type="button" class="btn btn-sm" data-act="add">Add family</button>
+        <span class="muted">The first family whose word appears in the device name wins, so
+           put the more specific one higher. A device no family names keeps its own row.</span>
+    </div>`;
+}
+
+/**
  * The labels TOOL_DATA detection matches sheet cells against.
  *
  * Each group is captioned with *how* its labels are matched, because that is
@@ -415,6 +464,7 @@ function onEdit(name, event) {
 
     if (name === "statuses") editStatuses(card.data, el, field);
     else if (name === "scopes") editScopes(card.data, el, field);
+    else if (name === "devices") editDevices(card.data, el, field);
     else editSheetLabels(card.data, el, field);
 
     // The fields that change the *shape* of the form — a key other rows refer
@@ -482,6 +532,15 @@ function editStatuses(data, el, field) {
     }
 }
 
+function editDevices(data, el, field) {
+    const row = data.families[Number(el.dataset.row)];
+    if (!row) return;
+    if (field === "key") row.key = el.value.trim();
+    else if (field === "label") row.label = el.value;
+    else if (field === "match") row.match = readList(el.value);
+}
+
+
 function editScopes(data, el, field) {
     if (field === "fallback_key" || field === "fallback_label") {
         data.fallback = data.fallback || {};
@@ -521,7 +580,7 @@ function onCardClick(name, event) {
     const card = state[name];
     if (!card.data) return;
 
-    const list = name === "statuses" ? card.data.statuses : card.data.groups;
+    const list = CARDS[name].list(card.data);
     if (!list) return;
     const i = Number(btn.dataset.row);
 

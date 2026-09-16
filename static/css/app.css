@@ -335,7 +335,10 @@ textarea.input {
     font-variant-numeric: tabular-nums;
 }
 
-.chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* Centred, not stretched: the eyebrow is a block, so the default `stretch`
+   makes it as tall as a chip and paints "FILTERED" against the top edge of
+   that box — reading as a line above the chips rather than beside them. */
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 
 .chip {
     display: inline-flex;

@@ -254,3 +254,37 @@ def test_the_scope_split_does_not_change_which_cases_owe_a_reason():
     _, scoped = aggregate.summary_rows(cases, by_scope=True)
 
     assert [m["case_no"] for m in flat] == [m["case_no"] for m in scoped] == ["TC-1"]
+
+
+def test_every_summary_row_names_the_device_family_it_belongs_to():
+    """Summary's "By device type" mode merges on this, so the classification
+    happens once here rather than in the browser — the report publisher reads
+    the same rows and the two cannot disagree about what an iPhone is."""
+    rows, _ = aggregate.summary_rows([
+        case(device="iPhone Min size", result="OK"),
+        case(device="iPhone Max size", result="NG"),
+        case(device="Android 14", result="OK"),
+    ])
+
+    assert {r["device"]: r["device_family"] for r in rows} == {
+        "iPhone Min size": "iPhone",
+        "iPhone Max size": "iPhone",
+        "Android 14": "Android 14",
+    }
+
+
+def test_the_device_families_of_a_file_add_up_to_its_combined_row():
+    """Merging by family must not change any total, only how many rows show it."""
+    cases = [
+        case(device="iPhone Min size", result="OK"),
+        case(device="iPhone Max size", result="NG"),
+        case(device="iPad Pro", result="OK"),
+    ]
+    rows, _ = aggregate.summary_rows(cases)
+
+    by_family = {}
+    for r in rows:
+        by_family[r["device_family"]] = by_family.get(r["device_family"], 0) + r["total"]
+
+    assert by_family == {"iPhone": 2, "iPad": 1}
+    assert sum(by_family.values()) == sum(r["total"] for r in rows)

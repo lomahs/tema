@@ -76,7 +76,9 @@ def restore_configs():
     from parser.status import STATUS
     from report.layout import LAYOUT
 
-    saved = [(obj, dict(obj.__dict__)) for obj in (STATUS, SCOPES, LABELS, LAYOUT)]
+    from parser.device import DEVICES
+
+    saved = [(obj, dict(obj.__dict__)) for obj in (STATUS, SCOPES, DEVICES, LABELS, LAYOUT)]
     yield config_store
     for obj, state in saved:
         obj.__dict__.clear()

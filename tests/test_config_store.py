@@ -165,7 +165,7 @@ def test_saving_sheet_labels_reaches_an_already_imported_LABELS(config_paths):
 def test_read_all_returns_each_file_with_its_contents(config_paths):
     got = config_store.read_all()
 
-    assert set(got["configs"]) == {"statuses", "scopes", "sheet_labels"}
+    assert set(got["configs"]) == {"statuses", "scopes", "devices", "sheet_labels"}
     assert got["configs"]["statuses"]["path"] == str(config_paths["statuses"])
     assert got["configs"]["scopes"]["data"]["fallback"]["key"] == "Other"
 
@@ -209,3 +209,31 @@ def test_a_refusal_names_the_file_without_its_whole_path(config_paths):
     message = str(raised.value)
     assert message.startswith("result_status.json:")
     assert str(config_paths["statuses"].parent) not in message
+
+
+# --- device families -------------------------------------------------------
+
+def test_saving_device_families_changes_how_a_device_is_classified(config_paths):
+    from parser.device import DEVICES
+
+    assert DEVICES.classify("Galaxy S24") == "Galaxy S24"
+
+    config_store.save("devices", {"families": [
+        {"key": "Galaxy", "label": "Galaxy", "match": ["Galaxy"]},
+    ]})
+
+    assert DEVICES.classify("Galaxy S24") == "Galaxy"
+    # Adopted in place, not rebound: eight modules hold this by name.
+    assert DEVICES.classify("iPhone Min size") == "iPhone Min size"
+
+
+def test_an_invalid_device_config_is_refused_and_leaves_the_file_untouched(config_paths):
+    before = config_paths["devices"].read_text(encoding="utf-8")
+
+    with pytest.raises(ValueError, match="already matched by"):
+        config_store.save("devices", {"families": [
+            {"key": "Phone", "match": ["Phone"]},
+            {"key": "iPhone", "match": ["iPhone"]},
+        ]})
+
+    assert config_paths["devices"].read_text(encoding="utf-8") == before

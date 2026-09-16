@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import config
+from parser.device import DEVICES, DeviceSet
 from parser.scope import SCOPES, ScopeSet
 from parser.sheet_labels import HEADER_FIELDS, LABELS, RESULT_FIELDS, SheetLabels
 from parser.status import DERIVE_CONDITIONS, STATUS, TONES, StatusSet
@@ -82,6 +83,11 @@ CONFIGS: dict[str, ConfigFile] = {
         setting="SCOPE_GROUPS_CONFIG",
         build=ScopeSet.from_dict,
         apply=SCOPES.adopt,
+    ),
+    "devices": ConfigFile(
+        setting="DEVICE_GROUPS_CONFIG",
+        build=DeviceSet.from_dict,
+        apply=DEVICES.adopt,
     ),
     "sheet_labels": ConfigFile(
         setting="SHEET_LABELS_CONFIG",

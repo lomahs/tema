@@ -1,0 +1,6 @@
+{
+  "families": [
+    {"key": "iPhone", "label": "iPhone", "match": ["iPhone"]},
+    {"key": "iPad",   "label": "iPad",   "match": ["iPad"]}
+  ]
+}
