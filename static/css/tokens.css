@@ -141,8 +141,12 @@
     --ctl-h:    33px;   /* buttons, inputs and selects all agree on one height */
     --rail-w:   232px;
     --rail-w-closed: 64px;
-    --band-w:   116px;  /* one width for every status column;
-                            wide enough that "Cancel (対象外)" stays on one line */
+    --band-w:   84px;   /* one width for every status column: what a six-figure
+                            count needs, not what its heading would like. The
+                            labels are the long part — "Cancel (対象外)" wraps
+                            here, which `.ledger th.band` is built for — and the
+                            width they were costing is width the File column
+                            needs for a fifty-character workbook name. */
     --progress-w: 190px; /* the Executed column: bar plus its percentage */
 
     /* --- geometry ----------------------------------------------------------

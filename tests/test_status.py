@@ -241,7 +241,7 @@ def test_classify_still_reads_the_result_cell_alone():
 
 
 def test_the_excluded_statuses_are_the_complement_of_the_counted_ones():
-    assert STATUS.excluded == ["OOS"]
+    assert STATUS.excluded == ["OOS", "Other"]
     assert set(STATUS.counted).isdisjoint(STATUS.excluded)
     assert set(STATUS.counted) | set(STATUS.excluded) == set(STATUS.keys)
 
@@ -267,7 +267,7 @@ def test_has_derivation_names_the_statuses_that_can_still_change():
 
 
 def test_the_taxonomy_is_published_with_its_excluded_statuses():
-    assert STATUS.to_dict()["excluded"] == ["OOS"]
+    assert STATUS.to_dict()["excluded"] == ["OOS", "Other"]
 
 
 def test_a_config_without_derivations_classifies_a_case_by_its_result_alone():

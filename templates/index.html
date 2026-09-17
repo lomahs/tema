@@ -56,8 +56,10 @@
                 <button class="rail-nav-item" data-view="productivity" disabled>
                     <span>Productivity</span>
                 </button>
+                <!-- The count stays open work: it is the actionable number, and
+                     the same one Summary's "To review" card reports. -->
                 <button class="rail-nav-item" data-view="detail" disabled>
-                    <span>Review</span><span class="rail-count rail-count--warn" id="navCountReview"></span>
+                    <span>Detail</span><span class="rail-count rail-count--warn" id="navCountReview"></span>
                 </button>
                 <button class="rail-nav-item" data-view="tools">
                     <span>Tools</span>
@@ -202,11 +204,25 @@
             </section>
         </section>
 
-        <!-- ==================== Review ==================== -->
+        <!-- ==================== Detail ====================
+             Where a status figure leads: the cases behind any number in any
+             status band, fetched one status at a time and kept. -->
         <section class="view" id="detailView" hidden>
+            <!-- One card per scope group, multi-select, the counted ones pressed
+                 to begin with. Adding a group the plan excludes is a choice
+                 somebody makes here rather than something a total does quietly,
+                 which is why the card for one is drawn set apart. -->
+            <div class="scope-row">
+                <div class="scope-cards" id="detailScopes" role="group"
+                     aria-label="Scope groups"></div>
+                <span class="count" id="detailScopeSummary"></span>
+            </div>
+
             <!-- Controls, not readouts: each card filters the table to its own
-                 status and the first clears that filter. Built from the
-                 taxonomy in `renderStatCards`, bound in `views/detail.js`. -->
+                 status and the first fetches every status. Built from the whole
+                 taxonomy in `renderDetailCards`, bound in `views/detail.js`.
+                 Their figures count over the chosen scopes, which is how many
+                 cases pressing one would list. -->
             <div class="stats" id="statsRow"></div>
 
             <!-- Search, and the way to everything else. Nine controls above the
@@ -277,7 +293,11 @@
                             Missing reason
                         </button>
                     </div>
-                    <button class="btn" id="btnClearFilters">Clear all</button>
+                    <!-- Filters, not the selection: the statuses and the scope
+                         cards decide what this screen holds at all, and a Clear
+                         that emptied the table would be offering to show
+                         nothing. The chips above drop those one at a time. -->
+                    <button class="btn" id="btnClearFilters">Clear filters</button>
                 </div>
             </div>
 

@@ -61,13 +61,37 @@ const FILTER_SELECTORS = [
 ];
 
 /**
+ * Called with a status figure's context when one is pressed.
+ *
+ * Daily counts the plan, not the scope groups, so the context it hands over
+ * names a day and whatever the row narrows it to — never a scope. The
+ * destination falls back to the groups in the plan, which is the same coverage.
+ *
+ * @type {(ctx: Object) => void}
+ */
+let onDrillIn = () => {};
+
+/**
  * Attach the filter, clear and expand-all listeners. Call once, at startup.
  *
  * These controls live in the static template, so unlike the sortable headers
  * they are never replaced and must only be bound a single time.
  */
-export function initDailyView() {
+export function initDailyView({ onDrillIn: drill = () => {} } = {}) {
+    onDrillIn = drill;
     FILTER_SELECTORS.forEach((sel) => $(sel).addEventListener("change", renderDaily));
+
+    // A status figure is a way into the cases counted on that day. The click is
+    // stopped here because the whole group row is a toggle: without this, asking
+    // for a day's NGs would also collapse the day.
+    const drillFrom = (e) => {
+        const figure = e.target.closest("button[data-status]");
+        if (!figure) return;
+        e.stopPropagation();
+        onDrillIn({ ...figure.dataset });
+    };
+    $("#dailyBody").addEventListener("click", drillFrom);
+    $("#dailyFoot").addEventListener("click", drillFrom);
 
     $("#btnClearDailyFilters").addEventListener("click", () => {
         FILTER_SELECTORS.forEach((sel) => { $(sel).value = ""; });
@@ -128,9 +152,18 @@ function executedOf(row) {
  * @returns {Object}
  */
 function dailyAggregate(rows) {
+    // A field the whole group agrees on is a fact about the group; one it does
+    // not is nothing, and must not be carried as though it were — the figures on
+    // a roll-up row are a door into its cases, and a file name borrowed from the
+    // first row would open the wrong ones.
+    const shared = (key) => (rows.length && rows.every((r) => r[key] === rows[0][key])
+        ? rows[0][key] : "");
     return {
         ...sumRows(rows),
         date: rows.length ? rows[0].date : "",
+        file: shared("file"),
+        device: shared("device"),
+        pic: shared("pic"),
         members: new Set(rows.map((r) => r.pic).filter(Boolean)).size,
     };
 }
@@ -202,6 +235,24 @@ export function initDaily(data) {
     populateSelect("#dailyFilterDevice", uniqueOf(data, "device"));
     populateSelect("#dailyFilterPIC", uniqueOf(data, "pic"));
     renderDaily();
+}
+
+/**
+ * What a daily row's status figure leads to.
+ *
+ * A leaf names a file, a device, a PIC and a day; a roll-up names the day and
+ * whichever of the rest its rows agree on. "N/A" is dropped: it is what this
+ * table prints for a case with no PIC recorded, and handing it on as a filter
+ * would ask for a tester of that name.
+ *
+ * @param {Object} r A leaf row or a roll-up.
+ * @returns {Object} Context for `onDrillIn`.
+ */
+function linkFor(r) {
+    return {
+        file: r.file, device: r.device, date: r.date,
+        pic: r.pic === "N/A" ? "" : r.pic,
+    };
 }
 
 /** Column count, for colspans. */
@@ -339,7 +390,7 @@ function renderDailyBody() {
         groupBy: GROUP_BY,
         aggregate: dailyAggregate,
         renderValues: (r, i, depth) =>
-            statusCells(r, { blankZeros: i !== -1 }) + dailyCells(r, depth),
+            statusCells(r, { blankZeros: i !== -1, link: linkFor(r) }) + dailyCells(r, depth),
         renderLabelCells: (r) => `<td></td><td></td>`
             + `<td class="cell-label" style="--depth:2">${esc(r.device)}</td>`
             + `<td>${esc(r.pic)}</td>`,
@@ -355,7 +406,15 @@ function renderDailyBody() {
     });
 
     const totals = sumRows(dailyRows);
-    $("#dailyFoot").innerHTML = `<tr><td colspan="4">Total</td>${statusCells(totals)}`
+    // The footer totals everything the filters left, so its figures lead there —
+    // to the filtered span of days, not to one of them.
+    $("#dailyFoot").innerHTML = `<tr><td colspan="4">Total</td>${statusCells(totals, {
+        link: {
+            file: $("#dailyFilterFile").value,
+            device: $("#dailyFilterDevice").value,
+            pic: $("#dailyFilterPIC").value,
+        },
+    })}`
         + `<td class="num">${executedOf(totals).toLocaleString()}</td>`
         + `<td class="num"></td><td class="num"></td><td class="num"></td>`
         + `<td class="progress-col"></td></tr>`;

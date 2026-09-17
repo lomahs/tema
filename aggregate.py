@@ -200,6 +200,54 @@ def file_rows(cases, file_name):
     }
 
 
+def status_cases(cases, status_key):
+    """Every loaded case classified as one status, as plain dicts.
+
+    The Detail view fetches one status at a time and keeps what it fetched, so
+    this is the slice behind a status figure: click the 3 in NG's column and
+    these are the three rows. Splitting the load this way is what stops the
+    browser being handed every case of every workbook before anyone has looked
+    at one, and it only works because the slices **partition** the load — a case
+    classifies as exactly one status, so two pressed cards can be unioned
+    without double-counting and no case is unreachable. `tests/test_aggregate.py`
+    asserts that directly.
+
+    Cases are classified with `classify_case` rather than `classify`, like every
+    other aggregate here: `対象外` with a PIC is a Cancel someone decided on and
+    without one is work that was never in the plan, and the Result cell alone
+    cannot tell them apart.
+
+    **Work the plan excludes is kept.** Detail draws a card per scope group and
+    adding an excluded one is the reader's deliberate choice, so filtering here
+    would leave a card that could never be filled — the same reasoning that
+    keeps every group in `file_rows` and in `summary_rows`. Everything that
+    *adds groups together* still runs through `in_plan`; this produces a list,
+    not a figure.
+
+    Source order is kept, for the reason `issue_rows` keeps it: the view sorts
+    from there, and the unsorted order should read like the workbook.
+
+    Args:
+        cases: The loaded `TestCase` list — every file, as the store holds it.
+        status_key: A key from the taxonomy. One the taxonomy does not name
+            simply matches nothing; whether that deserves a 400 is the
+            endpoint's business, not this function's.
+
+    Returns:
+        A list of plain dicts, each carrying the `status` it classified as, the
+        `scope_group` it belongs to and the `device_family` it merges into.
+        Both ride along for the reason `file_rows` carries `scope_group` and
+        `summary_rows` carries `device_family`: the figures a reader clicks are
+        keyed by group and by family, so a view classifying the cases itself
+        would be filtering the two halves of its own screen through two
+        different vocabularies.
+    """
+    return [{**c.to_dict(), "status": status_key,
+             "scope_group": SCOPES.classify(c.scope),
+             "device_family": DEVICES.classify(c.device)}
+            for c in cases if STATUS.classify_case(c) == status_key]
+
+
 def daily_rows(cases):
     """Stats grouped by file, device, PIC, and test_date.
 

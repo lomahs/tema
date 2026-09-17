@@ -93,12 +93,34 @@ expands over `counted`, so an excluded status gets **no report column** — whic
 published sheet adding up to its own total and its width unchanged. In the UI the column is drawn
 with `band--aside`, a dashed rule marking where the sum stops.
 
-**`"review": true` is what the Review view holds.** Review (still `#detailView` / `views/detail.js`
-in the code) is the list of work outstanding, so it loads *only* those statuses (NG / NG-OK /
-Pending / Cancel) and drops everything else at `initDetail`. That is a deliberate restriction, not
-a default filter — which is why its stat strip is labelled **"To review"** and not "Total": it
-counts this screen, and Summary's Total counts the plan. Two figures both called Total would read as a bug. A status may not be both `excluded` and
-`review` — a case outside the plan is not work to review — and the validator refuses it.
+**`"review": true` is the selection Detail opens on, not a wall around it.** Detail
+(`#detailView` / `views/detail.js`) holds the *whole* taxonomy: every figure in every status band
+is a button, and pressing the 3 in NG's column, or the OKs, or the Not Yet Starteds, opens that
+list. What `review` names — NG / NG-OK / Pending / Cancel — is what the rail and Summary's "To
+review" card *arrive with*, which is why the rail's second count is still open work and the KPI
+card still says so. That reverses the old rule deliberately: the restriction was worth keeping as
+a default and not as a ceiling, because a reader who can see 26,335 OKs on Summary and cannot ask
+which ones they are is being told to go back to the spreadsheet. A status may not be both
+`excluded` and `review` — a case outside the plan is not open work — and the validator still
+refuses it.
+
+**Cases are served one status at a time, and that is what makes Detail affordable.**
+`status_cases(cases, key)` in `aggregate.py` is the slice behind a figure, and `/api/cases?status=`
+its `jsonify` wrapper; `views/detail.js` keeps a `Map` of what it has fetched, so pressing NG twice
+costs one request and pressing OK costs only the OKs. It replaced `/api/data`, which shipped every
+in-plan case on every load — 10 MB of JSON before anyone had clicked anything, on the twelve sample
+workbooks — and `fetchAll` no longer carries cases at all. Three things hold it together:
+
+- **The slices partition the load.** A case classifies as exactly one status, so two chosen statuses
+  are a union with nothing counted twice and nothing unreachable. `tests/test_aggregate.py` asserts
+  it against `STATUS.keys` directly, because every other property here rests on it.
+- **It keeps work the plan excludes**, and names the `scope_group` and `device_family` of each case
+  so the view can filter by them. Its coverage is Summary's, not Review's — the reasoning
+  `file_rows` follows — because Detail's scope cards are how an excluded group is deliberately
+  added. Everything that *adds groups together* still runs through `in_plan`.
+- **A status the taxonomy does not name is a 400, and so is no status at all.** The parameter is
+  what bounds the cost, and an empty list for a removed status would read as "none today" rather
+  than as a browser left open while somebody edited the taxonomy in Config.
 
 Adding or renaming a status means editing only that JSON. Backend, `/api/statuses`, the UI and the
 sample generator all read from it — never hard-code status keys in Python or JS.
@@ -144,7 +166,8 @@ every case loaded**. `views/summary.js` names no scope itself — it draws a blo
 work that is reported but not committed to.** It keeps its Summary table — the count has to stay
 visible, so the card is drawn in full and marked `chip--aside`, the dashed rule that means "the
 sum stops here" — and it leaves *every figure that adds groups together*: the KPI strip, Daily,
-Productivity, Review and the published report. `in_plan(cases)` in [aggregate.py](aggregate.py)
+Productivity and the published report — and it is the one Detail card a reader has to press for
+themselves. `in_plan(cases)` in [aggregate.py](aggregate.py)
 is the one definition of "counts toward the total", and `SCOPES.counted` / `SCOPES.is_counted`
 the one definition of which groups do. Three things follow, and each is enforced rather than
 trusted:
@@ -155,11 +178,16 @@ trusted:
   and `issue_rows` apply it themselves, because a figure is all they produce. That also keeps
   the invariant `tests/test_aggregate.py` asserts — a file's scope rows add up to its unscoped
   row — true of whatever list `summary_rows` is handed.
-- **Review drops those cases too**, which is the direct reading of the rule that a status may
-  not be both `excluded` and `review`: a case outside the plan is not work to review. `/api/data`
-  is where that happens. For the same reason `/api/summary` filters `missing_reason` — the KPI is
-  a *link* into Review, and a count of rows the destination cannot show would send the reader to
-  an empty table. That is why `missing_reason` rows now carry `scope`, as `issue_rows` always did.
+- **Detail draws a card for such a group rather than dropping it**, which is the one place in the
+  app where work outside the plan can be added to a figure — because there it is a reader pressing
+  a card, not a total quietly including it. The card starts unpressed and is drawn `chip-card--aside`,
+  the dashed rule that means the sum stops here, and `/api/cases` serves the cases with their group
+  named on them so the view can leave them out until asked. The old rule — that the case list drops
+  them outright, which `/api/data` enforced — was the same idea with no way to say otherwise.
+  `/api/summary` still filters `missing_reason`: the KPI is a *link*, and it opens Detail on the
+  counted groups, so counting rows the destination would not show would send the reader to a
+  shorter table than the number they pressed. That is why `missing_reason` rows carry `scope`, as
+  `issue_rows` always did.
 - **The fallback group may not be excluded.** It is where a typo'd or unconfigured scope lands, so
   excluding it would let a mistake drop out of every figure in the app without saying so — the
   precise silence the fallback exists to prevent. It is also what guarantees at least one group
@@ -268,8 +296,8 @@ destroys something a file cannot give back, and the only one allowed to carry a 
 **Frontend state ownership.** No framework, no bundler; `templates/index.html` loads
 [static/js/main.js](static/js/main.js) as `<script type="module">`. An imported ES binding can't be
 reassigned by the importer, so each piece of mutable state lives in exactly one module and is
-reached through functions: taxonomy in `taxonomy.js`, cases/filters/page/expansion in
-`views/detail.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
+reached through functions: taxonomy in `taxonomy.js`, the per-status case cache and the
+chosen statuses/scopes/filters/page/expansion in `views/detail.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
 `views/productivity.js`, Chart.js instances in `charts.js`, theme in `theme.js`,
 the daily target in `target.js`, the working copy of each config file in `views/config.js`.
 
@@ -286,7 +314,7 @@ than a plan of zero it can never meet.
 card, the two counts it carries, and the page heading — and nothing else; it does not know what a
 view contains, so `main.js` hands it an `onNavigate` callback and it reports clicks back through
 that. `main.js` owns `VIEWS`, which is the single list of what exists: Summary, Daily,
-Productivity, Review, File, Tools and Config. Adding a view means adding an entry there and a
+Productivity, Detail, File, Tools and Config. Adding a view means adding an entry there and a
 `<section class="view" id="<name>View">`, and nothing else.
 
 **File is the one view with no nav item.** It is a drill-in: it reports on a workbook you
@@ -339,7 +367,7 @@ Behavior worth preserving when touching the UI:
   header and totals row). That is what makes "Show all" a reasonable offer: every row renders and
   the *pane* scrolls, rather than the page growing to three thousand rows. It is also why a card
   keeps its footprint as you page — one that changed height on every Next would move everything
-  under it. Summary's and Review's tables both use it.
+  under it. Summary's and Detail's tables both use it.
 - Every table lives in a `.scroll-x` pane that has `overflow: auto` **and** a `max-height`.
   Both halves matter: the overflow makes the pane — not the viewport — the scrollport for
   the sticky `<thead>` and `<tfoot>`, and the height cap is what gives it something to
@@ -418,35 +446,64 @@ Behavior worth preserving when touching the UI:
   design's, it answers to the filters above it — a chart contradicting the table beneath it is
   worse than a chart with a narrower question. Cumulative is computed in date order regardless of
   how the table is sorted, because a running total that reversed with the sort would not be one.
-- **Review's stat cards are controls.** Each filters the table to its own status and the first
-  clears that filter; clicking the pressed one clears it too, so the row is also the way back out.
-  They count over `conditioned` — every filter applied *except* the status choice — not over
-  `filtered`: a card is the way to pick a status, so its figure has to say how many there are to
-  pick. A "To review" card dropping to 256 the moment NG is chosen would be counting the choice it
-  is offering to change. `Files` is the exception and counts what is on screen. The Result toggles
+- **Every figure in a status band is a door into the cases it counts**, and there is one
+  implementation of that: `statusCells` in `taxonomy.js` takes a `link` context and renders each
+  non-zero figure as a button carrying it. Summary's rows and footers, the file page and Daily all
+  pass one, so a figure means the same thing wherever it is clicked and no view imports the one
+  that lists the cases — each reports the press through an `onDrillIn` callback and `main.js`
+  routes it, exactly as `onOpenFile` already worked. A zero stays inert; there is nothing behind
+  it. Context travels as plain `data-` scalars, which is *not* a breach of the rule below about
+  group paths: that rule is about a NUL separator the tokenizer rewrites, and a file name has none.
+  What a row means depends on how it was drawn — a Split row names its device, a "By device type"
+  row its `device_family`, a Combined row neither — so `linkFor` in `views/summary.js` says which,
+  and `device_family` rides on each case rather than the substring rules being re-implemented in JS.
+  Summary draws its band `counted`, so Out Of Scope has no column there: its aside chip carries the
+  figures instead, and they are links too, or the one status deliberately set aside would be the
+  one status unreachable from that screen.
+- **Detail's stat cards are controls, and they count from the summary rows.** Each filters the
+  table to its own status; the leading "All" card selects every status, which is the one
+  deliberately expensive press on the screen. Their figures come from `/api/summary` over the
+  pressed scope cards — *not* from the cases, which is the change lazy loading forced: a status
+  nobody has clicked has no cases in the browser, and a card reading 0 for it would be reporting
+  the absence of a fetch as an absence of work. So a card says how many cases pressing it would
+  list, and the File / PIC / date / search filters narrow the table beneath without moving it; the
+  page subtitle says so. `Files` is the exception and counts what is on screen. The Result toggles
   inside the folded filter panel edit the same `chosenStatuses` set one at a time — the cards are
-  the single pick, the toggles the combination the cards cannot express.
+  the single pick, the toggles the combination the cards cannot express — and either may fetch.
+- **Detail's scope cards are a filter over the cache, never part of the fetch key.** `/api/cases`
+  serves every scope group, so pressing a card only changes which of the cases in hand are listed
+  — no request. They open on the counted groups, so the figure the screen starts from is the one
+  Summary calls Total, and the line beside them names what the pressed ones add up to. "Clear all"
+  deliberately leaves both the statuses and the scopes alone: they decide what exists on the screen
+  rather than narrowing it, and a Clear that emptied the table would be offering to show nothing.
+  With none pressed the table says which pick is missing rather than sitting empty.
 - `views/summary.js` must not import `views/detail.js`. The missing-reason list that used to
   jump into Detail took `showCase` and the `onJumpToCase` callback with it when it went.
   **`missing_reason` reaches the screen as the "Missing reason" KPI figure**, which is a link:
   the list of those rows was drawn as an at-risk panel and has since been removed, because
-  Review can show them properly. Both navigating cards ("To review" and "Missing reason") go
-  through `setJumpHandler`, a callback `main.js` installs — `main.js` owns the views, so a card
-  that navigates is not a reason to put the import back. A card may also name a *filter*
-  (`data-filter`), which `main.js` translates into a call on whichever module owns that view's
-  state — `showMissingReason()` in `views/detail.js`.
+  Detail can show them properly. **Every** KPI card navigates now, and so does each line of the
+  result breakdown, because each of them is a status figure by another name; they go through
+  `setJumpHandler`, a callback `main.js` installs — `main.js` owns the views, so a card that
+  navigates is not a reason to put the import back. A card hands over the statuses it counted
+  rather than a single key, since "Executed" and "Pass rate" are each a set the taxonomy defines
+  and opening one on a single status would list less than the figure pressed. It travels as an
+  index into the render-local `cards` array, not as a list in an attribute: a separator there is
+  one waiting to collide with a status key somebody configures. Missing reason stays a named
+  *filter* (`data-filter`) instead, which `main.js` translates into `showMissingReason()` — and
+  that selects the `needs_reason` statuses, not the review ones, or the very rows the card counted
+  would be missing from the list it opens.
 - **`lacksReason(d)` in `taxonomy.js` is the one definition of "owes a reason and has
   none"**: `requiresReason(status) && !ticket_id && !note`. It paints the Ticket ID and Note
   cells red *and* drives the Missing reason filter, and it is the browser-side twin of what
   `/api/summary` computes for `missing_reason`. It lives with the taxonomy it reads because
-  Review and the file page both ask it, and two copies is how they would come to disagree. Which statuses oblige an explanation stays the
+  Detail and the file page both ask it, and two copies is how they would come to disagree. Which statuses oblige an explanation stays the
   taxonomy's business (`needs_reason`), never named in the JS. The filter is a **condition, not a
   status choice** — it narrows within whatever results are chosen, so it lives beside the Result
-  toggles and is applied to `conditioned`, which is why the status cards keep counting correctly
-  underneath it. One consequence worth knowing: Review's figure can be smaller than the KPI's,
-  because `needs_reason` may name a status that is not a `review` one, and such a case is not in
-  that view at all.
-- **`renderPageFooter` in `pagination.js` is the footer Summary and Review share.** Count on the
+  toggles, and the status cards keep counting correctly underneath it because they count from the
+  summary rows rather than from the list it narrows. Arriving from the KPI selects the
+  `needs_reason` statuses for exactly that reason: one of them may not be a `review` status, and
+  the old selection would have hidden those rows while the card promised them.
+- **`renderPageFooter` in `pagination.js` is the footer Summary and Detail share.** Count on the
   left, `Prev · n / m · Next` and a Show-all on the right. Two footers that drifted would be two
   different answers to "is this all of it", so the markup and the paging arithmetic live in the
   widget, not in either view. It imports no view module, like everything else in that file.

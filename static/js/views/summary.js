@@ -34,7 +34,10 @@ import { populateSelect, uniqueOf } from "../filters.js";
 import { groupPath, renderGroupedTable } from "../groupedTable.js";
 import { renderPageFooter } from "../pagination.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortRows } from "../sorting.js";
-import { getStatuses, statusCells, statusHeadCells, sumRows } from "../taxonomy.js";
+import {
+    getCountedStatuses, getStatuses, isExcluded, statusCells, statusHeadCells,
+    sumRows,
+} from "../taxonomy.js";
 import { executedPct, progressBar, renderOverview, scopeProgress } from "./summaryOverview.js";
 
 /** @typedef {{key: string, label: string}} ScopeGroup */
@@ -100,6 +103,18 @@ const FILTERS = ["#summaryFilterDevice", "#summaryFilterFile"];
 let onOpenFile = () => {};
 
 /**
+ * Called with a status figure's context when one is pressed.
+ *
+ * Every number in the status band is a way into the cases it counts, and this
+ * module must no more import the view that lists them than it imports the file
+ * view — `main.js` owns both. The context is the row: its file, its device or
+ * device family, and the scope group whose card it was drawn in.
+ *
+ * @type {(ctx: Object) => void}
+ */
+let onDrillIn = () => {};
+
+/**
  * Wire the shared controls. Call once, at startup.
  *
  * They live in the static template, so unlike the sortable headers they are
@@ -108,12 +123,21 @@ let onOpenFile = () => {};
  * @param {{onOpenFile?: (file: string) => void}} [opts] What to do when a file
  *   name is clicked. This module does not know there is a file view.
  */
-export function initSummaryView({ onOpenFile: open = () => {} } = {}) {
+export function initSummaryView({ onOpenFile: open = () => {},
+                                  onDrillIn: drill = () => {} } = {}) {
     onOpenFile = open;
+    onDrillIn = drill;
 
     // One listener for every table: the cards are regenerated per scope group
-    // on each render, and a file cell is the same link in all of them.
+    // on each render, and a file cell — or a status figure — is the same link in
+    // all of them. A status figure is checked first because a row's File cell is
+    // a link too, and only one of the two can be meant by a click.
     $("#summaryTables").addEventListener("click", (e) => {
+        const figure = e.target.closest("button[data-status]");
+        if (figure) {
+            onDrillIn({ ...figure.dataset });
+            return;
+        }
         const cell = e.target.closest("button[data-file]");
         if (cell) onOpenFile(cell.dataset.file);
     });
@@ -240,6 +264,46 @@ function combineByFamily(rows) {
     });
 }
 
+/**
+ * What a card's dropped columns hold, when they hold anything.
+ *
+ * Summary draws only the counted statuses, so a case classified Out Of Scope or
+ * Other has no column here. Silently is the one way it must not go: `Other` is
+ * the fallback, which is where a misspelt Result string lands, and a typo that
+ * vanishes from the main screen *and* from the total is the precise silence
+ * the fallback exists to prevent.
+ *
+ * So the count comes back as a chip on the heading — `chip--aside`, the same
+ * dashed treatment as the scope group that is reported but not counted, and
+ * the same thing it means. It costs no column width and it is absent entirely
+ * when the dropped columns are empty, which on a clean load is always. The
+ * per-status breakdown rides in the title, and the file page still draws every
+ * status a card.
+ *
+ * @param {Object[]} rows One scope group's rows.
+ * @returns {string} HTML, or "" when nothing was dropped.
+ */
+function asideChip(rows, scopeKey) {
+    const hidden = getStatuses().filter((s) => isExcluded(s.key));
+    if (!hidden.length) return "";
+
+    const totals = sumRows(rows);
+    const held = hidden.filter((s) => totals[s.key]);
+    const n = held.reduce((a, s) => a + totals[s.key], 0);
+    if (!n) return "";
+
+    // Each figure is a door, because this chip is the only place these statuses
+    // appear on this screen at all: the band is drawn `counted`, so Out Of Scope
+    // has no column here to click. Without this, the one status the reader
+    // cannot reach from Summary would be the one deliberately set aside.
+    const breakdown = held.map((s) =>
+        `<button type="button" class="cell-link" data-status="${esc(s.key)}"`
+        + ` data-scope="${esc(scopeKey)}" title="List the ${esc(s.label)} cases">`
+        + `${esc(s.label)}: ${totals[s.key]}</button>`).join(" · ");
+    return `<span class="chip chip--aside" title="Outside the total, and not given a column here">`
+        + `${breakdown} · ${n} not counted</span>`;
+}
+
 /** The chips describing what is filtered out, and how to put it back. */
 function chips() {
     const active = [
@@ -301,6 +365,8 @@ function render() {
                 ${scope.counted === false
                     ? `<span class="chip chip--aside" title="Reported, but not counted toward the totals above">Not in total</span>`
                     : ""}
+                <!-- And what this card's dropped columns hold, if anything. -->
+                ${asideChip(r, scope.key)}
                 <!-- Each group carries its own bar: FPT and JP are separate
                      commitments, so one of them running behind is a fact the
                      combined figure above would hide. -->
@@ -351,6 +417,10 @@ function render() {
  * container is rebuilt on every `render`, so the measurement is always of
  * freshly auto-sized tables and never of the last pass's pinned ones.
  *
+ * It runs for a single card too. Aligning is only half of what it does — the
+ * other half is `fitToPane`, which is what keeps the table inside the page, and
+ * one table can overflow its pane exactly as two can.
+ *
  * A hidden view measures as zero — `render` runs before `showView` on the load
  * path — so this bails rather than pinning every column to nothing, and
  * `main.js` calls `alignSummaryColumns` when the view is shown. That is the
@@ -358,7 +428,7 @@ function render() {
  */
 function alignColumns() {
     const tables = [...$$("#summaryTables table.ledger")];
-    if (tables.length < 2) return;   // one table is already consistent with itself
+    if (!tables.length) return;
     if (!tables[0].offsetParent) return;   // hidden: nothing has a width yet
 
     const widths = [];
@@ -397,20 +467,22 @@ function alignColumns() {
  *    figures — "Pending (保留)" against a one-digit count — so most of that
  *    width is whitespace, and `.ledger th.band` already sets `white-space:
  *    normal` so a heading wraps rather than clips. Squeezing here costs a line
- *    of header height. The floor is the room a four-figure count needs, which
+ *    of header height. The floor is the room a six-figure count needs, which
  *    is the point where squeezing would start costing a figure instead.
  * 2. The two columns of freehand text and the progress bar. A file name that
  *    runs out of room ellipsizes — recoverable from the cell's title, but only
  *    by hovering it, so this is asked second rather than first.
- * 3. The band again, down to what a two-figure count needs. This is the last
+ * 3. The band again, down to what a four-figure count needs. This is the last
  *    resort on a genuinely narrow window, where the choice is between a
  *    heading wrapping onto a third line and a sideways scrollbar. Kept apart
  *    from the first tier so that a wide screen never reaches it: the band
  *    settles at a comfortable width long before anything is this tight.
  *
- * Surplus goes the other way round: to the text tier only. A wide screen
- * spent on whitespace around two-digit numbers is a wide screen wasted, and
- * the column holding file names is the one that can use it.
+ * Surplus goes the other way round, and to the File column alone. A wide
+ * screen spent on whitespace around two-digit numbers is a wide screen wasted,
+ * and of the three columns that hold text, File is the only one that can spend
+ * the room: Device names are short, and Executed holds a bar whose width is
+ * declared. See `fitToPane`.
  *
  * @param {number} n The column count: File, Device, the band, then Executed.
  * @returns {{i: number, floor: number}[][]}
@@ -422,9 +494,9 @@ function giveTiers(n) {
         return cols;
     };
     return [
-        band(76),
-        [{ i: 0, floor: 100 }, { i: 1, floor: 80 }, { i: n - 1, floor: 110 }],
-        band(56),
+        band(64),
+        [{ i: 0, floor: 240 }, { i: 1, floor: 80 }, { i: n - 1, floor: 110 }],
+        band(52),
     ];
 }
 
@@ -465,8 +537,17 @@ function fitToPane(widths, available) {
         .filter((tier) => tier.length);
 
     let slack = available - widths.reduce((a, w) => a + w, 0);
-    // Only the text tier takes a surplus; the band tiers exist to give.
-    const asked = slack > 0 ? tiers.slice(1, 2) : tiers;
+    // A surplus goes to the File column and nowhere else.
+    //
+    // Sharing it across the text tier in proportion to current width sounds
+    // fair and is not: Executed is the widest of the three, so it took the
+    // largest share of every wide screen — and it holds a bar and a percentage
+    // whose size is declared, so the extra room did nothing at all. Device
+    // names are short. File names run past fifty characters and ellipsize.
+    // Only one of the three can spend the room, so only it is offered it.
+    const asked = slack > 0
+        ? [tiers[1].filter((c) => c.i === 0)].filter((t) => t.length)
+        : tiers;
 
     asked.forEach((tier) => {
         // More than one pass: a column that reaches its floor stops absorbing,
@@ -533,7 +614,13 @@ function renderTable(i, scope, rows) {
     $(head).innerHTML =
         sortableTh("file", "File")
         + sortableTh("device", "Device")
-        + statusHeadCells(sortableTh)
+        // Counted statuses only. Everywhere else draws the full band; this is
+        // the one screen that cannot afford it. The columns it drops hold
+        // nothing that enters the sum, and the room they free buys the File
+        // column the width a fifty-character workbook name actually needs.
+        // What those columns do hold is reported by `asideChip` on the card
+        // heading, so the count never leaves the screen altogether.
+        + statusHeadCells(sortableTh, { counted: true })
         // Not sortable, deliberately: it is a redrawing of the band beside it,
         // so a reader who wants that order has Total and the status columns.
         + `<th class="progress-col">Executed</th>`;
@@ -555,7 +642,7 @@ function renderTable(i, scope, rows) {
     renderGroupedTable({
         container: `#summaryBody-${i}`,
         rows: visible,
-        totalCols: 4 + getStatuses().length,
+        totalCols: 4 + getCountedStatuses().length,
         expanded: noExpansion,
         // Every row stands on its own: both identity columns are filled in, so
         // a copied selection is complete without the header above it.
@@ -569,7 +656,9 @@ function renderTable(i, scope, rows) {
             // name ellipsizes; the File cell's own title covers the same thing.
             + `<td title="${esc(r.device)}">${esc(r.device)}</td>`,
         labelCols: 2,
-        renderValues: (r) => statusCells(r, { blankZeros: true }) + progressCell(r),
+        renderValues: (r) => statusCells(r, {
+            blankZeros: true, counted: true, link: linkFor(r, scope.key),
+        }) + progressCell(r),
         onToggle: () => {},
         emptyMessage: "No test cases loaded.",
     });
@@ -577,10 +666,42 @@ function renderTable(i, scope, rows) {
     // The footer totals **every** row in the group, not the visible page — it
     // answers "where does this scope stand", which paging must not change.
     const totals = sumRows(sorted);
+    // The footer totals this group under whatever the shared filters are set to,
+    // so its figures lead to the same narrowing rather than to the whole group.
     $(`#summaryFoot-${i}`).innerHTML =
-        `<tr><td colspan="2">Total</td>${statusCells(totals)}${progressCell(totals)}</tr>`;
+        `<tr><td colspan="2">Total</td>${statusCells(totals, {
+            counted: true,
+            link: {
+                scope: scope.key,
+                file: $("#summaryFilterFile").value,
+                device: $("#summaryFilterDevice").value,
+            },
+        })}`
+        + `${progressCell(totals)}</tr>`;
 
     renderFooter(i, scope, sorted.length, page, pageCount, state.showAll);
+}
+
+/**
+ * What a row's status figure leads to, which is what the Rows setting made it.
+ *
+ * Split rows name one device, so the drill-in names it too. "By device type"
+ * rows name a family — several device names merged — so they hand over the
+ * family, which rides on each case for exactly this reason rather than being
+ * re-derived from the substring rules in JavaScript. A Combined row is every
+ * device of that file, so it names none and the file plus the scope group is
+ * already the whole of it.
+ *
+ * @param {Object} r A row at the current granularity.
+ * @param {string} scopeKey The scope group whose card it is drawn in.
+ * @returns {Object} Context for `onDrillIn`.
+ */
+function linkFor(r, scopeKey) {
+    if (grouping === "combined") return { file: r.file, scope: scopeKey };
+    if (grouping === "family") {
+        return { file: r.file, device_family: r.device_family, scope: scopeKey };
+    }
+    return { file: r.file, device: r.device, scope: scopeKey };
 }
 
 /**

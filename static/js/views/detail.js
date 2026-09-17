@@ -1,15 +1,45 @@
 /**
- * Detail view: stat figures, filters, the case table, and the charts.
+ * Detail view: the case list for the whole taxonomy, fetched a status at a time.
  *
- * Holds only the cases worth reviewing — NG, NG-OK, Pending and Cancel, or
- * whatever `"review": true` names in `parser/result_status.json`. A clean pass,
- * an unstarted case and an out-of-scope one need nobody's attention, and this
- * screen exists to work through the ones that do. That means the figures here
- * deliberately do **not** match Summary's: the card is labelled "To review",
- * not "Total".
+ * This is where a status figure leads. Every number in a status band on Summary,
+ * on the file page and on Daily is a button, and pressing it opens this screen
+ * showing exactly the cases behind it — an OK and a Not Yet Started as readily
+ * as an NG. That is what it stopped being "Review", which held only the statuses
+ * `parser/result_status.json` marks `"review": true`; that restriction survives
+ * as the *selection* the rail and Summary's "To review" card arrive with, rather
+ * than as a wall around the screen.
  *
- * Owns the reviewable case list and the derived filtered / grouped / paged
- * state, plus the set of statuses the Result toggles have selected.
+ * **Cases arrive one status at a time, and are kept.** Nothing is fetched until
+ * a status is chosen; `/api/cases?status=NG` is asked once and its answer cached
+ * for as long as the load lasts, so pressing NG again costs nothing and pressing
+ * OK costs only the OKs. Every other narrowing — scope, file, device, PIC, the
+ * dates, the search box, sorting, grouping, paging — happens here, over what is
+ * already in hand, so none of them is a round trip. The cache is dropped when
+ * the source is reloaded or a config is saved, because either can change what a
+ * case *is*.
+ *
+ * It follows that the status slices must partition the load, which is
+ * `aggregate.status_cases`'s job and asserted there: a case in two slices would
+ * be listed twice the moment two statuses are chosen, and one in no slice could
+ * never be reached from any figure.
+ *
+ * **The scope cards are how work outside the plan is added.** One card per scope
+ * group, multi-select, the counted ones pressed to begin with — so the figure
+ * this screen opens on is the one Summary calls Total, and a group the plan
+ * excludes is something the reader deliberately adds rather than something that
+ * quietly inflates a count. Scope is a filter over the cache, not part of the
+ * fetch key, so pressing a card never asks the server anything.
+ *
+ * **The status cards count from the summary rows, not from the cases.** They
+ * report how many cases each status has *within the pressed scopes*, which is
+ * exactly "how many there are to fetch" — a card that could only count what had
+ * already been fetched would read 0 for everything nobody had clicked yet. The
+ * other filters narrow the table beneath them without moving them; the strip
+ * says so.
+ *
+ * Owns the case cache, the chosen statuses and scopes, the derived
+ * filtered / grouped / paged state, and the two conditions a drill-in can set
+ * that no control on the screen expresses.
  *
  * Grouping is optional here, unlike Summary and Daily. A flat list of cases is
  * the right default — you often want to scan or sort across every file at once
@@ -18,13 +48,15 @@
  * a page boundary.
  */
 import { $, esc } from "../dom.js";
+import { getCases } from "../api.js";
 import { renderCharts, resizeCharts } from "../charts.js";
 import { populateSelect, uniqueOf } from "../filters.js";
 import { renderGroupedTable, toggleGroup } from "../groupedTable.js";
 import { renderPageFooter } from "../pagination.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortGrouped, sortRows } from "../sorting.js";
 import {
-    getReviewStatuses, isExcluded, isReview, lacksReason, toneFor,
+    getReasonStatuses, getReviewStatuses, getStatuses, isExcluded, lacksReason,
+    renderStatCards, sumRows, toneFor,
 } from "../taxonomy.js";
 
 const PAGE_SIZE = 50;
@@ -40,15 +72,66 @@ let missingOnly = false;
 
 const DEFAULT_EXPANDED = true;
 
-/** @type {Object[]} the reviewable cases from /api/data */
-let allData = [];
-/** @type {Set<string>} status keys the Result toggles have on; empty means all */
+/**
+ * Status key -> that status' cases, as `/api/cases` served them.
+ *
+ * The whole reason this screen is affordable. Cleared by {@link initDetail},
+ * which runs on every load and every config save — the cases behind a status
+ * can change without anything here being clicked.
+ *
+ * @type {Map<string, Object[]>}
+ */
+const cache = new Map();
+
+/** @type {Set<string>} status keys chosen; also the fetch key. Empty shows nothing. */
 const chosenStatuses = new Set();
-/** @type {Object[]} `allData` after filters and sorting */
+
+/** @type {Set<string>} scope group keys pressed. A filter over the cache, never fetched. */
+const chosenScopes = new Set();
+
+/** @type {{key: string, label: string, counted: boolean}[]} groups, from /api/summary */
+let scopeGroups = [];
+
+/** @type {Object[]} /api/summary rows — where the card figures come from */
+let summaryRows = [];
+
+/** @type {Object[]} the cached cases of the chosen statuses, within the chosen scopes */
+let allData = [];
+
+/** @type {Object[]} `allData` after the filters and the sort */
 let filtered = [];
-/** @type {Object[]} `allData` after every filter EXCEPT the status choice */
-let conditioned = [];
+
+/**
+ * Two narrowings a drill-in can arrive with that no control here expresses.
+ *
+ * Clicking a figure on a "By device type" row means *that handset*, which is
+ * several device names; clicking one on the file page means *that sheet*. Both
+ * ride on the case (`device_family` and `sheet` come down with it) rather than
+ * being re-derived here, and both are clearable from the chip row — which is
+ * why they are conditions and not hidden state.
+ */
+let conditions = { deviceFamily: "", sheet: "" };
+
+/**
+ * Filter values a drill-in asked for, applied once its cases have arrived.
+ *
+ * The File / Device / PIC selects are filled from the cases in hand, so setting
+ * one before the fetch lands would be assigning a value that is not yet an
+ * option. The row clicked is made of those very cases, so by the time they
+ * arrive the option exists.
+ *
+ * @type {?Object}
+ */
+let pending = null;
+
 let currentPage = 1;
+
+/** Whether a fetch is in flight, and which one is the current answer. */
+let loading = false;
+let loadToken = 0;
+
+/** Whether the cache was dropped since this view was last drawn. */
+let stale = true;
 
 /** @type {Set<string>} which groups are open */
 const expanded = new Set();
@@ -76,8 +159,12 @@ const COLUMNS = [
  * Single-choice selects that narrow the list, with the label used on their chip.
  *
  * Result is not among them: it narrows by *status* rather than by the raw text
- * of the cell, and it takes several values at once, so it is handled on its own
- * throughout this module.
+ * of the cell, it takes several values at once, and it is what decides which
+ * cases are fetched at all — so it is handled on its own throughout this module.
+ *
+ * Scope is: the select narrows by the raw string in the cell, which is a finer
+ * vocabulary than the cards above and belongs with the other selects. The cards
+ * pick *groups*; this picks one of the spellings inside them.
  */
 const FILTERS = [
     { id: "filterFile", field: "file_name", label: "File" },
@@ -96,7 +183,8 @@ const DATE_FILTERS = [
  *
  * The sortable headers are regenerated per taxonomy load, so they are bound in
  * {@link renderDetailHead} instead — binding them here as well would stack a
- * second listener and make one click sort twice.
+ * second listener and make one click sort twice. The status and scope cards are
+ * regenerated too, which is why both are bound through their strip.
  */
 export function initDetailView() {
     const rerender = () => { currentPage = 1; applyFilters(); };
@@ -106,14 +194,16 @@ export function initDetailView() {
     $("#filterSearch").addEventListener("input", rerender);
 
     // One listener on the group rather than one per button, so the toggles can
-    // be redrawn on every taxonomy load without rebinding anything.
+    // be redrawn on every taxonomy load without rebinding anything. Unlike every
+    // other control here, this one may have to fetch: a status nobody has picked
+    // yet has no cases in hand.
     $("#filterResult").addEventListener("click", (e) => {
         const key = e.target.closest("button[data-status]")?.dataset.status;
         if (!key) return;
         if (chosenStatuses.has(key)) chosenStatuses.delete(key);
         else chosenStatuses.add(key);
         paintResultToggles();
-        rerender();
+        loadChosen();
     });
     $("#detailGroupBy").addEventListener("change", rerender);
 
@@ -124,12 +214,31 @@ export function initDetailView() {
         const card = e.target.closest("button[data-status-card]");
         if (!card) return;
         const key = card.dataset.statusCard;
-        chosenStatuses.clear();
-        // Clicking the card already selected clears it, so the row is also the
-        // way back out — otherwise "All" would be the only way to undo a pick.
-        if (key && card.getAttribute("aria-pressed") !== "true") chosenStatuses.add(key);
+        if (!key) {
+            // "All" is the one deliberately expensive pick on the screen: it
+            // means every status, so it fetches the ones nobody has opened yet.
+            getStatuses().forEach((s) => chosenStatuses.add(s.key));
+        } else {
+            chosenStatuses.clear();
+            // Clicking the card already selected clears it, so the row is also
+            // the way back out.
+            if (card.getAttribute("aria-pressed") !== "true") chosenStatuses.add(key);
+        }
         paintResultToggles();
-        rerender();
+        loadChosen();
+    });
+
+    // The scope cards never fetch: every case of a chosen status is already
+    // here, whichever group it belongs to, so a card is a filter over the cache.
+    $("#detailScopes").addEventListener("click", (e) => {
+        const card = e.target.closest("button[data-scope-card]");
+        if (!card) return;
+        const key = card.dataset.scopeCard;
+        if (chosenScopes.has(key)) chosenScopes.delete(key);
+        else chosenScopes.add(key);
+        paintScopeCards();
+        currentPage = 1;
+        rebuild();
     });
 
     // Filters are folded away by default: search plus the status cards answers
@@ -150,7 +259,7 @@ export function initDetailView() {
     });
 
     $("#btnClearFilters").addEventListener("click", () => {
-        clearFilters();
+        clearNarrowing();
         rerender();
     });
 
@@ -160,18 +269,23 @@ export function initDetailView() {
         strip.hidden = !show;
         $("#btnToggleCharts").setAttribute("aria-expanded", String(show));
         $("#btnToggleCharts").textContent = show ? "Hide charts" : "Show charts";
-        // Chart.js sizes to its container, which was 0x0 while the strip was hidden.
+        // Chart.js sizes to a 0x0 container while the strip is hidden.
         if (show) resizeCharts();
     });
 }
 
-/** Clear every filter, leaving the grouping choice alone. */
-function clearFilters() {
+/**
+ * Clear everything that narrows the list, leaving the selection alone.
+ *
+ * The statuses and the scopes are deliberately untouched: they are what decides
+ * which cases exist on this screen at all, and a "Clear all" that emptied the
+ * table would be offering to show you nothing. The grouping choice is left too.
+ */
+function clearNarrowing() {
     [...FILTERS, ...DATE_FILTERS].forEach(({ id }) => { $("#" + id).value = ""; });
     $("#filterSearch").value = "";
-    chosenStatuses.clear();
+    conditions = { deviceFamily: "", sheet: "" };
     missingOnly = false;
-    paintResultToggles();
     paintMissingReason();
 }
 
@@ -180,56 +294,332 @@ function paintMissingReason() {
     $("#btnMissingReason").setAttribute("aria-pressed", String(missingOnly));
 }
 
+/** The scope groups that count toward the total — the selection this view opens on. */
+function defaultScopes() {
+    chosenScopes.clear();
+    scopeGroups.filter((g) => g.counted !== false)
+        .forEach((g) => chosenScopes.add(g.key));
+}
+
+/**
+ * Open this view on the statuses that count as open work.
+ *
+ * What the rail arrives with, and where Summary's "To review" card leads. The
+ * restriction that used to define this screen is this one selection now.
+ */
+export function showReview() {
+    clearNarrowing();
+    chosenStatuses.clear();
+    getReviewStatuses().forEach((s) => chosenStatuses.add(s.key));
+    defaultScopes();
+    paintScopeCards();
+    paintResultToggles();
+    showAll = false;
+    return loadChosen();
+}
+
 /**
  * Open this view showing only the cases that owe a reason and carry none.
  *
  * Called from `main.js` when Summary's Missing reason card is pressed. Every
- * other filter is cleared first: the card reports over the whole load, so
+ * other narrowing is cleared first: the card reports over the whole load, so
  * arriving into a list still narrowed by somebody's earlier File choice would
  * show a smaller number than the card that sent you.
  *
- * The figure can still be smaller, and legitimately: `needs_reason` may name a
- * status that is not a `review` one, and such a case is not in this view at all.
+ * The statuses chosen are the ones that *oblige* a reason, which is what the
+ * card counted — not the review ones. A status can need a reason without being
+ * open work, and arriving with only the review statuses chosen would silently
+ * drop exactly those rows.
  */
 export function showMissingReason() {
-    clearFilters();
+    clearNarrowing();
+    chosenStatuses.clear();
+    getReasonStatuses().forEach((s) => chosenStatuses.add(s.key));
+    defaultScopes();
+    paintScopeCards();
     missingOnly = true;
     paintMissingReason();
-    currentPage = 1;
+    paintResultToggles();
     showAll = false;
+    return loadChosen();
+}
+
+/**
+ * Open this view on the cases behind one status figure.
+ *
+ * The other half of making the status band a door: the figure says which status
+ * and which row it was counted on, and this narrows to exactly that. `main.js`
+ * routes every band on every screen here, so a figure means the same thing
+ * wherever it is clicked.
+ *
+ * A row that names its scope group selects that card alone — the figure counted
+ * that group and nothing else. One that does not (Daily reports over the plan
+ * rather than per group) falls back to the counted groups.
+ *
+ * @param {Object} ctx
+ * @param {string} [ctx.status] The status key the figure counts.
+ * @param {string[]} [ctx.statuses] Several, where the figure was a roll-up over
+ *   them — Summary's Executed and Pass rate cards each count a set the taxonomy
+ *   defines, and opening one on a single status would list less than it said.
+ * @param {string} [ctx.file] Workbook basename.
+ * @param {string} [ctx.device] One device name.
+ * @param {string} [ctx.deviceFamily] A handset, where the row merged its sizes.
+ * @param {string} [ctx.scope] A scope *group* key, not a raw Scope string.
+ * @param {string} [ctx.sheet] One sheet of one workbook.
+ * @param {string} [ctx.pic] One tester.
+ * @param {string} [ctx.date] One test date, applied to both date bounds.
+ */
+export function showStatusCases(ctx) {
+    clearNarrowing();
+    chosenStatuses.clear();
+    (ctx.statuses || (ctx.status ? [ctx.status] : [])).forEach((k) => chosenStatuses.add(k));
+
+    if (ctx.scope && scopeGroups.some((g) => g.key === ctx.scope)) {
+        chosenScopes.clear();
+        chosenScopes.add(ctx.scope);
+    } else {
+        defaultScopes();
+    }
+    paintScopeCards();
+    paintResultToggles();
+
+    conditions = { deviceFamily: ctx.deviceFamily || "", sheet: ctx.sheet || "" };
+    // The selects are filled from the cases, so these wait for them to arrive.
+    pending = { file: ctx.file, device: ctx.device, pic: ctx.pic, date: ctx.date };
+
+    showAll = false;
+    currentPage = 1;
+    return loadChosen();
+}
+
+/**
+ * Fetch whichever chosen statuses are not cached, then redraw.
+ *
+ * A slow first answer must not overwrite a fast second one, so each run takes a
+ * token and a stale run drops its result rather than rendering it — otherwise
+ * clicking NG and then OK could leave the NGs on screen with OK pressed.
+ *
+ * A refused status (400) is dropped from the selection rather than retried: the
+ * only way to ask for one the taxonomy does not name is to have had this screen
+ * open while somebody removed it in Config.
+ */
+async function loadChosen() {
+    stale = false;
+    currentPage = 1;
+    const missing = [...chosenStatuses].filter((key) => !cache.has(key));
+    if (!missing.length) { rebuild(); return; }
+
+    const token = ++loadToken;
+    loading = true;
+    renderTable();
+
+    const answers = await Promise.all(
+        missing.map(async (key) => [key, await getCases(key)]));
+    if (token !== loadToken) return;   // a later click is the current answer
+
+    answers.forEach(([key, { ok, json }]) => {
+        if (ok) cache.set(key, json);
+        else chosenStatuses.delete(key);
+    });
+    loading = false;
+    paintResultToggles();
+    rebuild();
+}
+
+/**
+ * Rebuild `allData` from the cache and redraw.
+ *
+ * Taxonomy order rather than the order the statuses were clicked, so the
+ * unsorted table reads the way every other status list in the app does.
+ */
+function rebuild() {
+    allData = [];
+    getStatuses().forEach((s) => {
+        if (!chosenStatuses.has(s.key)) return;
+        (cache.get(s.key) || []).forEach((d) => {
+            if (chosenScopes.has(d.scope_group)) allData.push(d);
+        });
+    });
+
+    expanded.clear();
+    FILTERS.forEach(({ id, field }) => populateSelect("#" + id, uniqueOf(allData, field)));
+
+    if (pending) {
+        // The row clicked is made of these cases, so its file, device and PIC
+        // are options by now.
+        if (pending.file) $("#filterFile").value = pending.file;
+        if (pending.device) $("#filterDevice").value = pending.device;
+        if (pending.pic) $("#filterPIC").value = pending.pic;
+        if (pending.date) {
+            $("#filterDateFrom").value = pending.date;
+            $("#filterDateTo").value = pending.date;
+        }
+        pending = null;
+    }
+
     applyFilters();
 }
 
 /**
- * Draw one toggle per review status.
+ * How many cases count as open work — the figure the rail carries beside Detail.
+ *
+ * Read off the summary rows rather than off the cases, because the cases of a
+ * review status may never be fetched: the rail states this whether or not
+ * anybody opens the screen. Counted over the scope groups in the plan, which is
+ * what the selection this view opens on shows.
+ *
+ * @returns {number}
+ */
+export function reviewCount() {
+    const counted = new Set(scopeGroups.filter((g) => g.counted !== false).map((g) => g.key));
+    const totals = sumRows(summaryRows.filter((r) => counted.has(r.scope)));
+    return getReviewStatuses().reduce((n, s) => n + (totals[s.key] || 0), 0);
+}
+
+/**
+ * Adopt a fresh load and drop the cache.
+ *
+ * Nothing is fetched here. The cases behind a figure are worth a request when
+ * somebody asks for them, and a load whose Detail screen is never opened should
+ * cost nothing at all — which is the whole point of serving them per status.
+ * The exception is a reader already standing on this screen when the source is
+ * reloaded or a config saved: their rows are now wrong, so those are re-fetched
+ * at once. Everyone else gets them from {@link enterDetail}.
+ *
+ * @param {{groups: Object[], scopes: Object[]}} summary The `/api/summary` body.
+ *   Its rows are what the status cards count, and its `scopes` are the cards.
+ */
+export function initDetail(summary) {
+    summaryRows = summary.groups || [];
+    scopeGroups = summary.scopes || [];
+    cache.clear();
+    allData = [];
+    filtered = [];
+    stale = true;
+
+    // A status or a group can disappear in Config while this screen is open.
+    const keys = new Set(getStatuses().map((s) => s.key));
+    [...chosenStatuses].forEach((k) => { if (!keys.has(k)) chosenStatuses.delete(k); });
+    if (!chosenStatuses.size) getReviewStatuses().forEach((s) => chosenStatuses.add(s.key));
+    const groups = new Set(scopeGroups.map((g) => g.key));
+    [...chosenScopes].forEach((k) => { if (!groups.has(k)) chosenScopes.delete(k); });
+    if (!chosenScopes.size) defaultScopes();
+
+    renderScopeCards();
+    paintResultToggles();
+    renderStats();
+    renderTable();
+
+    if (!$("#detailView").hidden) return loadChosen();
+    return Promise.resolve();
+}
+
+/**
+ * Fetch what the current selection needs, if the cache has been dropped since
+ * this view was last drawn. Called by `main.js` when the view is shown.
+ */
+export function enterDetail() {
+    if (stale) loadChosen();
+}
+
+/**
+ * Draw one toggle per status.
  *
  * Rebuilt from the taxonomy rather than written into the template, and called
  * again whenever the selection changes so `aria-pressed` stays truthful — a
  * toggle group that lies to a screen reader is worse than a plain select.
  */
 export function renderResultToggles() {
-    $("#filterResult").innerHTML = getReviewStatuses().map((st) =>
+    $("#filterResult").innerHTML = getStatuses().map((st) =>
         `<button type="button" class="toggle" data-status="${esc(st.key)}"`
         + ` data-tone="${esc(toneFor(st.key))}" aria-pressed="false">${esc(st.label)}</button>`
     ).join("");
     paintResultToggles();
 }
 
-/** Reflect `chosenStatuses` onto the buttons. */
+/**
+ * Draw the status card strip: every status, not only the reviewable ones.
+ *
+ * The leading card is "All" rather than "To review": this screen holds the whole
+ * taxonomy now, and pressing it is the deliberate choice to fetch every status.
+ * Built here rather than by `main.js`, which has no business knowing what this
+ * strip contains.
+ */
+export function renderDetailCards() {
+    renderStatCards({
+        container: "#statsRow",
+        statuses: getStatuses(),
+        totalLabel: "All",
+        totalId: "statTotal",
+        idPrefix: "stat-",
+        inert: [{ label: "Files", id: "statFiles" }],
+    });
+    paintResultToggles();
+}
+
+/** Reflect `chosenStatuses` onto the toggles and the cards. */
 function paintResultToggles() {
     $("#filterResult").querySelectorAll("button[data-status]").forEach((b) => {
         b.setAttribute("aria-pressed", String(chosenStatuses.has(b.dataset.status)));
     });
-    // The cards show the same state. "All" is pressed when nothing is chosen;
-    // a status card is pressed only when it is the *sole* choice, because the
-    // toggles can express a combination the single-pick row cannot.
+    // The cards show the same state. "All" is pressed when every status is
+    // chosen; a status card is pressed only when it is the *sole* choice,
+    // because the toggles can express a combination the single-pick row cannot.
+    const all = getStatuses().length > 0 && chosenStatuses.size === getStatuses().length;
     $("#statsRow").querySelectorAll("button[data-status-card]").forEach((b) => {
         const key = b.dataset.statusCard;
         const on = key
             ? chosenStatuses.size === 1 && chosenStatuses.has(key)
-            : chosenStatuses.size === 0;
+            : all;
         b.setAttribute("aria-pressed", String(on));
     });
+}
+
+/**
+ * Draw one card per scope group, with the cases it holds.
+ *
+ * Counted from the summary rows, so a group is offered — and its size is known
+ * — before any of its cases have been fetched. A group the plan excludes is
+ * drawn `chip-card--aside`, the card form of the dashed rule its Summary table
+ * carries, and starts unpressed: adding work nobody committed to is a choice
+ * somebody makes, not a default.
+ */
+export function renderScopeCards() {
+    const counts = countsByScope();
+    $("#detailScopes").innerHTML = scopeGroups.map((g) => `
+        <button type="button" class="chip-card${g.counted === false ? " chip-card--aside" : ""}"
+                data-scope-card="${esc(g.key)}" aria-pressed="false">
+            <span class="chip-card-label">${esc(g.label)}</span>
+            <span class="chip-card-value num">${(counts[g.key] || 0).toLocaleString()}</span>
+        </button>`).join("");
+    paintScopeCards();
+}
+
+/** Every case of every status, per scope group, from the summary rows. */
+function countsByScope() {
+    const counts = {};
+    scopeGroups.forEach((g) => {
+        const totals = sumRows(summaryRows.filter((r) => r.scope === g.key));
+        // Every status, not `total`: an excluded status is a case this screen
+        // can list, and a card that would not count it is a card that lies
+        // about how many rows pressing it adds.
+        counts[g.key] = getStatuses().reduce((n, s) => n + (totals[s.key] || 0), 0);
+    });
+    return counts;
+}
+
+/** Reflect `chosenScopes` onto the cards, and say what they add up to. */
+function paintScopeCards() {
+    $("#detailScopes").querySelectorAll("button[data-scope-card]").forEach((b) => {
+        b.setAttribute("aria-pressed", String(chosenScopes.has(b.dataset.scopeCard)));
+    });
+
+    const chosen = scopeGroups.filter((g) => chosenScopes.has(g.key));
+    const counts = countsByScope();
+    const total = chosen.reduce((n, g) => n + (counts[g.key] || 0), 0);
+    $("#detailScopeSummary").textContent = chosen.length
+        ? `${total.toLocaleString()} cases · ${chosen.map((g) => g.label).join(" + ")}`
+        : "No scope selected";
 }
 
 /**
@@ -246,36 +636,6 @@ export function renderDetailHead() {
     paintSortIndicators("#detailHead th.sortable", detailSort);
 }
 
-/**
- * Adopt a fresh dataset, refill the filter dropdowns, and redraw.
- * @param {Object[]} cases `/api/data` body, each row carrying a `status` key.
- */
-/**
- * How many cases this view holds — the count the rail carries beside "Review".
- *
- * Exported rather than recomputed by the caller so the figure in the nav and
- * the rows on the screen cannot answer to two different definitions of what
- * counts as open work.
- *
- * @returns {number}
- */
-export function reviewCount() {
-    return allData.length;
-}
-
-export function initDetail(cases) {
-    // The restriction is applied once, here, rather than as a default filter:
-    // this view is the list of work outstanding, and the dropdowns below should
-    // offer the files and PICs that actually have some.
-    allData = cases.filter((d) => isReview(d.status));
-    expanded.clear();
-    populateSelect("#filterFile", uniqueOf(allData, "file_name"));
-    populateSelect("#filterDevice", uniqueOf(allData, "device"));
-    populateSelect("#filterScope", uniqueOf(allData, "scope"));
-    populateSelect("#filterPIC", uniqueOf(allData, "pic"));
-    applyFilters();
-}
-
 /** The active grouping keys, from the toolbar control. */
 function groupBy() {
     const v = $("#detailGroupBy").value;
@@ -286,6 +646,9 @@ function groupBy() {
  * Recompute `filtered` from the active filters, then redraw everything that
  * depends on it: stats, chips, table, pager and charts.
  *
+ * The status choice is not among them — it decided which cases are here at all
+ * — and neither is the scope choice, which `rebuild` applied on the way in.
+ *
  * A case with no `test_date` is excluded as soon as either date bound is set.
  */
 function applyFilters() {
@@ -293,14 +656,12 @@ function applyFilters() {
         [...FILTERS, ...DATE_FILTERS].map(({ id }) => [id, $("#" + id).value]));
     const q = $("#filterSearch").value.trim().toLowerCase();
 
-    // Everything except the status choice. The status cards count over *this*,
-    // not over `filtered`: a card is the way to pick a status, so its figure has
-    // to say how many there are to pick — a "To review" card reporting 256 the
-    // moment NG is chosen would be counting the choice it is offering to change.
-    conditioned = allData.filter((d) => {
+    filtered = allData.filter((d) => {
         for (const { id, field } of FILTERS) {
             if (values[id] && d[field] !== values[id]) return false;
         }
+        if (conditions.deviceFamily && d.device_family !== conditions.deviceFamily) return false;
+        if (conditions.sheet && d.sheet !== conditions.sheet) return false;
         const from = values.filterDateFrom;
         const to = values.filterDateTo;
         if (from && (!d.test_date || d.test_date < from)) return false;
@@ -309,12 +670,6 @@ function applyFilters() {
         if (missingOnly && !lacksReason(d)) return false;
         return true;
     });
-
-    // No toggle on means "every result", not "none" — an empty selection is
-    // the unfiltered state, the same as a select sitting on its placeholder.
-    filtered = chosenStatuses.size
-        ? conditioned.filter((d) => chosenStatuses.has(d.status))
-        : conditioned.slice();
 
     const keys = groupBy();
     const numeric = new Set(["row_num"]);
@@ -342,46 +697,57 @@ function matchesSearch(d, q) {
         .some((f) => String(d[f] || "").toLowerCase().includes(q));
 }
 
-/** Update the stat figures and the "n / m cases" count. */
+/**
+ * Update the stat figures and the "n / m cases" count.
+ *
+ * The status figures are counted over the **summary rows** of the pressed scope
+ * groups, not over the cases: a status nobody has clicked has no cases here, and
+ * a card reading 0 for it would be reporting the absence of a fetch as an
+ * absence of work. What a card says is therefore how many cases pressing it
+ * would list — which is what a control has to say to be worth pressing — and it
+ * does not move when a File or a search narrows the table beneath it.
+ */
 function renderStats() {
-    const counts = {};
-    getReviewStatuses().forEach((s) => { counts[s.key] = 0; });
-    conditioned.forEach((d) => {
-        if (counts[d.status] !== undefined) counts[d.status] += 1;
-    });
+    const totals = sumRows(summaryRows.filter((r) => chosenScopes.has(r.scope)));
 
     const setStat = (id, value) => {
         const el = document.getElementById(id);
-        if (el) el.textContent = value;
+        if (el) el.textContent = Number(value || 0).toLocaleString();
     };
-    // Every case here is a review case, so the row count *is* the figure. It is
-    // labelled "To review" rather than "Total" precisely because it is not the
-    // Total on the Summary tab, which counts the whole plan.
-    setStat("statTotal", conditioned.length);
-    getReviewStatuses().forEach((s) => setStat(`stat-${s.key}`, counts[s.key]));
+    // Every status, including the excluded ones: this screen lists them, so
+    // "All" has to count them. That makes this figure legitimately larger than
+    // Summary's Total, which is the plan.
+    setStat("statTotal", getStatuses().reduce((n, s) => n + (totals[s.key] || 0), 0));
+    getStatuses().forEach((s) => setStat(`stat-${s.key}`, totals[s.key] || 0));
     // Files is a fact about what you are looking at, not about what you could
     // pick, so it alone counts the rows actually on screen.
     setStat("statFiles", new Set(filtered.map((d) => d.file_name)).size);
 
     $("#filteredCount").textContent = filtered.length === allData.length
-        ? `${filtered.length} cases`
-        : `${filtered.length} / ${allData.length} cases`;
+        ? `${filtered.length.toLocaleString()} cases`
+        : `${filtered.length.toLocaleString()} / ${allData.length.toLocaleString()} cases`;
 
     // How many conditions are folded away, on the button that folds them —
     // otherwise a closed panel hides the fact that the table is narrowed.
     const narrowing = FILTERS.filter(({ id }) => $("#" + id).value).length
         + DATE_FILTERS.filter(({ id }) => $("#" + id).value).length
-        + (chosenStatuses.size ? 1 : 0)
+        + (conditions.deviceFamily ? 1 : 0)
+        + (conditions.sheet ? 1 : 0)
         + (missingOnly ? 1 : 0)
         + ($("#detailGroupBy").value ? 1 : 0);
     $("#filterCount").textContent = narrowing ? String(narrowing) : "";
 }
 
 /**
- * One dismissible chip per active filter.
+ * One dismissible chip per active narrowing.
  *
  * A select showing "iPhone 15" does not say *which* dimension it narrows once
- * you have looked away, and the date bounds are easy to forget entirely.
+ * you have looked away, and the date bounds are easy to forget entirely. The
+ * two conditions a drill-in can set have no control of their own, so a chip is
+ * the only way to see — or undo — them.
+ *
+ * Status chips appear only when the choice is a strict subset: with every status
+ * pressed they would be a row of eight chips saying nothing is narrowed.
  */
 function renderChips() {
     const chips = [];
@@ -390,14 +756,26 @@ function renderChips() {
             + `<button type="button" data-clear="${esc(id)}" aria-label="Clear ${esc(label)} filter">✕</button></span>`);
     };
     FILTERS.forEach(({ id, label }) => push(id, label, $("#" + id).value));
-    // One chip per chosen status rather than one listing them all, so any single
-    // one can be dropped without retyping the rest.
-    getReviewStatuses()
-        .filter((st) => chosenStatuses.has(st.key))
-        .forEach((st) => chips.push(
-            `<span class="chip">Result: ${esc(st.label)}`
-            + `<button type="button" data-status="${esc(st.key)}"`
-            + ` aria-label="Clear ${esc(st.label)} filter">✕</button></span>`));
+    if (chosenStatuses.size < getStatuses().length) {
+        // One chip per chosen status rather than one listing them all, so any
+        // single one can be dropped without retyping the rest.
+        getStatuses()
+            .filter((st) => chosenStatuses.has(st.key))
+            .forEach((st) => chips.push(
+                `<span class="chip">Result: ${esc(st.label)}`
+                + `<button type="button" data-status="${esc(st.key)}"`
+                + ` aria-label="Clear ${esc(st.label)} filter">✕</button></span>`));
+    }
+    if (conditions.deviceFamily) {
+        chips.push(`<span class="chip">Device type: ${esc(conditions.deviceFamily)}`
+            + `<button type="button" data-condition="deviceFamily"`
+            + ` aria-label="Clear Device type filter">✕</button></span>`);
+    }
+    if (conditions.sheet) {
+        chips.push(`<span class="chip">Sheet: ${esc(conditions.sheet)}`
+            + `<button type="button" data-condition="sheet"`
+            + ` aria-label="Clear Sheet filter">✕</button></span>`);
+    }
     DATE_FILTERS.forEach(({ id, label }) => push(id, label, $("#" + id).value));
     push("filterSearch", "Search", $("#filterSearch").value.trim());
     if (missingOnly) {
@@ -414,6 +792,12 @@ function renderChips() {
             currentPage = 1;
             applyFilters();
         }));
+    $("#detailChips").querySelectorAll("button[data-condition]").forEach((b) =>
+        b.addEventListener("click", () => {
+            conditions[b.dataset.condition] = "";
+            currentPage = 1;
+            applyFilters();
+        }));
     $("#detailChips").querySelectorAll("button[data-clear]").forEach((b) =>
         b.addEventListener("click", () => {
             $("#" + b.dataset.clear).value = "";
@@ -424,8 +808,8 @@ function renderChips() {
         b.addEventListener("click", () => {
             chosenStatuses.delete(b.dataset.status);
             paintResultToggles();
-            currentPage = 1;
-            applyFilters();
+            // Dropping a status needs no fetch — the others are already here.
+            rebuild();
         }));
 }
 
@@ -514,6 +898,22 @@ function caseCells(d, i) {
         + td(d, "note", "clip");
 }
 
+/**
+ * What the table says when it has no rows to draw.
+ *
+ * Three different states look identical otherwise, and only one of them is
+ * "there is nothing here": cases are still on their way, no status is chosen so
+ * nothing was ever asked for, or the filters match nothing.
+ *
+ * @returns {string}
+ */
+function emptyMessage() {
+    if (loading) return "Loading cases…";
+    if (!chosenStatuses.size) return "Pick a status above to list its cases.";
+    if (!chosenScopes.size) return "Pick a scope above to list its cases.";
+    return "No cases match these filters.";
+}
+
 /** The distinct top-level group values, in their sorted order. */
 function groupValues(keys) {
     const seen = [];
@@ -528,6 +928,26 @@ function groupValues(keys) {
 function renderTable() {
     const keys = groupBy();
 
+    // Mid-fetch the rows on screen belong to the previous selection, so they are
+    // cleared rather than left to look like the answer. `aria-busy` says so to a
+    // screen reader, which a message in a table cell does not.
+    $("#dataBody").closest("table").setAttribute("aria-busy", String(loading));
+    if (loading) {
+        renderGroupedTable({
+            container: "#dataBody",
+            rows: [],
+            totalCols: COLUMNS.length,
+            expanded,
+            renderLabelCells: () => "",
+            labelCols: 0,
+            renderValues: () => "",
+            onToggle: () => {},
+            emptyMessage: emptyMessage(),
+        });
+        $("#detailFooter").innerHTML = "";
+        return;
+    }
+
     if (!keys.length) {
         const start = showAll ? 0 : (currentPage - 1) * PAGE_SIZE;
         renderGroupedTable({
@@ -539,7 +959,7 @@ function renderTable() {
             labelCols: 0,
             renderValues: (d, i) => caseCells(d, start + i),
             onToggle: () => {},
-            emptyMessage: "No cases match these filters.",
+            emptyMessage: emptyMessage(),
         });
         renderPageFooter({
             container: "#detailFooter",
@@ -575,7 +995,7 @@ function renderTable() {
             toggleGroup(expanded, path, DEFAULT_EXPANDED);
             renderTable();
         },
-        emptyMessage: "No cases match these filters.",
+        emptyMessage: emptyMessage(),
     });
 
     renderPageFooter({

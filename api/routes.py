@@ -205,25 +205,42 @@ def put_config(name):
     return jsonify(saved), 200
 
 
-@api.route("/api/data")
-def get_data():
-    """GET /api/data — every loaded case, each with its classified `status` key.
+@api.route("/api/cases")
+def get_cases():
+    """GET /api/cases?status=<key> — the loaded cases classified as one status.
+
+    The slice behind a status figure: click the 3 in NG's column and this is
+    what Detail fetches. One status per request, cached in the browser, so the
+    cost of opening a case list is the status you asked for rather than every
+    case of every workbook — which is what the endpoint this replaced charged on
+    every load, before anyone had looked at anything.
 
     `status` is derived here rather than stored on the case, so editing the
     result taxonomy takes effect without re-reading the workbooks.
 
-    Review is a list of work outstanding, so it holds only cases that are in the
-    plan: a scope group marked `excluded` is reported but not committed to, and
-    a case outside the plan is not work to review — the same reasoning that
-    forbids a status being both `excluded` and `review`. Summary is where such a
-    group stays visible.
+    Its coverage is Summary's, not Review's: a scope group marked `excluded` is
+    reported but not committed to, and Detail draws a card for it that the
+    reader may deliberately press, so its cases arrive with the group named on
+    them and the view decides — see `aggregate.status_cases`. Everything that
+    adds groups together still filters through `in_plan`.
+
+    The parameter is required, and one the taxonomy does not name is a 400
+    rather than an empty list: a browser asking for a status a config save has
+    since removed is out of date, and "no cases" would read as "none today".
     """
-    cases = []
-    for c in aggregate.in_plan(_data["cases"]):
-        row = c.to_dict()
-        row["status"] = STATUS.classify_case(c)
-        cases.append(row)
-    return jsonify(cases)
+    key = request.args.get("status", "").strip()
+    if not key:
+        return jsonify({
+            "error": "Provide 'status' as the status key to fetch cases for; "
+                     f"expected one of {', '.join(STATUS.keys)}"
+        }), 400
+    if key not in STATUS.keys:
+        return jsonify({
+            "error": f"Unknown status key '{key}'; "
+                     f"expected one of {', '.join(STATUS.keys)}"
+        }), 400
+
+    return jsonify(aggregate.status_cases(_data["cases"], key))
 
 
 @api.route("/api/summary")

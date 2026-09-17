@@ -16,7 +16,7 @@ import { initReportPanel, setReportEnabled } from "./reportPanel.js";
 import { initPreparePanel, refreshPrepare, runFileAction } from "./preparePanel.js";
 import { initFilesTable } from "./filesTable.js";
 import { initConfigView } from "./views/config.js";
-import { getReviewStatuses, renderStatCards, setTaxonomy } from "./taxonomy.js";
+import { getReviewStatuses, setTaxonomy } from "./taxonomy.js";
 import { alignSummaryColumns, initSummaryView, renderSummary } from "./views/summary.js";
 import {
     currentFile, initFileView, renderFileHeads, showFile,
@@ -28,8 +28,8 @@ import {
 } from "./views/productivity.js";
 import { initTarget } from "./target.js";
 import {
-    initDetail, initDetailView, renderDetailHead, renderResultToggles, reviewCount,
-    showMissingReason,
+    enterDetail, initDetail, initDetailView, renderDetailCards, renderDetailHead,
+    renderResultToggles, reviewCount, showMissingReason, showReview, showStatusCases,
 } from "./views/detail.js";
 
 /**
@@ -55,13 +55,10 @@ const VIEWS = {
                  + "Covers everything loaded — Daily's filters do not apply.",
     },
     detail: {
-        title: "Review",
-        sub: () => {
-            const names = getReviewStatuses().map((s) => s.label);
-            return names.length
-                ? `Open work only: ${names.join(", ")}. Everything else is left out of this view.`
-                : "Open work only.";
-        },
+        title: "Detail",
+        sub: () => "The cases behind a status figure. Cases are fetched one status "
+                 + "at a time and kept, so the card figures say what is there to "
+                 + "list — the filters below narrow the table, not the cards.",
     },
     file: {
         // The only title that is not a constant: this view is about a subject
@@ -126,7 +123,9 @@ function showView(view) {
     // a table they had not seen the head of.
     window.scrollTo({ top: 0 });
     // Chart.js sizes to the container, which is 0x0 while the view is hidden.
-    if (view === "detail") resizeCharts();
+    // Entering is also when Detail fetches: a load whose case list nobody opens
+    // should cost nothing, which is the point of serving cases per status.
+    if (view === "detail") { enterDetail(); resizeCharts(); }
     // Summary's tables are measured against each other so their columns line
     // up, and a hidden table measures zero — same reason, same moment.
     if (view === "summary") alignSummaryColumns();
@@ -173,17 +172,21 @@ async function openFile(name, origin) {
  */
 async function refreshViews(loadResult, { show = true } = {}) {
     lastLoad = loadResult;
-    const { taxonomy, cases, summary, daily, productivity } = await fetchAll();
+    const { taxonomy, summary, daily, productivity } = await fetchAll();
 
     setTaxonomy(taxonomy);
-    renderStatCards();
+    renderDetailCards();
     renderDailyHead();
     renderProductivityHead();
     renderDetailHead();
     renderResultToggles();
     renderFileHeads();
 
-    initDetail(cases);
+    // Detail is handed the summary rows, not the cases: its cards count from
+    // them, and the cases behind a figure are fetched when somebody asks for
+    // one. This also drops whatever it had cached, which a reload or a config
+    // save makes wrong.
+    initDetail(summary);
     // Summary's overview reports the last day anyone tested, which lives in the
     // daily rows rather than the summary ones.
     renderSummary(summary, daily);
@@ -254,14 +257,32 @@ initShell({ onNavigate: showView });
 // `views/detail.js` to do it — this module owns the views, so the jump comes
 // back through here instead, and it is also what translates a card's filter
 // name into the call on whichever module owns that view's state.
-setJumpHandler((view, filter) => {
+setJumpHandler((view, filter, ctx = {}) => {
     if (filter === "missing") showMissingReason();
+    else if (ctx.statuses && ctx.statuses.length) showStatusCases({ statuses: ctx.statuses });
+    else if (view === "detail") showReview();
     showView(view);
 });
+
+/**
+ * Open Detail on the cases behind a status figure.
+ *
+ * Every status band in the app reports its pressed figure here — Summary's rows
+ * and footers, the file page, Daily — so a figure means the same thing wherever
+ * it is clicked, and no view has to import the one it leads to. The context is
+ * whatever the row knew: a file, a device or a device family, a scope group, a
+ * sheet, a PIC, a date.
+ *
+ * @param {Object} ctx See `showStatusCases`.
+ */
+function openStatusCases(ctx) {
+    showStatusCases(ctx);
+    showView("detail");
+}
 // Clicking a file name is navigation, so it comes back through here rather than
 // either module importing the file view: `views/summary.js` and `filesTable.js`
 // report the name, this decides what to do with it and what Back should say.
-initFileView({ onBack: () => showView(fileOrigin) });
+initFileView({ onBack: () => showView(fileOrigin), onDrillIn: openStatusCases });
 initSourcePanel({ onLoaded: refreshViews });
 initReportPanel();
 initPreparePanel({ onApplied: reloadAfterPrepare });
@@ -273,8 +294,11 @@ initFilesTable({
 });
 initConfigView({ onSaved: refreshAfterConfigSave });
 initDetailView();
-initDailyView();
-initSummaryView({ onOpenFile: (name) => openFile(name, "summary") });
+initDailyView({ onDrillIn: openStatusCases });
+initSummaryView({
+    onOpenFile: (name) => openFile(name, "summary"),
+    onDrillIn: openStatusCases,
+});
 initProductivityView();
 
 // Nothing is loaded yet, so the only view that can answer anything is Tools.

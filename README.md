@@ -181,7 +181,7 @@ của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không s�
 | POST   | `/api/load`    | Body `{"folder": "..."}` hoặc `{"files": ["...", "..."]}` |
 | POST   | `/api/reload`  | Nạp lại từ source đã load trước đó |
 | POST   | `/api/browse`  | Mở hộp thoại chọn folder/file của hệ điều hành, trả `{paths}` |
-| GET    | `/api/data`    | Toàn bộ test case, kèm `status` đã phân loại |
+| GET    | `/api/cases`   | Query `?status=<key>` — các case thuộc đúng status đó, kèm `scope_group` và `device_family`. Thiếu `status` hoặc status lạ → 400 |
 | GET    | `/api/statuses`| Danh sách status (key / label / badge / text) + `needs_reason` + `executed` + `issue` |
 | GET    | `/api/summary` | Gộp theo (nhóm Scope, file, device) + danh sách nhóm Scope + danh sách case thiếu lý do |
 | GET    | `/api/daily`   | Gộp theo (file, device, PIC, date) |
@@ -484,14 +484,38 @@ Báo cáo SharePoint **không** đổi: việc gộp chỉ xảy ra trên màn h
 dòng cho mỗi (file, device); nó chỉ gắn thêm `device_family` vào mỗi dòng để màn hình và báo cáo
 không thể hiểu khác nhau về chuyện device nào là máy nào.
 
-## Tab Detail: chỉ hiển thị case cần xử lý
+## Tab Detail: danh sách case nằm sau mỗi con số
 
-Detail **chỉ nạp** các case có status đánh dấu `"review": true` — mặc định là NG, NG-OK,
-Pending, Cancel. Case OK, NYS và Out Of Scope không xuất hiện ở đây: Detail là danh sách việc
-còn tồn, không phải nơi tra cứu toàn bộ.
+Mọi con số trong dải status — ở Summary, ở trang file, ở Daily — đều bấm được. Bấm vào con số 3
+ở cột NG thì Detail mở ra đúng ba case đó; OK, NYS hay Out Of Scope cũng vậy. Các thẻ KPI và
+từng dòng trong "Result breakdown" ở Summary cũng là cửa vào như thế.
 
-Vì vậy thẻ đầu tiên ở dải thống kê tên là **"To review"** chứ không phải "Total" — nó đếm số
-case trên màn hình này, khác với `Total` ở tab Summary (đếm toàn bộ case trong phạm vi).
+**Case được nạp theo từng status, và được giữ lại.** Chưa chọn status thì chưa nạp gì.
+`/api/cases?status=NG` chỉ gọi một lần rồi nằm lại trong trình duyệt, nên bấm NG lần thứ hai
+không tốn request nào, còn bấm OK chỉ tốn phần OK. Mọi thứ còn lại — scope, file, device, PIC,
+khoảng ngày, ô tìm kiếm, sắp xếp, gom nhóm, phân trang — chạy tại chỗ trên dữ liệu đã có, không
+gọi server. Nạp lại source hoặc lưu config thì phần đã nạp bị xoá, vì cả hai đều có thể làm đổi
+*nghĩa* của một case. (Endpoint cũ `/api/data` trả toàn bộ case ngay khi load — với 12 file mẫu
+là hơn 10 MB JSON trước khi ai kịp bấm gì — nên nó đã được bỏ.)
+
+**Thẻ Scope: mỗi nhóm Scope một thẻ, chọn được nhiều thẻ cùng lúc.** Mặc định bật các nhóm nằm
+trong kế hoạch, nên con số Detail mở ra đúng bằng `Total` ở Summary; dòng bên cạnh cho biết các
+thẻ đang bật cộng lại là bao nhiêu. Nhóm bị đánh `excluded` (ví dụ JP) vẽ viền đứt và mặc định
+tắt: cộng thêm phần việc không cam kết là lựa chọn của người đọc, không phải điều tổng số tự làm.
+
+**Thẻ status đếm theo các nhóm Scope đang bật**, lấy từ `/api/summary` chứ không phải từ danh
+sách case đã nạp — một status chưa ai bấm thì chưa có case nào trong trình duyệt, và thẻ ghi 0
+sẽ biến "chưa nạp" thành "không có việc". Vì vậy con số trên thẻ là *số case sẽ hiện ra nếu
+bấm*, còn File / PIC / ngày / tìm kiếm chỉ thu hẹp bảng bên dưới chứ không làm thẻ đổi số.
+
+Thẻ đầu tiên tên **"All"** và chọn toàn bộ status — đây là lần bấm tốn kém duy nhất trên màn
+hình này, và nó tốn kém một cách cố ý. Con số của nó tính cả các status `excluded`, nên có thể
+lớn hơn `Total` ở Summary (vốn chỉ đếm phần trong kế hoạch).
+
+Vào Detail từ thanh bên trái thì màn hình mở sẵn các status `"review": true` (NG, NG-OK,
+Pending, Cancel) — vẫn là danh sách việc còn tồn như trước, chỉ khác là bây giờ nó là *lựa chọn
+mặc định* chứ không phải giới hạn của màn hình. Con số cạnh chữ "Detail" trên thanh bên và thẻ
+"To review" ở Summary đều đếm đúng nhóm status đó.
 
 Bộ lọc **Result** là một dãy nút bật/tắt, **chọn được nhiều status cùng lúc** (ví dụ NG +
 Pending). Không bật nút nào = xem tất cả. Mỗi status đang bật hiện thành một chip riêng, tắt

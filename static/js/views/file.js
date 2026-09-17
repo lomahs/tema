@@ -79,18 +79,42 @@ let caseShowAll = false;
 let onBack = () => {};
 
 /**
+ * Called with a status figure's context when one is pressed.
+ *
+ * The same door Summary's band carries, reported back the same way: this module
+ * no more knows which view lists the cases than it knows which view sent the
+ * reader here. Its rows name a sheet as well, which no control on the
+ * destination expresses — so it rides along as a condition.
+ *
+ * @type {(ctx: Object) => void}
+ */
+let onDrillIn = () => {};
+
+/**
  * Wire the controls. Call once, at startup.
  *
  * The status cards are regenerated on every taxonomy load, so the strip is
  * bound here by delegation rather than each card being bound as it is built —
  * the arrangement Review uses, and for the same reason.
  *
- * @param {{onBack: () => void}} opts
+ * @param {{onBack: () => void, onDrillIn?: (ctx: Object) => void}} opts
  */
 export function initFileView(opts) {
     onBack = opts.onBack;
+    onDrillIn = opts.onDrillIn || (() => {});
 
     $("#btnFileBack").addEventListener("click", () => onBack());
+
+    // One listener for the sheet table: its rows are redrawn on every filter,
+    // and every figure in them is the same kind of link.
+    $("#fileSheetBody").addEventListener("click", (e) => {
+        const figure = e.target.closest("button[data-status]");
+        if (figure) onDrillIn({ ...figure.dataset, file: fileName });
+    });
+    $("#fileSheetFoot").addEventListener("click", (e) => {
+        const figure = e.target.closest("button[data-status]");
+        if (figure) onDrillIn({ ...figure.dataset, file: fileName });
+    });
 
     $("#fileFilterScope").addEventListener("change", () => {
         sheetPage = 1;
@@ -286,7 +310,13 @@ function renderSheetTable(conditioned) {
         renderLabelCells: (r) =>
             `<td>${esc(r.sheet)}</td><td>${esc(r.scope)}</td><td>${esc(r.device)}</td>`,
         labelCols: 3,
-        renderValues: (r) => statusCells(r, { blankZeros: true }),
+        // A row here is one (sheet, scope, device) of this workbook, and all
+        // three travel: the file is added by the listener, which is the one
+        // thing every row on this page shares.
+        renderValues: (r) => statusCells(r, {
+            blankZeros: true,
+            link: { sheet: r.sheet, scope: r.scope, device: r.device },
+        }),
         onToggle: () => {},
         emptyMessage: "No sheets match these filters.",
     });
@@ -294,8 +324,12 @@ function renderSheetTable(conditioned) {
     // The totals row adds up every row the filters left, not the visible page:
     // it answers "where does this file stand", which paging must not change.
     const totals = sumRows(sorted);
+    // The footer covers the whole file under the Scope filter as it stands, so
+    // its figures lead to that and not to the sheet above them.
     $("#fileSheetFoot").innerHTML =
-        `<tr><td colspan="3">Total</td>${statusCells(totals)}</tr>`;
+        `<tr><td colspan="3">Total</td>${statusCells(totals, {
+            link: { scope: $("#fileFilterScope").value },
+        })}</tr>`;
 
     renderPageFooter({
         container: "#fileSheetFooter",

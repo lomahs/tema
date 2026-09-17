@@ -192,16 +192,56 @@ def test_browsing_does_not_disturb_the_loaded_source(client, workbook_dir, monke
     assert routes._data["source"] == {"type": "folder", "value": workbook_dir}
 
 
-def test_data_carries_a_server_computed_status(client, workbook_dir):
+def test_cases_carry_a_server_computed_status(client, workbook_dir):
+    """One status per request: what Detail fetches when a status figure is clicked."""
     load(client, workbook_dir)
-    cases = client.get("/api/data").get_json()
-    by_case = {(c["device"], c["case_no"]): c["status"] for c in cases}
 
-    assert by_case[("iPhone", "TC-1")] == "OK"
-    assert by_case[("iPhone", "TC-2")] == "NG"
-    assert by_case[("iPhone", "TC-4")] == "Other"     # unrecognised result
-    assert by_case[("iPhone", "TC-5")] == "NYS"       # blank result
-    assert by_case[("iPad", "TC-1")] == "Pending"
+    def cases_of(key):
+        return {(c["device"], c["case_no"])
+                for c in client.get(f"/api/cases?status={key}").get_json()}
+
+    assert cases_of("OK") == {("iPhone", "TC-1"), ("iPad", "TC-2")}
+    assert cases_of("NG") == {("iPhone", "TC-2"), ("iPhone", "TC-3")}
+    assert cases_of("Other") == {("iPhone", "TC-4")}    # unrecognised result
+    # Blank results: iPhone's last row, and the three the iPad block's span
+    # reaches that nobody has run yet.
+    assert cases_of("NYS") == {("iPhone", "TC-5"), ("iPad", "TC-3"),
+                               ("iPad", "TC-4"), ("iPad", "TC-5")}
+    assert cases_of("Pending") == {("iPad", "TC-1")}
+
+
+def test_the_cases_endpoint_names_the_status_it_was_asked_for(client, workbook_dir):
+    load(client, workbook_dir)
+    cases = client.get("/api/cases?status=NG").get_json()
+
+    assert cases and {c["status"] for c in cases} == {"NG"}
+
+
+def test_the_cases_endpoint_refuses_a_status_the_taxonomy_does_not_name(client, workbook_dir):
+    """A stale browser asking for a status a config save removed. An empty list
+    would read as "no NGs today" rather than as a screen out of date."""
+    load(client, workbook_dir)
+    res = client.get("/api/cases?status=Nope")
+
+    assert res.status_code == 400
+    assert "Nope" in res.get_json()["error"]
+
+
+def test_the_cases_endpoint_requires_a_status(client, workbook_dir):
+    """The parameter is what bounds the cost, so there is no "all cases" call."""
+    load(client, workbook_dir)
+    res = client.get("/api/cases")
+
+    assert res.status_code == 400
+    assert "status" in res.get_json()["error"]
+
+
+def test_the_everything_at_once_endpoint_is_gone(client, workbook_dir):
+    """`/api/cases` replaced it. Two doors into the same cases is one too many,
+    and the eager one is the cost this change exists to remove."""
+    load(client, workbook_dir)
+
+    assert client.get("/api/data").status_code == 404
 
 
 def test_summary_totals_reconcile_including_unknown_results(client, workbook_dir):
@@ -249,8 +289,10 @@ def test_daily_rows_reconcile_and_skip_cases_without_a_date(client, workbook_dir
 
     for row in rows:
         assert sum(row[key] for key in STATUS.counted) == row["total"]
-    # TC-5 has no date at all, so it appears nowhere in the daily view.
-    assert sum(r["total"] for r in rows) == 6
+    # TC-5 has no date at all, so it appears nowhere in the daily view. TC-4's
+    # result matches no status, so it lands in the excluded fallback: it is in
+    # its own column on every row above, and in none of these totals.
+    assert sum(r["total"] for r in rows) == 5
 
 
 # --- /api/productivity -----------------------------------------------------
@@ -326,7 +368,7 @@ def test_reload_reuses_the_remembered_source(client, workbook_dir):
 
 
 def test_empty_store_returns_empty_aggregates(client):
-    assert client.get("/api/data").get_json() == []
+    assert client.get("/api/cases?status=OK").get_json() == []
     assert client.get("/api/daily").get_json() == []
     assert client.get("/api/productivity").get_json() == []
     body = client.get("/api/summary").get_json()
@@ -355,10 +397,11 @@ def test_missing_reason_rows_carry_their_status(client, workbook_dir):
 
 def test_an_unowned_cancel_is_reported_as_out_of_scope(client, out_of_scope_dir):
     load(client, out_of_scope_dir)
-    by_case = {c["case_no"]: c["status"] for c in client.get("/api/data").get_json()}
+    cancels = client.get("/api/cases?status=Cancel").get_json()
+    out_of_scope = client.get("/api/cases?status=OOS").get_json()
 
-    assert by_case["TC-2"] == "Cancel"
-    assert by_case["TC-3"] == "OOS"
+    assert [c["case_no"] for c in cancels] == ["TC-2"]
+    assert [c["case_no"] for c in out_of_scope] == ["TC-3"]
 
 
 def test_summary_shows_out_of_scope_without_counting_it(client, out_of_scope_dir):
@@ -477,15 +520,25 @@ def fpt_is_not_in_the_plan():
     SCOPES.__dict__.update(saved)
 
 
-def test_review_drops_a_scope_group_outside_the_plan(client, workbook_dir,
-                                                     fpt_is_not_in_the_plan):
-    """A case outside the plan is not work to review — the same rule that
-    forbids a status being both `excluded` and `review`."""
+def test_every_figure_that_adds_groups_together_drops_one_outside_the_plan(
+        client, workbook_dir, fpt_is_not_in_the_plan):
+    """`in_plan` is the one definition of "counts toward the total"."""
     load(client, workbook_dir)
 
-    assert client.get("/api/data").get_json() == []
     assert client.get("/api/daily").get_json() == []
     assert client.get("/api/productivity").get_json() == []
+
+
+def test_detail_is_served_a_scope_group_outside_the_plan_to_label(
+        client, workbook_dir, fpt_is_not_in_the_plan):
+    """Detail draws a card per scope group and adding an excluded one is the
+    reader's deliberate choice, so the cases have to arrive — with the group
+    named on each, which is what lets the card be left unpressed by default."""
+    load(client, workbook_dir)
+    cases = client.get("/api/cases?status=OK").get_json()
+
+    assert cases, "an excluded group still has cases to show"
+    assert {c["scope_group"] for c in cases} == {"FPT"}
 
 
 def test_summary_still_reports_a_scope_group_outside_the_plan(client, workbook_dir,

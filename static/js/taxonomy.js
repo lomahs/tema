@@ -136,6 +136,34 @@ export function requiresReason(key) {
 }
 
 /**
+ * The statuses that count toward `total`, in taxonomy order.
+ *
+ * The browser-side twin of `STATUS.counted`, and the one definition of it here:
+ * the progress bar expands over these, the report's columns are these, and
+ * Summary draws a column per one of these. Three private copies of
+ * `filter(s => !isExcluded(s.key))` is how those three would come to disagree.
+ *
+ * @returns {Status[]}
+ */
+export function getCountedStatuses() {
+    return statuses.filter((s) => !excluded.has(s.key));
+}
+
+/**
+ * The statuses that oblige a ticket id or a note, in taxonomy order.
+ *
+ * What Detail selects when the Missing reason card sends someone there: the
+ * condition narrows *within* the chosen statuses, so arriving with only the
+ * review ones chosen would silently hide the cases of any other status that
+ * owes an explanation — the very rows the card counted.
+ *
+ * @returns {Status[]}
+ */
+export function getReasonStatuses() {
+    return statuses.filter((s) => needsReason.has(s.key));
+}
+
+/**
  * Whether a status is shown but deliberately left out of `total`.
  *
  * Out Of Scope is the shipped example: it owns a column so the count stays
@@ -184,17 +212,52 @@ export function sumRows(rows) {
  * @param {boolean} [opts.blankZeros] Render an empty cell rather than `0`. Set
  *   on data rows, where a grid of zeros drowns out the figures that matter, and
  *   left off for roll-up and total rows, where a zero is a real answer.
+ * @param {?Object} [opts.link] The row's context — `{file, device, scope, ...}`
+ *   — which turns every non-zero figure into a button carrying it, and is what
+ *   makes the status band a way *into* the cases it counts rather than only a
+ *   report of them. A zero stays inert: there is nothing behind it to show.
+ * @param {boolean} [opts.counted] Draw only the statuses inside `total`,
+ *   omitting the excluded ones entirely. Summary asks for this: its band is
+ *   wide enough already, and a column of blanks outside the sum costs room the
+ *   file names need more. Everywhere else keeps the full band, because a count
+ *   that appears on no screen at all is a count nobody can check.
  * @returns {string} HTML.
  */
-export function statusCells(row, { blankZeros = false } = {}) {
+export function statusCells(row, { blankZeros = false, counted = false, link = null } = {}) {
     const show = (v) => (v ? v : (blankZeros ? "" : 0));
-    const cells = statuses.map((s) => {
+    const cells = (counted ? getCountedStatuses() : statuses).map((s) => {
         const v = row[s.key] || 0;
         const zero = v ? "" : " zero";
         const aside = isExcluded(s.key) ? " band--aside" : "";
-        return `<td class="num band${aside}${zero}" data-tone="${esc(toneFor(s.key))}">${show(v)}</td>`;
+        const figure = link && v
+            ? `<button type="button" class="cell-link" data-status="${esc(s.key)}"`
+              + `${contextAttrs(link)}>${show(v)}</button>`
+            : show(v);
+        return `<td class="num band${aside}${zero}" data-tone="${esc(toneFor(s.key))}">${figure}</td>`;
     });
     return `<td class="num band band--first">${show(row.total || 0)}</td>` + cells.join("");
+}
+
+/**
+ * The row's own context, as `data-` attributes on a status figure.
+ *
+ * Which fields a row has is the calling view's business — Summary knows a file
+ * and a device, Daily also knows a date and a PIC — so this takes whatever it
+ * is given and drops the blanks. Underscores become dashes so the values come
+ * back off `dataset` in the usual camelCase.
+ *
+ * These are plain scalars, which an attribute carries losslessly. The rule
+ * against round-tripping identity through the DOM is about *group paths*, whose
+ * separator is a NUL the tokenizer rewrites; a file name is not that.
+ *
+ * @param {Object<string, string>} context
+ * @returns {string} HTML attributes, each with a leading space.
+ */
+function contextAttrs(context) {
+    return Object.entries(context)
+        .filter(([, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => ` data-${k.replace(/_/g, "-")}="${esc(v)}"`)
+        .join("");
 }
 
 /**
@@ -202,11 +265,15 @@ export function statusCells(row, { blankZeros = false } = {}) {
  *
  * @param {(col: string, label: string, opts: Object) => string} th A cell
  *   builder — `sortableTh` for a sortable table, a plain one otherwise.
+ * @param {Object} [opts]
+ * @param {boolean} [opts.counted] Head only the counted statuses, matching
+ *   `statusCells` with the same flag set. The two are one band and must be
+ *   passed the same option, or the headings slide off their figures.
  * @returns {string} HTML.
  */
-export function statusHeadCells(th) {
+export function statusHeadCells(th, { counted = false } = {}) {
     return th("total", "Total", { cls: "num band band--first" })
-        + statuses.map((s) => th(s.key, s.label, {
+        + (counted ? getCountedStatuses() : statuses).map((s) => th(s.key, s.label, {
             cls: `num band${isExcluded(s.key) ? " band--aside" : ""}`,
             tone: toneFor(s.key),
         })).join("");

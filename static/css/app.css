@@ -853,6 +853,65 @@ textarea.input {
 }
 
 
+/* --- scope cards ---------------------------------------------------------
+ * Detail's scope groups: one card each, several pressable at once, and a line
+ * beside them saying what the pressed ones add up to. Smaller than a stat card
+ * because they are a *filter*, not a figure — the figures are the strip below.
+ * Selection is an ink border, never a hue: on this screen a hue means a status.
+ */
+
+.scope-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+    margin: 0 0 var(--sp-3);
+}
+
+.scope-cards { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+.chip-card {
+    appearance: none;
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-md);
+    background: var(--paper-raised);
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.chip-card:hover { border-color: var(--rule-strong); }
+.chip-card[aria-pressed="true"] { border-color: var(--ink); background: var(--paper-sunk); }
+.chip-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.chip-card-label {
+    color: var(--ink-soft);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: var(--ls-eyebrow);
+    text-transform: uppercase;
+}
+.chip-card[aria-pressed="true"] .chip-card-label { color: var(--ink); }
+
+.chip-card-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* A group the plan excludes: the same dashed rule its Summary table carries and
+   its status columns carry, meaning "reported, but not in the sum". Pressing it
+   is how that work is deliberately added to what this screen lists. */
+.chip-card--aside {
+    border-style: dashed;
+    border-color: var(--rule-strong);
+    background: none;
+}
+
+
 /* --- KPI cards -----------------------------------------------------------
  * The design's headline row: one card per figure, an uppercase eyebrow above
  * a large mono number. A card with an action is a button, so it is operated by
@@ -1527,6 +1586,29 @@ textarea.input {
 }
 .cell-link:hover { text-decoration-color: var(--ink); }
 .cell-link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* The same link, on a figure in the status band — every one of which opens the
+   cases it counts. Here the underline is withheld until the pointer or the
+   keyboard reaches it: a file name is one link in a row of text, but a band is
+   nothing *but* figures, and ruling all of them would turn the ledger into a
+   page of links. The figure keeps its own mono face and its column's alignment,
+   so the table reads exactly as it did. */
+.band .cell-link {
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+}
+.band .cell-link:hover,
+.band .cell-link:focus-visible {
+    text-decoration: underline;
+    text-decoration-color: var(--ink);
+    text-underline-offset: 3px;
+}
+
+/* The breakdown list on Summary: a label and a count, which is the same thing a
+   band figure is, so it opens the same list and says so the same way. */
+.legend-item--link { cursor: pointer; }
+.legend-item--link:hover .legend-label { text-decoration: underline; text-underline-offset: 3px; }
+.legend-item--link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* A status left out of the total keeps its card, marked the way its column and
    its scope chip are — one dashed rule saying "counted, but not in the sum". */

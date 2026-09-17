@@ -63,24 +63,49 @@ export async function postReload() {
  * `taxonomy` must be applied before any view renders, because the status
  * columns of the summary and daily tables are built from it.
  *
- * @returns {Promise<{taxonomy: Object, cases: Object[], summary: Object,
- *   daily: Object[], productivity: Object[]}>}
+ * Cases are deliberately **not** among them. Every screen here draws figures,
+ * which the aggregates already carry; the rows behind a figure are fetched one
+ * status at a time by {@link getCases}, when somebody clicks it. Pulling them
+ * all eagerly meant every load carried every case of every workbook before
+ * anyone had looked at one.
+ *
+ * @returns {Promise<{taxonomy: Object, summary: Object, daily: Object[],
+ *   productivity: Object[]}>}
  */
 export async function fetchAll() {
-    const [statusRes, dataRes, summaryRes, dailyRes, prodRes] = await Promise.all([
+    const [statusRes, summaryRes, dailyRes, prodRes] = await Promise.all([
         fetch("/api/statuses"),
-        fetch("/api/data"),
         fetch("/api/summary"),
         fetch("/api/daily"),
         fetch("/api/productivity"),
     ]);
     return {
         taxonomy: await statusRes.json(),
-        cases: await dataRes.json(),
         summary: await summaryRes.json(),
         daily: await dailyRes.json(),
         productivity: await prodRes.json(),
     };
+}
+
+/**
+ * The loaded cases of one status: the rows behind a status figure.
+ *
+ * One status per request, because that is the unit Detail caches — click NG and
+ * the NGs arrive once and are kept, click it again and nothing is fetched. The
+ * slices partition the load, so two statuses chosen at once are a union with no
+ * case counted twice and none unreachable.
+ *
+ * Covers every scope group, including one the plan excludes: Detail draws a
+ * card for it that the reader may deliberately press, and each case names the
+ * group it belongs to so the view can leave it out until they do.
+ *
+ * @param {string} status A status key from the taxonomy.
+ * @returns {Promise<ApiResponse>} On success `json` is the case list; a key the
+ *   taxonomy no longer names is a 400 with `{error}`.
+ */
+export async function getCases(status) {
+    const res = await fetch(`/api/cases?status=${encodeURIComponent(status)}`);
+    return { ok: res.ok, json: await res.json() };
 }
 
 /**

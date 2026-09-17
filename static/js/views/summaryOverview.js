@@ -26,8 +26,8 @@
  */
 import { $, esc } from "../dom.js";
 import {
-    colourFor, getExecutedStatuses, getReviewStatuses, getStatuses,
-    isExcluded, sumRows, toneFor,
+    colourFor, getCountedStatuses as countedStatuses, getExecutedStatuses,
+    getReviewStatuses, getStatuses, sumRows, toneFor,
 } from "../taxonomy.js";
 
 /**
@@ -38,15 +38,17 @@ import {
  * a card that navigates is not a reason to put it back.
  *
  * The second argument names a filter the destination should apply — `main.js`
- * translates it, because only it knows which module owns that view's state.
+ * translates it, because only it knows which module owns that view's state —
+ * and the third hands over the statuses the card counted, so the list it opens
+ * is the figure that was pressed rather than a screenful of something adjacent.
  *
- * @type {(view: string, filter?: string) => void}
+ * @type {(view: string, filter?: string, ctx?: Object) => void}
  */
 let onJump = () => {};
 
 /**
  * Tell the overview where its cards lead. Call once, at startup.
- * @param {(view: string, filter?: string) => void} fn
+ * @param {(view: string, filter?: string, ctx?: Object) => void} fn
  */
 export function setJumpHandler(fn) {
     onJump = fn;
@@ -57,19 +59,6 @@ const fmt = (n) => Number(n || 0).toLocaleString();
 
 /** "2026-09-08" -> "09-08". The year is the same on every row that matters. */
 const shortDate = (d) => String(d || "").slice(5);
-
-/**
- * The statuses a progress bar may draw, in taxonomy order.
- *
- * Excluded statuses are left out for the reason the dashed `band--aside` rule
- * exists in the table: `total` does not include them, so a bar that drew them
- * would not add up to its own denominator.
- *
- * @returns {import("../taxonomy.js").Status[]}
- */
-function countedStatuses() {
-    return getStatuses().filter((s) => !isExcluded(s.key));
-}
 
 /**
  * Sum a set of statuses out of a totals object.
@@ -189,7 +178,7 @@ function lastDayActivity(dailyRows) {
  *          action?: string, jump?: string}} f
  * @returns {string} HTML.
  */
-function kpi(f) {
+function kpi(f, i) {
     const tone = f.tone ? ` data-tone="${esc(f.tone)}"` : "";
     const inner = `
         <span class="kpi-head">
@@ -199,9 +188,12 @@ function kpi(f) {
         <span class="kpi-value"${tone}>${esc(f.value)}</span>
         <span class="kpi-sub">${esc(f.sub || "")}</span>`;
 
+    // The card carries its position and nothing else: which statuses it counted
+    // is a list, and a list in an attribute is a separator waiting to collide
+    // with a status key somebody configures. The handler reads it back off the
+    // array this render built.
     return f.jump
-        ? `<button type="button" class="kpi kpi--link" data-jump="${esc(f.jump)}"`
-          + `${f.filter ? ` data-filter="${esc(f.filter)}"` : ""}>${inner}</button>`
+        ? `<button type="button" class="kpi kpi--link" data-card="${i}">${inner}</button>`
         : `<div class="kpi">${inner}</div>`;
 }
 
@@ -327,6 +319,12 @@ export function renderOverview(data, dailyRows) {
             label: "In plan",
             value: fmt(totals.total),
             sub: `${fmt(files)} file${files === 1 ? "" : "s"}`,
+            action: "View →",
+            jump: "detail",
+            // The statuses inside the total, which is what this figure is: the
+            // excluded ones are deliberately not in it, so listing them here
+            // would open a list longer than the number pressed.
+            statuses: countedStatuses().map((st) => st.key),
         },
         {
             label: `Executed · ${executedPct(totals)}%`,
@@ -337,12 +335,20 @@ export function renderOverview(data, dailyRows) {
                 ? `${activity.delta >= 0 ? "+" : "−"}${fmt(Math.abs(activity.delta))}`
                   + ` vs ${shortDate(activity.prevDate)}`
                 : `of ${fmt(totals.total)}`,
+            action: "View →",
+            jump: "detail",
+            statuses: getExecutedStatuses().map((st) => st.key),
         },
         {
             label: "Pass rate",
             value: `${executed ? Math.round((passed / executed) * 100) : 0}%`,
             tone: "success",
             sub: `${fmt(passed)} of ${fmt(executed)} executed`,
+            action: "View →",
+            jump: "detail",
+            // The passes themselves, not the rate: a percentage has no list.
+            statuses: getStatuses().filter((st) => toneFor(st.key) === "success")
+                .map((st) => st.key),
         },
         {
             label: "To review",
@@ -351,6 +357,7 @@ export function renderOverview(data, dailyRows) {
             sub: "open work",
             action: "View →",
             jump: "detail",
+            statuses: getReviewStatuses().map((st) => st.key),
         },
         {
             label: "Missing reason",
@@ -368,9 +375,13 @@ export function renderOverview(data, dailyRows) {
 
     // Label, share and count on one grid so the three columns line up down the
     // panel — the design's breakdown list, which a flowed inline legend is not.
+    // Each line is a status and a count, which is the same thing a figure in the
+    // status band is — so it opens the same list. A button rather than a
+    // clickable row, for the reason the KPI cards are buttons.
     const legend = countedStatuses()
         .filter((s) => totals[s.key] > 0)
-        .map((s) => `<li class="legend-item">
+        .map((s) => `<li class="legend-item legend-item--link" data-status="${esc(s.key)}"
+                         role="button" tabindex="0">
             <span class="swatch" style="background:${colourFor(s.key)}"></span>
             <span class="legend-label">${esc(s.label)}</span>
             <span class="legend-pct num">${
@@ -379,7 +390,7 @@ export function renderOverview(data, dailyRows) {
         </li>`).join("");
 
     host.innerHTML = `
-        <div class="kpis">${cards.map(kpi).join("")}</div>
+        <div class="kpis">${cards.map((f, i) => kpi(f, i)).join("")}</div>
         <div class="panels">
             <section class="card">
                 <div class="card-head card-head--row">
@@ -392,6 +403,19 @@ export function renderOverview(data, dailyRows) {
             ${todayPanel(dailyRows, activity)}
         </div>`;
 
-    host.querySelectorAll(".kpi--link").forEach((b) =>
-        b.addEventListener("click", () => onJump(b.dataset.jump, b.dataset.filter)));
+    host.querySelectorAll(".kpi--link").forEach((b) => {
+        const card = cards[Number(b.dataset.card)];
+        b.addEventListener("click", () =>
+            onJump(card.jump, card.filter, { statuses: card.statuses }));
+    });
+
+    host.querySelectorAll(".legend-item--link").forEach((li) => {
+        const open = () => onJump("detail", "", { statuses: [li.dataset.status] });
+        li.addEventListener("click", open);
+        // `role="button"` promises the keyboard works; nothing else supplies it
+        // on an `<li>`.
+        li.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+        });
+    });
 }

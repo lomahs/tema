@@ -39,12 +39,21 @@ def test_summary_rows_group_by_file_and_device():
 
 
 def test_a_summary_rows_status_columns_add_up_to_its_total():
+    """Three cases, but a total of two: "TBD" matches no status.
+
+    It therefore lands in the fallback, which the shipped taxonomy excludes, so
+    it keeps its count and leaves the denominator. That is what makes the
+    invariant the narrower one — total equals the sum of the *counted* columns,
+    not of every column — and it is why the assertion is written against
+    `STATUS.counted` rather than against `len`.
+    """
     rows, _ = aggregate.summary_rows([
         case(result="OK"), case(result="TBD"), case(result=None),
     ])
 
     row = rows[0]
-    assert sum(row[key] for key in aggregate.STATUS.counted) == row["total"] == 3
+    assert sum(row[key] for key in aggregate.STATUS.counted) == row["total"] == 2
+    assert sum(row[key] for key in aggregate.STATUS.excluded) == 1
 
 
 def test_an_out_of_scope_case_is_counted_in_its_column_but_not_in_the_total():
@@ -498,3 +507,105 @@ def test_every_file_case_names_the_scope_group_it_was_classified_into():
         ("Vendor", SCOPES.classify("Vendor")),
     ]
     assert {c["scope_group"] for c in data["cases"]} == {r["scope"] for r in data["rows"]}
+
+
+# --- Cases of one status, for Detail's on-demand fetch ---------------------
+
+
+def test_status_cases_holds_exactly_the_cases_of_that_status():
+    cases = aggregate.status_cases([
+        case(result="OK"),
+        case(result="NG", row_num=5),
+        case(result="OK", row_num=6),
+    ], "OK")
+
+    assert [c["row_num"] for c in cases] == [4, 6]
+    assert {c["status"] for c in cases} == {"OK"}
+
+
+def test_status_cases_classifies_the_whole_row_not_the_result_cell():
+    """`対象外` with a PIC is a Cancel; without one it was never in the plan.
+
+    The same rule every aggregate follows — `classify_case`, never `classify`.
+    """
+    owned = case(result="対象外", pic="lee")
+    unowned = case(result="対象外", row_num=5)
+
+    assert [c["row_num"] for c in aggregate.status_cases([owned, unowned], "Cancel")] == [4]
+    assert [c["row_num"] for c in aggregate.status_cases([owned, unowned], "OOS")] == [5]
+
+
+def test_the_statuses_between_them_account_for_every_loaded_case():
+    """Detail fetches one status at a time, so the slices must partition the load.
+
+    A case appearing in two of them would be double-counted the moment two
+    status cards are pressed; one appearing in none could never be reached.
+    """
+    loaded = [
+        case(result="OK"), case(result="NG", row_num=5),
+        case(result="TBD", row_num=6), case(result=None, row_num=7),
+        case(result="対象外", row_num=8), case(scope="JP", result="OK", row_num=9),
+    ]
+
+    seen = [(c["file_name"], c["row_num"])
+            for key in aggregate.STATUS.keys
+            for c in aggregate.status_cases(loaded, key)]
+
+    assert sorted(seen) == sorted((c.file_name, c.row_num) for c in loaded)
+
+
+def test_status_cases_keep_work_the_plan_excludes(jp_is_not_in_the_plan):
+    """Detail's scope cards are how JP work is opted into, so it must arrive.
+
+    That makes this endpoint's coverage Summary's rather than Review's — the
+    same reasoning `file_rows` follows.
+    """
+    cases = aggregate.status_cases([
+        case(result="OK", scope="FPT"),
+        case(result="OK", scope="JP", row_num=5),
+    ], "OK")
+
+    assert [c["scope"] for c in cases] == ["FPT", "JP"]
+
+
+def test_every_status_case_names_the_scope_group_it_was_classified_into():
+    """Detail filters by group and the cell carries a raw string — one
+    vocabulary, for the reason `file_rows` carries `scope_group` too."""
+    cases = aggregate.status_cases([
+        case(result="OK", scope="FPT (JM Support)"),
+        case(result="OK", scope="Vendor", row_num=5),
+    ], "OK")
+
+    assert [(c["scope"], c["scope_group"]) for c in cases] == [
+        ("FPT (JM Support)", "FPT"),
+        ("Vendor", SCOPES.classify("Vendor")),
+    ]
+
+
+def test_status_cases_keeps_the_source_order_of_the_cases():
+    cases = aggregate.status_cases([
+        case(result="OK", row_num=9), case(result="OK", row_num=4),
+    ], "OK")
+
+    assert [c["row_num"] for c in cases] == [9, 4]
+
+
+def test_an_unknown_status_key_has_no_cases():
+    """Whether that is worth a 400 is the endpoint's business, not the aggregate's."""
+    assert aggregate.status_cases([case(result="OK")], "Nope") == []
+
+
+def test_every_status_case_names_the_device_family_it_belongs_to():
+    """Summary merges a handset's sizes into one row, and that row is a door
+    into Detail. Re-deriving the family in JavaScript would mean writing the
+    substring rules there — `summary_rows` attaches it to every row for the
+    same reason."""
+    cases = aggregate.status_cases([
+        case(device="iPhone Min size", result="OK"),
+        case(device="Android 14", result="OK", row_num=5),
+    ], "OK")
+
+    assert [(c["device"], c["device_family"]) for c in cases] == [
+        ("iPhone Min size", "iPhone"),
+        ("Android 14", "Android 14"),
+    ]
