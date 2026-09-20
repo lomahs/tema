@@ -152,6 +152,13 @@
     /* --- geometry ----------------------------------------------------------
      * Distance from the data sets the curvature. See rule 3 above.
      */
+    /* Below `--r-sm` because the scale above it assumes a control of roughly
+       `--ctl-h`: on a 15px box 6px is nearly half the side, and the thing reads
+       as a radio button — single-select — rather than as the checkbox a
+       multi-select scope tab needs. Extending the scale is the answer rather
+       than a literal at the one call site, which is how a scale stops being
+       one. */
+    --r-xs:   4px;    /* check boxes and anything else smaller than an input */
     --r-sm:   6px;    /* inputs, selects, small in-cell buttons */
     --r-md:   7px;    /* buttons, rail nav items */
     --r-lg:   10px;   /* cards and table panes — the design's card radius */

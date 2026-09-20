@@ -273,10 +273,16 @@ figure that matters. The three roles are the ones the config already encodes, an
 `views/summary.js` is the list: **In Scope** (`counted`), **Out Scope** (excluded), and the
 fallback, which takes its heading from its own configured label. The first two are role names so
 they are written down; the third is a configured group, so naming it here would be this module
-naming a scope. A bucket holding several groups draws a strip of multi-select scope cards — the
-same control, and the same code shape, as Review's `#detailScopes` — and drawn only when the
-bucket holds more than one, because a single card can only be pressed or else empty the table
-above it. `views/summary.js` still names no scope itself: it buckets on the `counted` and
+naming a scope. A bucket holding several groups draws a strip of multi-select scope **tabs**,
+drawn only when the bucket holds more than one, because a single tab can only be pressed or else
+empty the table above it. They ask Review's question and no longer share its shape: a Summary
+card has a rule under its heading, so the tabs sit *on* that rule — the head gives its own border
+up (`card-head--tabbed`) and each tab overhangs by a pixel so a pressed one's 2px marker replaces
+the hairline rather than doubling it — and the pressed ones read as part of the heading rather
+than as a strip floating above the rows. Review has no such rule, which is why `#detailScopes`
+stays pills. Selection is ink: the design canvas marks it in a green a few degrees from OK's own,
+and here colour means status. The leading `All` presses every group in its bucket and reads
+pressed only when they all are, with no way back — Review's convention, for Review's reason. `views/summary.js` still names no scope itself: it buckets on the `counted` and
 `fallback` flags that ride on every group in the `scopes` list `/api/summary` serves.
 
 **A bucket's rows are summed per (file, device).** `/api/summary` serves one row per
@@ -380,8 +386,11 @@ The organising idea is still **the ledger** — this tool sits between two sprea
 grid is the structure. Rows are ruled and cells are square: a curve inside a run of figures is
 noise.
 
-**Curvature is a scale, and it means distance from the data.** `--r-sm` (6px) for inputs and
-small in-cell buttons, `--r-md` (7px) for buttons and rail nav items, `--r-lg` (10px) for cards
+**Curvature is a scale, and it means distance from the data.** `--r-xs` (4px) for anything
+smaller than an input — the scope tabs' check boxes are the only case today, and they are the
+reason the token exists: the scale above assumes a control of roughly `--ctl-h`, so on a 15px box
+`--r-sm` is nearly half the side and the thing reads as a radio button, promising single-select on
+a strip that is anything but. `--r-sm` (6px) for inputs and small in-cell buttons, `--r-md` (7px) for buttons and rail nav items, `--r-lg` (10px) for cards
 and table panes, `--r-full` for badges, result toggles and scope pills — things whose whole job
 is to be pressed, or read as a token. Reaching for a literal `border-radius` instead of a token is what
 makes an interface look assembled rather than designed. Two consequences worth knowing, because
@@ -559,11 +568,16 @@ Behavior worth preserving when touching the UI:
   (result breakdown, today's progress, what owes a reason), then one card per *bucket* — In
   Scope, Out Scope and the fallback. Each card carries the design's chrome — Device and File
   selects, a three-state Rows toggle, an Executed progress column, condition chips and a
-  Prev/Next/Show-all footer. **The design's Scope select is answered by the scope cards inside
-  each bucket**, which is the multi-select Review already uses: a select picks one group, and a
-  bucket holding two commitments needs to show either, or both summed. A bucket whose cards are
-  all unpressed keeps its card rather than disappearing — hiding the table you just emptied would
-  take the cards away with it and leave no way to press them back. The filters are shared across cards for the reason the sort is —
+  Prev/Next/Show-all footer. **The design's Scope select is answered by the scope tabs across
+  each bucket's head rule**: a select picks one group, and a bucket holding two commitments needs
+  to show either, or both summed. The head's row count carries what the design puts beside it —
+  "26 rows · 2 of 2 scopes" — because how many scopes are pressed and how many rows resulted are
+  one answer to "what am I looking at", and only the strip below can change either. A bucket whose
+  tabs are all unpressed keeps its card rather than disappearing — hiding the table you just
+  emptied would take the tabs away with it and leave no way to press them back. No tab carries the
+  dashed `--aside` marker its Review counterpart does: a bucket splits on the `counted` flag, so a
+  strip's groups are either all in the plan or all out, and the head's "Not in total" chip has
+  already said which. The filters are shared across cards for the reason the sort is —
   "iPad only" should mean the same thing in both — and paging is not, because a page number only
   means something inside one table. **Rows cycles Split → By device type → Combined**, and none
   of the three changes a total — only how many rows carry it. `combine()` sums every device of a

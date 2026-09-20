@@ -942,6 +942,113 @@ textarea.input {
 }
 
 
+/* --- scope tabs ----------------------------------------------------------
+ * Summary's scope groups, drawn as a tab bar across the head rule of the table
+ * they narrow. They ask Review's question — which of these groups am I looking
+ * at, several at once — but they answer it in a different shape, and that is
+ * the point: a Summary card has a rule under its heading, so a control sitting
+ * *on* that rule reads as part of the heading rather than as a strip floating
+ * above the rows. Review has no such rule, which is why its pills stay pills.
+ *
+ * The strip carries the rule and each tab overhangs it by a pixel, so a pressed
+ * tab's 2px marker covers the hairline rather than sitting above it. That is
+ * also why the head beside it gives its own border up — see `card-head--tabbed`.
+ *
+ * Selection is ink. The design canvas marks it in a green a few degrees from
+ * OK's own, and on this screen a colour is a status.
+ */
+
+.scope-tabs {
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    column-gap: var(--sp-5);
+    row-gap: 0;
+    padding: 0 var(--sp-5);
+    border-bottom: 1px solid var(--rule);
+}
+
+.scope-tab {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) 0 calc(var(--sp-2) + 2px);
+    /* Over the strip's own hairline, so the pressed marker replaces it rather
+       than doubling it. */
+    margin-bottom: -1px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    font: inherit;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 90ms ease-out, border-color 90ms ease-out;
+}
+.scope-tab:hover { color: var(--ink); }
+.scope-tab[aria-pressed="true"] {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+}
+/* Inset, because an outline on a tab flush with the rule would be clipped by
+   the pane below it. */
+.scope-tab:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+
+/* The check box: the pressed state drawn, so a tab is legible as a choice
+   before it is pressed rather than only after. `--r-xs`, not `--r-sm` — at this
+   size 6px is half the side and the box reads as a radio button, which would
+   promise single-select on a strip that is anything but. */
+.scope-tab-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--r-xs);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    color: transparent;
+}
+.scope-tab[aria-pressed="true"] .scope-tab-box {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--ink-invert);
+}
+
+/* The label is the eyebrow idiom — a mono uppercase micro-label — because that
+   is what the design sets it as, and because it is what makes the count beside
+   it read as the figure rather than as part of the name. Review's pills set the
+   same names in sentence case; there they sit alone on a line and have no
+   column of figures to distinguish themselves from. */
+.scope-tab-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: var(--ls-eyebrow);
+    text-transform: uppercase;
+    color: inherit;
+}
+
+/* Set in sans, not mono: it is the one figure on this strip and reads at size,
+   where the tabular alignment mono buys costs legibility against the label. */
+.scope-tab-count {
+    font-family: var(--font-sans);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: inherit;
+}
+
+/* `All` has no count — there is nothing to size about "every one of these" —
+   so it keeps the gap the count would have filled off its right edge. */
+.scope-tab--all { padding-right: var(--sp-1); }
+
+
 /* --- KPI cards -----------------------------------------------------------
  * The design's headline row: one card per figure, an uppercase eyebrow above
  * a large mono number. A card with an action is a button, so it is operated by
@@ -1257,6 +1364,10 @@ textarea.input {
    reach the card's edge, or the header band stops short of its own frame. */
 .card--table .ledger { min-width: 100%; }
 .card--table > .card-head { padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--rule); }
+/* Unless a scope tab strip follows it: the strip carries the rule, and the tabs
+   overhang it, so a head that kept its own would draw a second line a few
+   pixels above and the pressed tab's marker would cover neither. */
+.card--table > .card-head--tabbed { border-bottom: 0; padding-bottom: var(--sp-2); }
 
 .scroll-x--flush {
     width: auto;

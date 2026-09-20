@@ -187,13 +187,25 @@ export function initSummaryView({ onOpenFile: open = () => {},
         if (cell) onOpenFile(cell.dataset.file);
     });
 
-    // The scope cards never fetch: every row is already here, and pressing one
-    // is a filter over them. Delegated like the file cells, because the cards
+    // The scope tabs never fetch: every row is already here, and pressing one
+    // is a filter over them. Delegated like the file cells, because the tabs
     // are regenerated on every render.
     $("#summaryTables").addEventListener("click", (e) => {
-        const card = e.target.closest("button[data-scope-card]");
-        if (!card) return;
-        const key = card.dataset.scopeCard;
+        // `All` is a shortcut, not a fourth state: it presses every group in
+        // its bucket and has no way back, because unpressing them all shows
+        // nothing. The attribute carries a bucket key — one of this module's
+        // own three literals — never a configured scope key.
+        const all = e.target.closest("button[data-scope-all]");
+        if (all) {
+            const bucket = BUCKETS.find((b) => b.key === all.dataset.scopeAll);
+            if (bucket) groupsOf(bucket).forEach((g) => chosenScopes.add(g.key));
+            paging.clear();
+            render();
+            return;
+        }
+        const tab = e.target.closest("button[data-scope-tab]");
+        if (!tab) return;
+        const key = tab.dataset.scopeTab;
         if (chosenScopes.has(key)) chosenScopes.delete(key);
         else chosenScopes.add(key);
         paging.clear();
@@ -437,38 +449,60 @@ function bucketRows(bucket, rows) {
 }
 
 /**
- * A bucket's scope cards: one per group in it, multi-select.
+ * A bucket's scope tabs: one per group in it, multi-select.
  *
  * Drawn only where there is a choice to make. With one group in the bucket the
- * strip would be a single card that can only be pressed or else empty the table
+ * strip would be a single tab that can only be pressed or else empty the table
  * it sits above, which is a control that asks a question with one answer.
  *
- * The figure on each card counts that group under the shared Device/File
- * filters but *not* under the scope choice — a card is how you pick a scope, so
+ * The figure on each tab counts that group under the shared Device/File
+ * filters but *not* under the scope choice — a tab is how you pick a scope, so
  * its count has to say how much there is to pick, exactly as Review's status
  * cards count over `conditioned`.
+ *
+ * It is a tab bar rather than the pill strip Review draws, and deliberately so:
+ * these sit on the head rule of the table they narrow, so the pressed ones read
+ * as the heading of the rows beneath them rather than as a control floating
+ * above. Review's pills are the same *question* asked of a screen with no such
+ * rule to sit on, which is why the two no longer share a code shape.
+ *
+ * Selection is ink — an underline, ink text and a filled box. The design canvas
+ * this came from marks it in its green, which is a few degrees from OK's own,
+ * and colour on this screen means status.
+ *
+ * `All` presses every group in the bucket and reads pressed only when they all
+ * are. It has no "off", the convention Review's leading pill uses: a control
+ * whose only effect is to empty the table is not worth offering.
  *
  * @param {Object} bucket
  * @param {Object[]} rows Every row under the shared filters.
  * @returns {string} HTML, or "" when the bucket holds a single group.
  */
-function scopeCards(bucket, rows) {
+function scopeTabs(bucket, rows) {
     const groups = groupsOf(bucket);
     if (groups.length < 2) return "";
 
     const total = (key) => rows.filter((r) => r.scope === key)
         .reduce((n, r) => n + (r.total || 0), 0);
 
-    return `<div class="scope-row">
-        <div class="scope-cards" role="group" aria-label="Scope groups">
-            ${groups.map((g) => `
-                <button type="button" class="chip-card"
-                        data-scope-card="${esc(g.key)}"
-                        aria-pressed="${chosenScopes.has(g.key)}">
-                    <span class="chip-card-label">${esc(g.label)}</span>
-                    <span class="chip-card-value num">${total(g.key).toLocaleString()}</span>
-                </button>`).join("")}
-        </div>
+    // The box is `aria-hidden`: it is the pressed state drawn, and the button
+    // already announces that through `aria-pressed`.
+    const box = `<span class="scope-tab-box" aria-hidden="true">✓</span>`;
+
+    return `<div class="scope-tabs" role="group" aria-label="Scope groups">
+        <button type="button" class="scope-tab scope-tab--all"
+                data-scope-all="${bucket.key}"
+                aria-pressed="${groups.every((g) => chosenScopes.has(g.key))}">
+            ${box}<span class="scope-tab-label">All</span>
+        </button>
+        ${groups.map((g) => `
+            <button type="button" class="scope-tab"
+                    data-scope-tab="${esc(g.key)}"
+                    aria-pressed="${chosenScopes.has(g.key)}">
+                ${box}
+                <span class="scope-tab-label">${esc(g.label)}</span>
+                <span class="scope-tab-count num">${total(g.key).toLocaleString()}</span>
+            </button>`).join("")}
     </div>`;
 }
 
@@ -527,9 +561,14 @@ function render() {
     // Addressed by position, not by bucket key, for the reason it was not
     // addressed by scope key: an id and a selector round trip want something
     // that never needs escaping.
-    container.innerHTML = chips() + present.map(({ bucket, groups, rows: r }, i) => `
+    container.innerHTML = chips() + present.map(({ bucket, groups, rows: r }, i) => {
+        // The tabs sit *on* the head's rule, so the head gives that rule up —
+        // a strip drawn under a head that kept its own border would stack two
+        // lines a couple of pixels apart.
+        const tabs = scopeTabs(bucket, rows);
+        return `
         <section class="card card--table">
-            <div class="card-head card-head--row">
+            <div class="card-head card-head--row${tabs ? " card-head--tabbed" : ""}">
                 <h2>${esc(bucket.title ?? groups[0].label)}</h2>
                 <!-- A bucket outside the plan says so on its own heading. Its
                      table and its bar are drawn in full — the count has to stay
@@ -546,9 +585,14 @@ function render() {
                 <!-- Each bucket carries its own bar: a commitment running behind
                      is a fact the combined figure above would hide. -->
                 ${scopeProgress(r)}
-                <span class="count">${r.length} row${r.length === 1 ? "" : "s"}</span>
+                <!-- The design's right-hand summary. How many scopes are
+                     pressed belongs beside the row count rather than in a
+                     second element: both answer "what am I looking at", and
+                     only the strip below can change either of them. -->
+                <span class="count">${r.length} row${r.length === 1 ? "" : "s"}${
+                    tabs ? ` · ${pressedScopes(bucket.key).length} of ${groups.length} scopes` : ""}</span>
             </div>
-            ${scopeCards(bucket, rows)}
+            ${tabs}
             <div class="scroll-x scroll-x--flush scroll-x--rows">
                 <table class="ledger">
                     <thead><tr id="summaryHead-${i}"></tr></thead>
@@ -557,7 +601,8 @@ function render() {
                 </table>
             </div>
             <div class="card-foot" id="summaryFooter-${i}"></div>
-        </section>`).join("");
+        </section>`;
+    }).join("");
 
     container.querySelectorAll("[data-clear]").forEach((b) =>
         b.addEventListener("click", () => {
