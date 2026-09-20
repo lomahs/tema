@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test-management"
+version = "0.1.0"
+description = "Reads test cases out of Excel workbooks and aggregates progress into Summary, Daily and Detail views."
+requires-python = ">=3.12"
+dependencies = [
+    "Flask>=3.0",
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "requests>=2.31",
+    "msal>=1.28",
+]
+
+[tool.setuptools]
+# The app is run from a checkout, not installed. Declaring the package keeps
+# `pip install -e .` working for anyone who wants it without turning the
+# repository into a src-layout.
+packages = ["tcm"]
+
+[tool.pytest.ini_options]
+# Pins the rootdir so `tests/` resolves `tcm.*` the same way whether pytest is
+# invoked from the repository root or from an editor.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
