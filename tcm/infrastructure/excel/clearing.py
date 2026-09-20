@@ -23,10 +23,10 @@ from openpyxl import load_workbook
 from openpyxl.cell import MergedCell
 from openpyxl.utils import column_index_from_string
 
-from parser.excel_reader import TOOL_DATA_SHEET, parse_tool_data
+from tcm.infrastructure.excel.reader import TOOL_DATA_SHEET, parse_tool_data
 from tcm.domain.case import CASE_COLUMNS, SheetConfig, TestCase
 from tcm.domain.status import STATUS
-from prepare.workbook import read_sheets
+from tcm.infrastructure.excel.workbook import read_sheets
 
 
 log = logging.getLogger(__name__)

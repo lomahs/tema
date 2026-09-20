@@ -15,10 +15,10 @@ from dataclasses import dataclass, field
 
 from openpyxl import load_workbook
 
-from parser.excel_reader import TOOL_DATA_COLUMNS, TOOL_DATA_SHEET
+from tcm.infrastructure.excel.reader import TOOL_DATA_COLUMNS, TOOL_DATA_SHEET
 from tcm.domain.case import SheetConfig
-from parser.tool_data_builder import Unresolved, detect_workbook_configs
-from prepare.workbook import read_sheets
+from tcm.infrastructure.excel.detection import Unresolved, detect_workbook_configs
+from tcm.infrastructure.excel.workbook import read_sheets
 
 
 #: The SheetConfig fields a diff compares — everything but the two that

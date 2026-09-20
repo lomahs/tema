@@ -4,7 +4,7 @@ import pytest
 from openpyxl import Workbook
 from openpyxl.utils import column_index_from_string
 
-from parser.excel_reader import TOOL_DATA_SHEET, TOOL_DATA_COLUMNS
+from tcm.infrastructure.excel.reader import TOOL_DATA_SHEET, TOOL_DATA_COLUMNS
 
 DEFAULT_COLS = "A B C D E F G"
 

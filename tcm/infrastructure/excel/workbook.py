@@ -9,7 +9,7 @@ sees `"=IF(...)"`.
 
 from openpyxl import load_workbook
 
-from parser.excel_reader import TOOL_DATA_SHEET
+from tcm.infrastructure.excel.reader import TOOL_DATA_SHEET
 
 
 def read_sheets(path: str) -> dict[str, list[tuple]]:

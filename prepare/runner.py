@@ -15,10 +15,10 @@ whose TOOL_DATA is unreadable must not sink a batch of forty.
 import logging
 import os
 
-from parser.excel_reader import LOCK_FILE_PREFIX, find_workbooks, parse_tool_data
-from prepare.clear import apply_plan, plan_file
-from prepare.tool_data import detect_file, diff_configs, write_tool_data_sheet
-from prepare.workbook import has_tool_data
+from tcm.infrastructure.excel.reader import LOCK_FILE_PREFIX, find_workbooks, parse_tool_data
+from tcm.infrastructure.excel.clearing import apply_plan, plan_file
+from tcm.infrastructure.excel.tool_data import detect_file, diff_configs, write_tool_data_sheet
+from tcm.infrastructure.excel.workbook import has_tool_data
 
 
 log = logging.getLogger(__name__)

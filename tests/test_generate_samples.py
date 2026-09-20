@@ -5,7 +5,7 @@ import pytest
 
 from openpyxl import load_workbook
 
-from parser.excel_reader import TOOL_DATA_SHEET, load_from_folder, parse_tool_data
+from tcm.infrastructure.excel.reader import TOOL_DATA_SHEET, load_from_folder, parse_tool_data
 from tools.generate_samples import DEFAULTS, generate, validate_config
 
 CONFIG = validate_config({

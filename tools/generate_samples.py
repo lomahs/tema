@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
-from parser.excel_reader import TOOL_DATA_SHEET, TOOL_DATA_COLUMNS
+from tcm.infrastructure.excel.reader import TOOL_DATA_SHEET, TOOL_DATA_COLUMNS
 from tcm.domain.status import STATUS
 
 log = logging.getLogger(__name__)

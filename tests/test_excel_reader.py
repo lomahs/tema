@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pytest
 
-from parser.excel_reader import (
+from tcm.infrastructure.excel.reader import (
     find_workbooks, load_file, load_from_files, load_from_folder,
 )
 from tcm.domain.case import SheetConfig

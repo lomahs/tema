@@ -9,10 +9,10 @@ the comparison that turns "Create" into "Check" once a workbook has one.
 import pytest
 from openpyxl import load_workbook
 
-from parser.excel_reader import TOOL_DATA_SHEET, parse_tool_data
+from tcm.infrastructure.excel.reader import TOOL_DATA_SHEET, parse_tool_data
 from tcm.domain.case import SheetConfig
-from prepare.tool_data import detect_file, diff_configs, write_tool_data_sheet
-from prepare.workbook import has_tool_data, read_sheets
+from tcm.infrastructure.excel.tool_data import detect_file, diff_configs, write_tool_data_sheet
+from tcm.infrastructure.excel.workbook import has_tool_data, read_sheets
 from tests.conftest import config_row, write_workbook
 
 

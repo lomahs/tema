@@ -12,8 +12,8 @@ from openpyxl import load_workbook
 
 from api import routes
 from app import create_app
-from parser.excel_reader import parse_tool_data
-from prepare.workbook import has_tool_data
+from tcm.infrastructure.excel.reader import parse_tool_data
+from tcm.infrastructure.excel.workbook import has_tool_data
 from tests.conftest import config_row, write_workbook
 
 

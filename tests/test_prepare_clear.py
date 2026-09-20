@@ -7,7 +7,7 @@ result columns is ever touched.
 
 import pytest
 
-from prepare.clear import apply_plan, plan_file
+from tcm.infrastructure.excel.clearing import apply_plan, plan_file
 from tests.conftest import config_row, write_workbook
 
 
