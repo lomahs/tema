@@ -12,7 +12,7 @@ import config_store
 from tcm.domain.scope import SCOPES
 from tcm.domain.sheet_labels import LABELS
 from tcm.domain.status import STATUS
-from tcm.domain.report_layout import LAYOUT
+from tcm.infrastructure.report.layout import LAYOUT
 
 #: Every test here writes a config and mutates the live singletons.
 pytestmark = pytest.mark.usefixtures("restore_configs")

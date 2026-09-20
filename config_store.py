@@ -23,7 +23,7 @@ swaps it in, which is one filesystem operation.
 
 **An applied edit mutates the live object rather than replacing it.** Five
 modules hold `from tcm.domain.status import STATUS`, and rebinding the name in
-`parser.status` would reach none of them. `adopt` is what makes one save reach
+`tcm.domain.status` would reach none of them. `adopt` is what makes one save reach
 all of them; see `StatusSet.adopt`.
 
 Saving the taxonomy also rebuilds the report layout. `{"expand": "statuses"}` is
@@ -43,7 +43,7 @@ from tcm.domain.device import DEVICES, DeviceSet
 from tcm.domain.scope import SCOPES, ScopeSet
 from tcm.domain.sheet_labels import HEADER_FIELDS, LABELS, RESULT_FIELDS, SheetLabels
 from tcm.domain.status import DERIVE_CONDITIONS, STATUS, TONES, StatusSet
-from tcm.domain.report_layout import LAYOUT, ReportLayout
+from tcm.infrastructure.report.layout import LAYOUT, ReportLayout
 
 log = logging.getLogger(__name__)
 

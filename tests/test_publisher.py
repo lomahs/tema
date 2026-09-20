@@ -9,7 +9,7 @@ from datetime import datetime
 import pytest
 
 from tcm.domain import case as models
-from tcm.domain.report_layout import ReportLayout
+from tcm.infrastructure.report.layout import ReportLayout
 from report.publisher import SheetMissing, publish
 from sharepoint.workbook import UsedRange
 
@@ -273,7 +273,7 @@ def test_publishing_twice_into_a_table_is_idempotent_as_well():
 # --- all three datasets ----------------------------------------------------
 
 def test_every_sheet_in_the_layout_is_published():
-    from tcm.domain.report_layout import ReportLayout as RL
+    from tcm.infrastructure.report.layout import ReportLayout as RL
 
     wb = FakeWorkbook({"Summary": [["h"]], "Daily": [["h"]], "Issues": [["h"]]})
     cases = [case(result="NG", test_date="2026-08-05", pic="lee", case_no="TC-2")]
@@ -285,7 +285,7 @@ def test_every_sheet_in_the_layout_is_published():
 
 
 def test_the_issues_sheet_holds_only_the_cases_the_taxonomy_flags():
-    from tcm.domain.report_layout import ReportLayout as RL
+    from tcm.infrastructure.report.layout import ReportLayout as RL
 
     wb = FakeWorkbook({"Summary": [["h"]], "Daily": [["h"]], "Issues": [["h"]]})
     cases = [case(result="OK", case_no="TC-1", test_date="2026-08-05"),

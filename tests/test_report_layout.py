@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from tcm.domain.report_layout import ReportLayout
+from tcm.infrastructure.report.layout import ReportLayout
 
 MINIMAL = {
     "sheets": [

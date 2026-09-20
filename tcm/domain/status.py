@@ -9,10 +9,11 @@ import logging
 import os
 from dataclasses import dataclass
 
+from tcm.settings import CONFIG_DIR
+
 log = logging.getLogger(__name__)
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_CONFIG_PATH = os.path.join(_ROOT, "config", "result_status.json")
+DEFAULT_CONFIG_PATH = os.path.join(CONFIG_DIR, "result_status.json")
 
 DEFAULT_BADGE = "bg-secondary"
 

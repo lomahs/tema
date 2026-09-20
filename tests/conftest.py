@@ -74,7 +74,7 @@ def restore_configs():
     from tcm.domain.scope import SCOPES
     from tcm.domain.sheet_labels import LABELS
     from tcm.domain.status import STATUS
-    from tcm.domain.report_layout import LAYOUT
+    from tcm.infrastructure.report.layout import LAYOUT
 
     from tcm.domain.device import DEVICES
 

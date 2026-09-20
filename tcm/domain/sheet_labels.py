@@ -23,11 +23,11 @@ import logging
 import os
 from dataclasses import dataclass
 
+from tcm.settings import CONFIG_DIR
 
 log = logging.getLogger(__name__)
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_LABELS_PATH = os.path.join(_ROOT, "config", "sheet_labels.json")
+DEFAULT_LABELS_PATH = os.path.join(CONFIG_DIR, "sheet_labels.json")
 
 # The two columns every device block on a sheet shares, as `SheetConfig` names them.
 HEADER_FIELDS = ("test_no_col", "scope_col")

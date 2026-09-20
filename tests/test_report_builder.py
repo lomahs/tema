@@ -1,6 +1,6 @@
 """Turning aggregate rows into the cell grid a sheet's layout asks for."""
 from report.builder import build_rows
-from tcm.domain.report_layout import ReportLayout
+from tcm.infrastructure.report.layout import ReportLayout
 
 
 def sheet_layout(dataset, columns, **overrides):

@@ -3,7 +3,7 @@
 Pure and offline: everything that decides *what* gets written lives here, so the
 Graph code downstream only has to decide *where*.
 """
-from tcm.domain.report_layout import RUN_DATE, SheetLayout
+from tcm.infrastructure.report.layout import RUN_DATE, SheetLayout
 
 
 def build_rows(dataset_rows, layout: SheetLayout, run_date: str) -> list[list]:
