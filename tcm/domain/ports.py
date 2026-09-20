@@ -62,8 +62,7 @@ class ReportWorkbook(Protocol):
     """The report workbook, edited in place.
 
     Exactly the eight methods `tests/services/test_publisher.py`'s FakeWorkbook
-    implements. (CLAUDE.md has long said "seven methods wide" -- it is wrong,
-    and Task 15 corrects it.) Widening this means widening the fake, which is the point:
+    implements. Widening this means widening the fake, which is the point:
     downloading the file, rewriting it and putting it back would destroy the
     charts and pivots in a hand-built report.
     """
