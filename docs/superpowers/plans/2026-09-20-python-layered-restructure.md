@@ -2181,6 +2181,14 @@ MSG
 
 Add a section stating: where a port exists, a service takes it as a constructor argument; the rule bounding the set; and that `create_app` is the only place implementations are chosen.
 
+**Say what the port tests do and do not prove.** `issubclass` against a
+`runtime_checkable` Protocol is `hasattr`-based: it catches a method that was
+deleted or renamed, and catches nothing else. Dropping `width` from
+`delete_rows`, reordering its parameters, or changing what it returns all still
+pass. The ports pin the *shape* of each interface, not its contract — a reader
+who assumes otherwise will trust them for something they cannot do. Say this
+plainly rather than leaving it to be discovered.
+
 - [ ] **Step 2: Correct "seven methods wide"**
 
 `CLAUDE.md` says the Graph workbook interface is "deliberately seven methods wide". It is eight: `worksheet_names`, `used_range`, `write_values`, `delete_rows`, `table_at`, `table_rows`, `table_add_rows`, `table_delete_row`. The spec inherited the error from it. Fix both files.
