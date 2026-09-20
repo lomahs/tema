@@ -186,10 +186,10 @@ Hai điều quan trọng:
   cho đúng, đó mới là bản chuẩn của file đó; app chỉ đề nghị Apply khi thật sự có khác biệt.
 
 Ô **Keep these results when clearing** chọn status nào được giữ lại qua vòng sau (mặc định
-`Cancel`). Danh sách này sinh từ [parser/result_status.json](parser/result_status.json), nên
+`Cancel`). Danh sách này sinh từ [config/result_status.json](config/result_status.json), nên
 thêm status mới là nó tự hiện ra.
 
-Nhãn mà bước dò layout tìm nằm ở [parser/sheet_labels.json](parser/sheet_labels.json) — sheet
+Nhãn mà bước dò layout tìm nằm ở [config/sheet_labels.json](config/sheet_labels.json) — sheet
 của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không sửa code.
 
 ## API
@@ -214,7 +214,7 @@ của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không s�
 
 ## Phân loại kết quả
 
-Định nghĩa trong `parser/result_status.json` — backend, UI và tool sinh file mẫu đều đọc
+Định nghĩa trong `config/result_status.json` — backend, UI và tool sinh file mẫu đều đọc
 từ đây, nên chỉ cần sửa một chỗ:
 
 `OK` → OK · `NG` → NG · `NG-OK` → NG-OK · `保留` → Pending · `対象外` → Cancel ·
@@ -339,7 +339,7 @@ python app.py
 | `GRAPH_CLIENT_ID` | *(rỗng)* | Bắt buộc. Chưa đặt thì panel SharePoint báo rõ và không cho bấm. |
 | `GRAPH_TENANT_ID` | `organizations` | Đặt tenant id để giới hạn đúng một directory. |
 | `GRAPH_TOKEN_CACHE` | `~/.test-management/graph_token_cache.json` | Nơi lưu refresh token, ghi với quyền `0600`. Giữ như file mật khẩu. |
-| `REPORT_LAYOUT_CONFIG` | `report/report_layout.json` | Layout file báo cáo. |
+| `REPORT_LAYOUT_CONFIG` | `config/report_layout.json` | Layout file báo cáo. |
 
 ### 3. Dùng
 
@@ -363,7 +363,7 @@ rollback**, file có thể đã được ghi một phần, nhưng chạy lại s
 ### Layout file báo cáo
 
 File đích phải **có sẵn** ba sheet cùng dòng tiêu đề; app không tự tạo sheet. Cột nào giữ
-gì khai trong `report/report_layout.json`:
+gì khai trong `config/report_layout.json`:
 
 ```json
 {
@@ -410,11 +410,11 @@ Nếu vùng đích là một **Excel Table** thật (Insert → Table) bắt đ�
 app dùng luôn table đó, nên định dạng và công thức tự giãn theo dòng mới.
 
 Sheet nào lọt vào Issues là do taxonomy quyết định: status có `"issue": true` trong
-`parser/result_status.json` (mặc định là NG, Pending, Cancel).
+`config/result_status.json` (mặc định là NG, Pending, Cancel).
 
 ## Nhóm Scope (Summary tách bảng)
 
-Định nghĩa trong `parser/scope_groups.json`. Tab Summary vẽ **một bảng cho mỗi nhóm**, vì
+Định nghĩa trong `config/scope_groups.json`. Tab Summary vẽ **một bảng cho mỗi nhóm**, vì
 phần việc FPT và phần việc JP là hai cam kết khác nhau — cộng chung lại không trả lời được
 câu hỏi nào.
 
@@ -440,7 +440,7 @@ câu hỏi nào.
 Summary của mình (con số phải nhìn thấy được, và tiêu đề bảng có nhãn *Not in total*), nhưng
 bị loại khỏi **mọi con số cộng chung các nhóm lại**: dải KPI phía trên, tab Daily, tab
 Productivity, tab Review, và cả báo cáo đẩy lên SharePoint. Cùng một chữ và cùng một ý nghĩa
-với `"excluded": true` của status trong `parser/result_status.json`.
+với `"excluded": true` của status trong `config/result_status.json`.
 
 `fallback` **không được** đặt `excluded` — đó là nơi Scope gõ sai rơi vào, loại nó đi đồng
 nghĩa với việc một lỗi chính tả biến mất khỏi mọi con số mà không báo gì. Cấu hình như vậy
@@ -464,7 +464,7 @@ mỗi (file, device), nên không phải thêm cột nào trên SharePoint.
 
 ## Nhóm device (Summary gộp dòng theo loại máy)
 
-Định nghĩa trong `parser/device_groups.json`. Một bộ test thường chạy cùng một máy ở hai cỡ
+Định nghĩa trong `config/device_groups.json`. Một bộ test thường chạy cùng một máy ở hai cỡ
 màn hình — `iPhone Min size` và `iPhone Max size` là hai block device trong file Excel, nhưng
 với người đọc tổng số thì chỉ là một chiếc iPhone. Nút **Rows** trên tab Summary có ba trạng
 thái: `Split` (một dòng cho mỗi file + device), `By device type` (gộp theo cấu hình này) và
