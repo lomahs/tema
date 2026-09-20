@@ -1,26 +1,13 @@
-import logging
-from flask import Flask, render_template
-from api.routes import api
-from tcm.settings import PORT, DEBUG
+"""Run the app: `.venv/bin/python app.py`.
 
-logging.basicConfig(
-    level=logging.DEBUG if DEBUG else logging.INFO,
-    format="%(asctime)s %(levelname)-5s [%(name)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
+The factory lives in `tcm.web.app`; this is the entry point that keeps the
+documented command working from the repository root.
+"""
+from tcm.settings import DEBUG, PORT
+from tcm.web.app import configure_logging, create_app
 
-
-def create_app():
-    app = Flask(__name__)
-    app.register_blueprint(api)
-
-    @app.route("/")
-    def index():
-        return render_template("index.html")
-
-    return app
-
+configure_logging()
+app = create_app()
 
 if __name__ == "__main__":
-    app = create_app()
     app.run(host="127.0.0.1", port=PORT, debug=DEBUG)

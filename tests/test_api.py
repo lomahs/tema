@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from api import routes
+from tcm.web import routes
 from app import create_app
 from tcm.domain.device import DEVICES
 from tcm.domain.scope import SCOPES

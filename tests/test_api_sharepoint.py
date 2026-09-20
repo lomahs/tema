@@ -6,7 +6,7 @@ routes module imported it.
 """
 import pytest
 
-from api import routes
+from tcm.web import routes
 from app import create_app
 from tcm.domain import case as models
 from tcm.services.publishing import SheetMissing

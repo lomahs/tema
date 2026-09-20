@@ -10,7 +10,7 @@ import os
 import pytest
 from openpyxl import load_workbook
 
-from api import routes
+from tcm.web import routes
 from app import create_app
 from tcm.infrastructure.excel.reader import parse_tool_data
 from tcm.infrastructure.excel.workbook import has_tool_data
