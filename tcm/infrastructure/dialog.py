@@ -150,8 +150,8 @@ def pick_files(initial: str | None = None) -> list[str]:
 class NativeDialog:
     """The FilePicker port, answered by the OS dialog."""
 
-    def pick_folder(self, initial=None):
+    def pick_folder(self, initial: str | None = None) -> list[str]:
         return pick_folder(initial)
 
-    def pick_files(self, initial=None):
+    def pick_files(self, initial: str | None = None) -> list[str]:
         return pick_files(initial)

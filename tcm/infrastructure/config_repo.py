@@ -3,7 +3,9 @@
 The write is atomic because a half-written result_status.json does not make the
 taxonomy wrong -- it stops the app booting, since the vocabularies load at
 import. So the text goes to a temp file beside the target and os.replace swaps
-it in, which is one filesystem operation.
+it in, which is one filesystem operation. The temp file must be in the same
+directory because os.replace is only atomic within a filesystem (a cross-device
+link will raise OSError).
 """
 import os
 import tempfile
