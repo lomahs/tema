@@ -1514,6 +1514,30 @@ class Workspace:
 Run: `.venv/bin/python -m pytest tests/services/test_workspace.py -v 2>&1 | tail -10`
 Expected: 4 passed.
 
+- [ ] **Step 6b: Check the two ports this task implements**
+
+Task 10 wrote six `Protocol`s but could only check two of them, because four had
+no class to check against yet. This task creates two of the four, so it closes
+half that gap. A port nothing is checked against is a comment.
+
+Add to `tests/domain/test_ports.py`:
+
+```python
+def test_the_excel_loader_is_a_case_loader():
+    from tcm.infrastructure.excel.loader import ExcelCaseLoader
+    assert issubclass(ExcelCaseLoader, ports.CaseLoader)
+
+
+def test_the_memory_store_is_a_case_store():
+    from tcm.infrastructure.store.memory import InMemoryCaseStore
+    assert issubclass(InMemoryCaseStore, ports.CaseStore)
+```
+
+Run: `.venv/bin/python -m pytest tests/domain/test_ports.py -v 2>&1 | tail -10`
+Expected: 5 passed. If either fails, the adapter is missing a method the port
+names — fix the adapter, or the port if it describes a method that should not
+exist.
+
 - [ ] **Step 7: Point the blueprint at it**
 
 In `tcm/web/routes.py`: delete `_data` and `_load`, and add near the top, beside the other module-level objects that Task 13 will move into the factory:
