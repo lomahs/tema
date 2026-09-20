@@ -56,7 +56,7 @@ Phase 1 moves these. Every path on the left exists today; every path on the righ
 | `parser/scope.py` | `tcm/domain/scope.py` |
 | `parser/device.py` | `tcm/domain/device.py` |
 | `parser/sheet_labels.py` | `tcm/domain/sheet_labels.py` |
-| `report/layout.py` | `tcm/domain/report_layout.py` |
+| `report/layout.py` | `tcm/infrastructure/report/layout.py` |
 | `parser/excel_reader.py` | `tcm/infrastructure/excel/reader.py` |
 | `parser/tool_data_builder.py` | `tcm/infrastructure/excel/detection.py` |
 | `prepare/workbook.py` | `tcm/infrastructure/excel/workbook.py` |
@@ -68,7 +68,7 @@ Phase 1 moves these. Every path on the left exists today; every path on the righ
 | `sharepoint/workbook.py` | `tcm/infrastructure/graph/workbook.py` |
 | `api/filedialog.py` | `tcm/infrastructure/dialog.py` |
 | `aggregate.py` | `tcm/services/aggregation.py` |
-| `report/builder.py` | `tcm/services/report_rows.py` |
+| `report/builder.py` | `tcm/infrastructure/report/builder.py` |
 | `report/publisher.py` | `tcm/services/publishing.py` |
 | `prepare/runner.py` | `tcm/services/preparation.py` |
 | `config_store.py` | `tcm/services/settings_store.py` |
@@ -80,7 +80,11 @@ Phase 1 moves these. Every path on the left exists today; every path on the righ
 | `parser/sheet_labels.json` | `config/sheet_labels.json` |
 | `report/report_layout.json` | `config/report_layout.json` |
 
-**Refinement to the spec, applied here:** the spec put `report/layout.py` and `report/builder.py` under `infrastructure/report/`. Neither touches the outside world — `ReportLayout` is a validated-at-import schema exactly like `StatusSet`, and `build_rows` is a pure transform. Leaving them in infrastructure would make `services/publishing.py` depend outward for pure code. They go to `domain/report_layout.py` and `services/report_rows.py`. Task 9 updates the spec to match.
+**A refinement that was tried and reverted, recorded so it is not retried.** An earlier revision of this plan moved `report/layout.py` to `domain/report_layout.py` and `report/builder.py` to `services/report_rows.py`, arguing that neither touches the outside world and that leaving them in infrastructure would make `services/publishing.py` depend outward for pure code.
+
+Both halves of that argument were wrong. The layering table above *permits* `services → infrastructure`, so there was never an outward dependency to avoid. And `ReportLayout` is not pure: it imports `openpyxl.utils` for `column_index_from_string` / `get_column_letter`, because its subject matter is literally the column letters of somebody's spreadsheet. A domain that imports an Excel library is not a domain — and `tests/test_layering.py` fails on exactly that. CLAUDE.md had it right all along: the report layout is "the geometry of someone's report workbook rather than a vocabulary."
+
+So both files go where the spec first put them: `tcm/infrastructure/report/`.
 
 Phase 2 adds:
 
@@ -179,7 +183,7 @@ MSG
 
 Five vocabulary modules plus the two dataclasses, none of which imports anything else in the project except lazily from `config`. They move first because every other layer imports them and nothing imports back.
 
-`report/layout.py` moves with them — see the refinement note above — even though it lives under `report/` today.
+`report/layout.py` does **not** move with them: it imports `openpyxl.utils`, so it belongs to infrastructure. Task 5 moves it. (An earlier revision of this plan moved it here; see the reverted-refinement note above.)
 
 **Files:**
 - Create: `tcm/__init__.py`, `tcm/domain/__init__.py`
@@ -189,7 +193,6 @@ Five vocabulary modules plus the two dataclasses, none of which imports anything
 - Move: `parser/scope.py` → `tcm/domain/scope.py`
 - Move: `parser/device.py` → `tcm/domain/device.py`
 - Move: `parser/sheet_labels.py` → `tcm/domain/sheet_labels.py`
-- Move: `report/layout.py` → `tcm/domain/report_layout.py`
 - Move: the five JSON files → `config/`
 - Modify: every file importing them (see the rewrite map below)
 
@@ -214,7 +217,6 @@ git mv parser/status.py tcm/domain/status.py
 git mv parser/scope.py tcm/domain/scope.py
 git mv parser/device.py tcm/domain/device.py
 git mv parser/sheet_labels.py tcm/domain/sheet_labels.py
-git mv report/layout.py tcm/domain/report_layout.py
 git mv parser/result_status.json config/result_status.json
 git mv parser/scope_groups.json config/scope_groups.json
 git mv parser/device_groups.json config/device_groups.json
@@ -246,7 +248,6 @@ MAP = [
     (r"\bfrom parser\.scope import\b",         "from tcm.domain.scope import"),
     (r"\bfrom parser\.device import\b",        "from tcm.domain.device import"),
     (r"\bfrom parser\.sheet_labels import\b",  "from tcm.domain.sheet_labels import"),
-    (r"\bfrom report\.layout import\b",        "from tcm.domain.report_layout import"),
     (r"\bfrom parser import models\b",         "from tcm.domain import case as models"),
     (r"\bfrom config import\b",                "from tcm.settings import"),
     (r"^import config$",                       "import tcm.settings as config"),
@@ -299,7 +300,6 @@ Expected: no hits.
 .venv/bin/python -c "
 from tcm.domain.status import STATUS
 from tcm.domain.scope import SCOPES
-from tcm.domain.report_layout import LAYOUT
 import tcm.settings as s
 assert STATUS.keys, 'taxonomy did not load'
 assert SCOPES.keys, 'scope groups did not load'
@@ -325,9 +325,9 @@ The JSON moves to config/ at the root, because the Config view writes
 those files at runtime and a package directory is the wrong place to
 write user data.
 
-report/layout.py comes too: it is a validated-at-import schema exactly
-like StatusSet, so leaving it outside the domain would make the
-publisher depend outward for pure code.
+report/layout.py stays behind: it imports openpyxl for column-letter
+arithmetic, because its subject is the geometry of a spreadsheet rather
+than a vocabulary of the domain. Task 5 moves it to infrastructure.
 
 No logic changed. 450 passed.
 
@@ -567,13 +567,15 @@ MSG
 
 ---
 
-## Task 5: The Graph and OS infrastructure
+## Task 5: The Graph, report and OS infrastructure
 
 **Files:**
 - Create: `tcm/infrastructure/graph/__init__.py`
 - Move: `sharepoint/{auth,client,links,workbook}.py` → `tcm/infrastructure/graph/`
 - Move: `api/filedialog.py` → `tcm/infrastructure/dialog.py`
-- Modify: `report/publisher.py`, `api/routes.py`, the SharePoint and filedialog tests
+- Move: `report/layout.py` → `tcm/infrastructure/report/layout.py`
+- Move: `report/builder.py` → `tcm/infrastructure/report/builder.py`
+- Modify: `report/publisher.py`, `api/routes.py`, `config_store.py`, the SharePoint, filedialog, report-layout and report-builder tests
 
 **Interfaces:**
 - Consumes: nothing from `tcm`.
@@ -589,6 +591,10 @@ git mv sharepoint/client.py tcm/infrastructure/graph/client.py
 git mv sharepoint/links.py tcm/infrastructure/graph/links.py
 git mv sharepoint/workbook.py tcm/infrastructure/graph/workbook.py
 git mv api/filedialog.py tcm/infrastructure/dialog.py
+mkdir -p tcm/infrastructure/report
+printf '"""The report workbook's shape, and laying rows out in it."""\n' > tcm/infrastructure/report/__init__.py
+git mv report/layout.py tcm/infrastructure/report/layout.py
+git mv report/builder.py tcm/infrastructure/report/builder.py
 git rm -q sharepoint/__init__.py
 rmdir sharepoint 2>/dev/null || true
 ```
@@ -607,6 +613,8 @@ MAP = [
     (r"\bfrom sharepoint import\b",           "from tcm.infrastructure.graph import"),
     (r"\bimport sharepoint\.(\w+)\b",         r"import tcm.infrastructure.graph.\1"),
     (r"\bfrom api\.filedialog import\b",      "from tcm.infrastructure.dialog import"),
+    (r"\bfrom report\.layout import\b",       "from tcm.infrastructure.report.layout import"),
+    (r"\bfrom report\.builder import\b",      "from tcm.infrastructure.report.builder import"),
     (r"\bimport api\.filedialog\b",           "import tcm.infrastructure.dialog"),
     (r"\bfrom api import filedialog\b",       "from tcm.infrastructure import dialog as filedialog"),
 ]
@@ -665,7 +673,6 @@ The five modules that orchestrate. `aggregate.py` is the one the routes and the 
 **Files:**
 - Create: `tcm/services/__init__.py`
 - Move: `aggregate.py` → `tcm/services/aggregation.py`
-- Move: `report/builder.py` → `tcm/services/report_rows.py`
 - Move: `report/publisher.py` → `tcm/services/publishing.py`
 - Move: `prepare/runner.py` → `tcm/services/preparation.py`
 - Move: `config_store.py` → `tcm/services/settings_store.py`
@@ -681,7 +688,6 @@ The five modules that orchestrate. `aggregate.py` is the one the routes and the 
 mkdir -p tcm/services
 printf '"""Orchestration over domain objects.\n\nPlain functions and small objects: no Flask, no HTTP, no request context. The\nroutes are jsonify wrappers around what lives here, and the report publisher\ncalls the same functions the screen does -- which is what stops the numbers on\nscreen and the numbers in the report drifting apart.\n"""\n' > tcm/services/__init__.py
 git mv aggregate.py tcm/services/aggregation.py
-git mv report/builder.py tcm/services/report_rows.py
 git mv report/publisher.py tcm/services/publishing.py
 git mv prepare/runner.py tcm/services/preparation.py
 git mv config_store.py tcm/services/settings_store.py
@@ -699,7 +705,6 @@ MAP = [
     (r"^import aggregate$",                   "from tcm.services import aggregation as aggregate"),
     (r"\bfrom aggregate import\b",            "from tcm.services.aggregation import"),
     (r"\bimport aggregate\b",                 "from tcm.services import aggregation as aggregate"),
-    (r"\bfrom report\.builder import\b",      "from tcm.services.report_rows import"),
     (r"\bfrom report\.publisher import\b",    "from tcm.services.publishing import"),
     (r"\bfrom report import publisher\b",     "from tcm.services import publishing as publisher"),
     (r"\bfrom prepare\.runner import\b",      "from tcm.services.preparation import"),
@@ -940,7 +945,7 @@ for d in domain services infrastructure web; do : > tests/$d/__init__.py; done
 git mv tests/test_status.py tests/domain/test_status.py
 git mv tests/test_scope.py tests/domain/test_scope.py
 git mv tests/test_device_groups.py tests/domain/test_device_groups.py
-git mv tests/test_report_layout.py tests/domain/test_report_layout.py
+git mv tests/test_report_layout.py tests/infrastructure/test_report_layout.py
 
 git mv tests/test_excel_reader.py tests/infrastructure/test_excel_reader.py
 git mv tests/test_prepare_clear.py tests/infrastructure/test_prepare_clear.py
@@ -953,7 +958,7 @@ git mv tests/test_filedialog.py tests/infrastructure/test_filedialog.py
 git mv tests/test_aggregate.py tests/services/test_aggregate.py
 git mv tests/test_publisher.py tests/services/test_publisher.py
 git mv tests/test_publish_integration.py tests/services/test_publish_integration.py
-git mv tests/test_report_builder.py tests/services/test_report_builder.py
+git mv tests/test_report_builder.py tests/infrastructure/test_report_builder.py
 git mv tests/test_config_store.py tests/services/test_config_store.py
 
 git mv tests/test_api.py tests/web/test_api.py
@@ -1017,9 +1022,9 @@ Add a short section stating the layering rule and pointing at `tests/test_layeri
 
 The "Cấu trúc" block at the top lists the old tree. Replace it with the new one. Keep it in Vietnamese, matching the surrounding prose.
 
-- [ ] **Step 4: Correct the spec's `report/layout.py` placement**
+- [ ] **Step 4: Leave the spec's `report/` placement alone**
 
-The spec puts `report/layout.py` and `report/builder.py` under `infrastructure/report/`. Change those two lines to `domain/report_layout.py` and `services/report_rows.py`, and add one sentence giving the reason: neither touches the outside world, so leaving them in infrastructure would make `services/publishing.py` depend outward for pure code.
+The spec puts `report/layout.py` and `report/builder.py` under `infrastructure/report/`, and that is where they ended up. An earlier revision of this plan proposed moving them into `domain/` and `services/`; it was tried in Task 2 and reverted, because `ReportLayout` imports `openpyxl.utils` and a domain that imports an Excel library is not a domain. No spec change is needed here — only make sure `CLAUDE.md` describes the placement that exists.
 
 - [ ] **Step 5: Verify no stale path survives**
 
