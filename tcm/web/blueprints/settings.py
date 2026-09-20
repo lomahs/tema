@@ -1,14 +1,14 @@
+"""The editable config files, and the vocabulary the editor draws its form from.
+
+`jsonify` wrappers around `tcm.services.settings_store`, the same arrangement
+as the analytics and prepare blueprints. The rules — what validates, what is
+written, what takes effect — are the store's; what stays here is the request.
+"""
 from flask import Blueprint, jsonify, request
 
 from tcm.services import settings_store as config_store
 
 bp = Blueprint("settings", __name__)
-
-# --- the editable configs --------------------------------------------------
-#
-# `jsonify` wrappers around `config_store`, the same arrangement as the
-# aggregate and prepare endpoints. The rules — what validates, what is written,
-# what takes effect — are the store's; what stays here is the request.
 
 
 @bp.route("/api/config")

@@ -71,7 +71,7 @@ export function getStatuses() {
 /**
  * The statuses that count as work carried out, in taxonomy order.
  *
- * Which ones these are is configured in `parser/result_status.json` and served
+ * Which ones these are is configured in `config/result_status.json` and served
  * by `/api/statuses`, so the productivity table stays in step with the backend
  * instead of naming OK / NG / NG-OK itself.
  *
@@ -85,7 +85,7 @@ export function getExecutedStatuses() {
  * The statuses whose cases the detail view lists, in taxonomy order.
  *
  * Everything that is not a clean pass, not unstarted and not outside the plan —
- * which is what Detail is for. Configured in `parser/result_status.json` by
+ * which is what Detail is for. Configured in `config/result_status.json` by
  * `"review": true`, so this module names no status itself.
  *
  * @returns {Status[]}
@@ -348,7 +348,7 @@ export function renderStatCards({
  * reports under `missing_reason`. It lives here, with the taxonomy it reads,
  * because two views ask it now — Review and the file page — and two copies of
  * this rule is exactly how they would come to disagree. Which statuses oblige
- * an explanation stays `needs_reason` in `parser/result_status.json`, never
+ * an explanation stays `needs_reason` in `config/result_status.json`, never
  * named in the JS.
  *
  * @param {Object} d A case row carrying `status`, `ticket_id` and `note`.

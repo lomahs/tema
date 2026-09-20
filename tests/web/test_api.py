@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from app import create_app
+from tcm.web.app import create_app
 from tcm.domain.device import DEVICES
 from tcm.domain.scope import SCOPES
 from tcm.domain.status import STATUS

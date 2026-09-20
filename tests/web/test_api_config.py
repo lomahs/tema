@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from app import create_app
+from tcm.web.app import create_app
 
 #: Every test here saves a config, which mutates the live singletons.
 pytestmark = pytest.mark.usefixtures("restore_configs")

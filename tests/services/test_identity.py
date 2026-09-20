@@ -1,5 +1,4 @@
 """The device-code flow, without Microsoft."""
-import pytest
 
 from tcm.services.identity import IdentityService
 

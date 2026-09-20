@@ -21,7 +21,7 @@
  *
  * Which statuses count as executed, as review, or as outside the plan is read
  * from the taxonomy, never named here — the same rule the rest of the UI
- * follows, so a new status in `parser/result_status.json` lands in the bar, the
+ * follows, so a new status in `config/result_status.json` lands in the bar, the
  * legend and the figures without a change to this file.
  */
 import { $, esc } from "../dom.js";

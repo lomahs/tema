@@ -1,3 +1,13 @@
+"""Signing in to Microsoft, and publishing the loaded cases to a report workbook.
+
+`/api/sharepoint/*` covers the device-code login this app can't do silently:
+`IdentityService` owns the flow, this blueprint only starts it, reports how
+far it has got, and lets the user forget the account. `/api/report/publish`
+is the one write in the app that leaves the machine — it hands the loaded
+cases and a SharePoint URL to `publish_to_url`, which runs the same
+aggregation the read endpoints serve, so a published report cannot disagree
+with the screen it was published from.
+"""
 import logging
 
 from flask import Blueprint, jsonify, request
@@ -10,8 +20,6 @@ from tcm.web.blueprints import identity, workspace
 log = logging.getLogger(__name__)
 
 bp = Blueprint("sharepoint", __name__)
-
-# --- SharePoint ------------------------------------------------------------
 
 
 @bp.route("/api/sharepoint/status")

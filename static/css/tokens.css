@@ -64,7 +64,7 @@
     --rail-ink-soft:  #7e8791;
 
     /* --- status tones ------------------------------------------------------
-     * The only chromatic values in the system. `parser/result_status.json`
+     * The only chromatic values in the system. `config/result_status.json`
      * names which tone a status carries; what the tone looks like lives here,
      * so a palette change never touches the taxonomy and vice versa.
      *

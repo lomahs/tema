@@ -1,8 +1,7 @@
 """Tests for the atomic config file write and cleanup on failure."""
 import os
-import tempfile
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from tcm.infrastructure.config_repo import JsonFileConfigRepository
 
@@ -10,9 +9,11 @@ from tcm.infrastructure.config_repo import JsonFileConfigRepository
 def test_cleanup_on_write_failure(tmp_path):
     """The temp file is cleaned up if write fails, and the target is unchanged.
 
-    The except BaseException clause is the only thing that prevents a leftover
-    temp file when the write fails. This test would pass if the cleanup were
-    removed, but it verifies that cleanup happens.
+    The except BaseException clause is what stops a failed write from leaving
+    a temp file behind beside the real config. This test pins that: remove
+    the cleanup and the final assertion below fails, because the `.tmp` file
+    this test forces to fail partway through would still be sitting in
+    tmp_path.
     """
     repo = JsonFileConfigRepository()
 

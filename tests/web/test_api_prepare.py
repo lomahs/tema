@@ -10,7 +10,7 @@ import os
 import pytest
 from openpyxl import load_workbook
 
-from app import create_app
+from tcm.web.app import create_app
 from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.excel.reader import parse_tool_data
 from tcm.infrastructure.excel.workbook import has_tool_data

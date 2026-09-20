@@ -1,3 +1,16 @@
+"""Changing the source workbooks: TOOL_DATA detection and clearing last round's results.
+
+Reading a workbook needs a TOOL_DATA sheet describing its layout, and a new
+test round needs last round's results out of the way. Both are things you do
+to the source files themselves, before or between loads — which makes this
+the one blueprint in this package whose endpoints write to disk; every other
+one only reads the loaded cases or forwards to Graph.
+
+The work itself lives in `tcm.services.preparation`; these endpoints are
+`jsonify` wrappers with the two guards that are genuinely about the request:
+which files may be touched (`_requested_files`), and whether `keep` names real
+statuses.
+"""
 import os
 
 from flask import Blueprint, jsonify, request
@@ -8,17 +21,6 @@ from tcm.services import preparation as runner
 from tcm.web.blueprints import workspace
 
 bp = Blueprint("prepare", __name__)
-
-# --- Preparing the workbooks -----------------------------------------------
-#
-# Reading a workbook needs a TOOL_DATA sheet describing its layout, and a new
-# test round needs last round's results out of the way. Both are things you do
-# to the source files themselves, before or between loads - so unlike every
-# other endpoint here, these two write to disk.
-#
-# The work itself lives in `tcm.services.preparation`; these endpoints are
-# `jsonify` wrappers with the two guards that are genuinely about the request:
-# which files may be touched, and whether `keep` names real statuses.
 
 
 def _requested_files(body) -> tuple[list[str], dict | None]:

@@ -7,7 +7,7 @@ it replaces a name `tcm.web.blueprints.sharepoint` imported at module scope.
 """
 import pytest
 
-from app import create_app
+from tcm.web.app import create_app
 from tcm.domain import case as models
 from tcm.domain.ports import Snapshot
 from tcm.services.identity import IdentityService

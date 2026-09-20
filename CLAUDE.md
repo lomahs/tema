@@ -51,6 +51,15 @@ The package is layered, and the layering is enforced, not aspirational:
 | `tcm/services/` | `tcm.domain`, `tcm.infrastructure`, `tcm.services`, `tcm.settings` |
 | `tcm/web/` | anything — the only layer that imports flask |
 
+The table says nothing about I/O, and that is deliberate rather than an oversight: `tcm/domain/`
+does read from disk. `STATUS`, `SCOPES`, `DEVICES` and `LABELS` are each built by a
+module-level `_load_default()` that reads a JSON file out of `config/` the moment
+`tcm.domain.status` / `.scope` / `.device` / `.sheet_labels` is first imported — so import order
+and `CONFIG_DIR` are load-bearing, and a malformed shipped config fails as an `ImportError` at
+startup rather than as an error the request that hit it could report. `tests/test_layering.py`
+forbids five *framework names* (see its `FRAMEWORKS` comment), not I/O in general, which is what
+lets this stand without the test contradicting it.
+
 `services → infrastructure` is deliberate, not a hole in the rule: a service that needs to
 swap its I/O — the fake Graph transport in the publisher tests, for instance — takes a port as
 an argument at that one named boundary, and everywhere else it reaches infrastructure
@@ -91,6 +100,14 @@ arguments for the sake of tests: an app over fakes is built by passing them, not
 module attribute and remembering to put it back. That is what removed the per-test reset the
 suite used to need — each test gets its own app, so there is no shared store to clear.
 
+**Calling `create_app()` touches `$HOME`.** With no `identity` argument it builds a fresh
+`GraphAuth`, and `GraphAuth.__init__` reads the real token cache at
+`settings.GRAPH_TOKEN_CACHE` (`~/.test-management/graph_token_cache.json` by default)
+immediately, before any request arrives. That is harmless today — `_load_cache` swallows every
+exception a missing or unreadable file raises — but "build an app" being a filesystem read
+against the user's home directory is easy to miss in a factory, and worth knowing before it
+surprises someone in a sandboxed test run or a container with no `$HOME`.
+
 **What the port checks prove is narrower than it looks.**
 [tests/domain/test_ports.py](tests/domain/test_ports.py) asserts `issubclass(impl, Port)` for
 each of the six, because a Protocol nothing is checked against is a comment. But `issubclass`
@@ -102,13 +119,27 @@ and `FakeWorkbook` agreeing on signatures, which is exactly what they cannot do.
 those two together is `tests/services/test_publish_integration.py`, which runs the real client,
 links and workbook against a fake Graph service that parses the addresses it is sent.
 
+Three of the six are not actually wired the way the rule above describes, and each is worth
+knowing before it is read as a live seam.
+
 `FilePicker` is the one port with no production caller: `NativeDialog` in
 [tcm/infrastructure/dialog.py](tcm/infrastructure/dialog.py) answers it and is checked against
 it, but `/api/browse` in `tcm/web/blueprints/source.py` still calls the module-level
 `pick_folder` / `pick_files` directly — wiring it through the factory rewrites six monkeypatches
-in `tests/web/test_api.py`, and that was left for its own change. It is therefore the one of the
-six that does not yet meet the rule above, which is worth knowing before anyone reads it as a
-live seam.
+in `tests/web/test_api.py`, and that was left for its own change.
+
+`ConfigRepository` is constructed, not injected: `tcm/services/settings_store.py` holds
+`_repo = JsonFileConfigRepository()` as a module-level global built at import time, so nothing
+can hand `settings_store` a different repository the way `Workspace(loader, store)` can be
+handed a different store.
+
+`GraphClient` is built inside the route that uses it, not in `create_app`: `publish_report` in
+`tcm/web/blueprints/sharepoint.py` constructs `GraphClient(identity().token)` itself, on every
+publish, rather than `create_app` building one and putting it on `app.extensions` beside
+`workspace` and `identity` — which is the "only place implementations are chosen" the paragraph
+above describes.
+
+None of the three meet the rule above today.
 
 **TOOL_DATA is the schema.** Test case sheets have no fixed layout. Each workbook carries a
 `TOOL_DATA` sheet whose rows say, per (sheet, device): the row span and the Excel column
@@ -687,7 +718,12 @@ while [tcm/infrastructure/excel/clearing.py](tcm/infrastructure/excel/clearing.p
 [tcm/services/preparation.py](tcm/services/preparation.py) is the layer above: it walks a list of workbooks,
 isolates the failures per file the way `load_files` does, and returns plain dicts. The three
 `/api/prepare/*` endpoints are `jsonify` wrappers around it — the same arrangement as
-`tcm/services/aggregation.py`, and for the same reason. Put new batch behaviour in `preparation.py`, not in a route;
+`tcm/services/aggregation.py`, and for the same reason — but not all three share a file: the two
+that write, `/api/prepare/tool-data` and `/api/prepare/clear`, are in
+[tcm/web/blueprints/prepare.py](tcm/web/blueprints/prepare.py), while the read-only
+`/api/prepare/files` is in [tcm/web/blueprints/source.py](tcm/web/blueprints/source.py) — it
+reports what the loaded source contains, so it belongs with loading rather than with the two
+endpoints that overwrite workbooks. Put new batch behaviour in `preparation.py`, not in a route;
 what stays in the route is what is genuinely about the request, which is the two guards below.
 **The app is the only way in.** These operations once had argparse shells in `tools/`; they
 were deleted once the Tools view covered them, because two front doors to an irreversible write is

@@ -1,3 +1,12 @@
+"""Read-only aggregates over the loaded cases.
+
+Each route is a thin `jsonify` wrapper around a function in
+`tcm.services.aggregation` — the same functions the SharePoint publisher calls,
+so the numbers on screen and the numbers in a published report cannot drift.
+`/api/cases` is the one exception worth flagging: it serves the cases behind a
+single status per request rather than the whole loaded set, which is what
+keeps opening Detail affordable.
+"""
 from flask import Blueprint, jsonify, request
 
 from tcm.domain.device import DEVICES

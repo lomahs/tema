@@ -100,15 +100,17 @@ def test_only_the_web_layer_knows_about_flask():
 
 
 def test_layer_directories_match_the_allowed_table():
-    """`_modules()` returns `[]` both for a layer that hasn't been built yet
-    (correct, today, for `services` and `web`) and for a layer whose name
-    was mistyped or renamed out from under `ALLOWED` (a silent hole, since a
-    parametrize over `[]` collects nothing and the tests above simply stop
-    checking anything for it). This pins both directions: every
-    layer-shaped directory that exists under `tcm/` must be a key `ALLOWED`
-    knows, and every key `ALLOWED` knows that already exists on disk must
-    contain at least one module — a directory present but empty of `.py`
-    files would pass the other tests vacuously too.
+    """`_modules()` returns `[]` both for a layer `ALLOWED` names that hasn't
+    been built on disk yet (there is no such layer today — all four exist —
+    but a future one named in `ALLOWED` ahead of its first module would look
+    exactly like this) and for a layer whose directory name was mistyped or
+    renamed out from under `ALLOWED` (a silent hole, since a parametrize over
+    `[]` collects nothing and the tests above simply stop checking anything
+    for it). This pins both directions: every layer-shaped directory that
+    exists under `tcm/` must be a key `ALLOWED` knows, and every key
+    `ALLOWED` knows that already exists on disk must contain at least one
+    module — a directory present but empty of `.py` files would pass the
+    other tests vacuously too.
     """
     on_disk = {
         p.name for p in PACKAGE.iterdir()

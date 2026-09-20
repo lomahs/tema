@@ -4,7 +4,6 @@ import os
 import pytest
 
 from tcm.domain import case as models
-from tcm.domain.ports import Snapshot
 from tcm.infrastructure.excel.reader import LOCK_FILE_PREFIX
 from tcm.infrastructure.store.memory import InMemoryCaseStore
 from tcm.services.workspace import Workspace

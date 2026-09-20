@@ -5,7 +5,7 @@
  * on the file page and on Daily is a button, and pressing it opens this screen
  * showing exactly the cases behind it — an OK and a Not Yet Started as readily
  * as an NG. That is what it stopped being "Review", which held only the statuses
- * `parser/result_status.json` marks `"review": true`; that restriction survives
+ * `config/result_status.json` marks `"review": true`; that restriction survives
  * as the *selection* the rail and Summary's "To review" card arrive with, rather
  * than as a wall around the screen.
  *

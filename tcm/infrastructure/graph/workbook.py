@@ -4,7 +4,7 @@ Everything here writes to the file where it lives on SharePoint. The workbook is
 never downloaded and re-uploaded, so charts, pivots, formulas and conditional
 formatting in the report survive a publish untouched.
 
-The surface is deliberately small — seven operations — because the publisher is
+The surface is deliberately small — eight operations — because the publisher is
 tested against a stand-in that implements exactly this much.
 """
 import logging

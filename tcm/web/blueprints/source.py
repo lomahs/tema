@@ -1,3 +1,12 @@
+"""Choosing and loading the source, and reporting what was found in it.
+
+`/api/load`, `/api/reload` and `/api/browse` are how a source folder or file
+list is chosen and (re)read. `/api/prepare/files` lives here rather than in
+`prepare.py`, even though its name suggests otherwise: it only reports what
+the loaded source's workbooks currently contain, and writes nothing, so it
+belongs with loading rather than with the two endpoints in `prepare.py` that
+overwrite workbooks.
+"""
 from flask import Blueprint, jsonify, request
 
 from tcm.infrastructure.dialog import DialogError, pick_files, pick_folder

@@ -5,7 +5,7 @@
  * separate tables. A single table adding them together answers no question
  * anyone asks, and the two rarely move for the same reason. The backend splits
  * the rows; which Scope belongs to which table is configured in
- * `parser/scope_groups.json`, so this module never names a scope itself.
+ * `config/scope_groups.json`, so this module never names a scope itself.
  *
  * That is the one place this screen departs from the design canvas, which has a
  * single table and a Scope dropdown. Everything else it draws is the design's:
@@ -100,7 +100,7 @@ const sort = { col: null, asc: true };
  * - `family` — one per (file, device family): "iPhone Min size" and "iPhone Max
  *   size" are two device blocks in the workbook but one handset to anyone
  *   reading the totals. Which names make a family is configured in
- *   `parser/device_groups.json` and arrives on the row as `device_family`, so
+ *   `config/device_groups.json` and arrives on the row as `device_family`, so
  *   this module names no device of its own.
  * - `combined` — one per file, every device summed.
  *
