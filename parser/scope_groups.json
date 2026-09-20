@@ -1,7 +1,30 @@
 {
+  "fallback": {
+    "key": "Other",
+    "label": "Other"
+  },
   "groups": [
-    {"key": "FPT", "label": "FPT", "match": ["FPT", "FPT (JM Support)"]},
-    {"key": "JP",  "label": "JP",  "match": ["JP"], "excluded": true}
-  ],
-  "fallback": {"key": "Other", "label": "Other"}
+    {
+      "key": "FPT",
+      "label": "FPT",
+      "match": [
+        "FPT"
+      ]
+    },
+    {
+      "key": "JM",
+      "label": "JM Support",
+      "match": [
+        "FPT (JM Support)"
+      ]
+    },
+    {
+      "excluded": true,
+      "key": "JP",
+      "label": "JP",
+      "match": [
+        "JP"
+      ]
+    }
+  ]
 }

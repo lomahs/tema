@@ -446,15 +446,20 @@ def scoped_dir(tmp_path):
     return str(tmp_path)
 
 
-def test_summary_rows_carry_the_scope_group_they_belong_to(client, scoped_dir):
+def test_summary_rows_carry_the_scope_group_they_belong_to(client, scoped_dir, fixed_scopes):
     load(client, scoped_dir)
     rows = client.get("/api/summary").get_json()["groups"]
 
     assert {r["scope"]: r["total"] for r in rows} == {"FPT": 2, "JP": 1, "Other": 1}
 
 
-def test_the_two_fpt_scopes_share_one_table(client, scoped_dir):
-    """FPT and FPT (JM Support) are one commitment, reported together."""
+def test_the_two_fpt_scopes_share_one_table(client, scoped_dir, fixed_scopes):
+    """Two Scope spellings configured into one group are reported together.
+
+    `fixed_scopes` is what makes them one commitment here. The shipped config is
+    free to split them — that is a decision for whoever owns the report, and the
+    Config view exists so they can make it — so this pins the arrangement it is
+    about rather than reading whatever the file currently says."""
     load(client, scoped_dir)
     fpt = next(r for r in client.get("/api/summary").get_json()["groups"]
                if r["scope"] == "FPT")
@@ -507,12 +512,20 @@ def test_missing_reason_survives_the_scope_split(client, scoped_dir):
 
 @pytest.fixture
 def fpt_is_not_in_the_plan():
-    """The fixture workbook is all FPT work, reported but not committed to."""
+    """The fixture workbook is all FPT work, reported but not committed to.
+
+    `JP` is here only to satisfy the rule that some configured group must count:
+    the workbook holds no JP cases, so every figure that adds groups together is
+    still empty, which is what these tests are about.
+    """
     from parser.scope import ScopeSet
 
     saved = dict(SCOPES.__dict__)
     SCOPES.adopt(ScopeSet.from_dict({
-        "groups": [{"key": "FPT", "match": ["FPT"], "excluded": True}],
+        "groups": [
+            {"key": "FPT", "match": ["FPT"], "excluded": True},
+            {"key": "JP", "match": ["JP"]},
+        ],
         "fallback": {"key": "Other"},
     }))
     yield
@@ -548,7 +561,8 @@ def test_summary_still_reports_a_scope_group_outside_the_plan(client, workbook_d
     body = client.get("/api/summary").get_json()
 
     assert [r["scope"] for r in body["groups"]] == ["FPT", "FPT"]
-    assert {g["key"]: g["counted"] for g in body["scopes"]} == {"FPT": False, "Other": True}
+    assert {g["key"]: g["counted"] for g in body["scopes"]} == {
+        "FPT": False, "JP": True, "Other": False}
 
 
 def test_missing_reason_drops_a_scope_group_outside_the_plan(client, workbook_dir,

@@ -97,8 +97,11 @@ class FakeGraphService:
 
 
 def case(**kwargs):
+    """A publishable case, scoped to a counted group: the publisher passes its
+    cases through `in_plan`, and the fallback no longer counts."""
     return models.TestCase(**{"file_name": "TC.xlsx", "sheet": "Login",
-                              "device": "iPhone", "row_num": 4, **kwargs})
+                              "device": "iPhone", "row_num": 4, "scope": "FPT",
+                              **kwargs})
 
 
 def publish_against(service, cases, run_date="2026-09-06"):

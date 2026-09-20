@@ -167,7 +167,9 @@ def test_read_all_returns_each_file_with_its_contents(config_paths):
 
     assert set(got["configs"]) == {"statuses", "scopes", "devices", "sheet_labels"}
     assert got["configs"]["statuses"]["path"] == str(config_paths["statuses"])
-    assert got["configs"]["scopes"]["data"]["fallback"]["key"] == "Other"
+    # That a fallback is named, not what it is called: the name is editable
+    # from the very form this endpoint feeds.
+    assert got["configs"]["scopes"]["data"]["fallback"]["key"]
 
 
 def test_read_all_reports_the_vocabularies_the_form_needs(config_paths):
@@ -250,18 +252,20 @@ def test_marking_a_scope_group_excluded_takes_effect_without_a_restart(config_pa
         "fallback": {"key": "Other", "label": "Other"},
     })
 
-    assert SCOPES.counted == ["FPT", "Other"]
+    assert SCOPES.counted == ["FPT"]
     assert SCOPES.is_counted("JP") is False
 
 
-def test_an_excluded_fallback_is_refused_rather_than_written(config_paths):
-    """A typo'd scope lands there; it must never leave the figures silently."""
+def test_a_config_where_nothing_counts_is_refused_rather_than_written(config_paths):
+    """Nothing is written until it validates, and this is the rule most worth
+    catching at the door: the fallback no longer counts, so a config excluding
+    every configured group leaves every figure in the app reading zero."""
     before = config_paths["scopes"].read_text(encoding="utf-8")
 
-    with pytest.raises(ValueError, match="fallback"):
+    with pytest.raises(ValueError, match="at least one group"):
         config_store.save("scopes", {
-            "groups": [{"key": "FPT", "match": ["FPT"]}],
-            "fallback": {"key": "Other", "excluded": True},
+            "groups": [{"key": "FPT", "match": ["FPT"], "excluded": True}],
+            "fallback": {"key": "Other"},
         })
 
     assert config_paths["scopes"].read_text(encoding="utf-8") == before

@@ -89,6 +89,16 @@ const chosenStatuses = new Set();
 /** @type {Set<string>} scope group keys pressed. A filter over the cache, never fetched. */
 const chosenScopes = new Set();
 
+/**
+ * @type {Set<string>} raw Scope strings pressed in the filter well.
+ *
+ * Empty means every scope, which is what the select this replaced meant by "".
+ * A narrowing, not a selection: unlike `chosenScopes` it never decides which
+ * cases are here, only which of them are listed — which is why `clearNarrowing`
+ * empties this one and deliberately leaves that one alone.
+ */
+const chosenRawScopes = new Set();
+
 /** @type {{key: string, label: string, counted: boolean}[]} groups, from /api/summary */
 let scopeGroups = [];
 
@@ -162,14 +172,20 @@ const COLUMNS = [
  * of the cell, it takes several values at once, and it is what decides which
  * cases are fetched at all — so it is handled on its own throughout this module.
  *
- * Scope is: the select narrows by the raw string in the cell, which is a finer
- * vocabulary than the cards above and belongs with the other selects. The cards
- * pick *groups*; this picks one of the spellings inside them.
+ * Scope is not among them either, and for the same first reason: it takes
+ * several values at once. It narrows by the raw string in the cell, which is a
+ * finer vocabulary than the cards at the top of the screen — the cards pick
+ * *groups*, this picks the spellings inside them — and asking for two spellings
+ * of one commitment ("FPT" and "FPT (JM Support)") is the normal question, not
+ * an exotic one. So it is a strip of toggles like Result, and `chosenRawScopes`
+ * below is its state. It differs from Result in what an empty set means: Result
+ * decides which cases are *fetched*, so all-pressed is its neutral position,
+ * while this only narrows cases already in hand, so **empty means no narrowing**
+ * — exactly what the select's "" meant before it.
  */
 const FILTERS = [
     { id: "filterFile", field: "file_name", label: "File" },
     { id: "filterDevice", field: "device", label: "Device" },
-    { id: "filterScope", field: "scope", label: "Scope" },
     { id: "filterPIC", field: "pic", label: "PIC" },
 ];
 const DATE_FILTERS = [
@@ -192,6 +208,19 @@ export function initDetailView() {
     [...FILTERS, ...DATE_FILTERS].forEach(({ id }) =>
         $("#" + id).addEventListener("change", rerender));
     $("#filterSearch").addEventListener("input", rerender);
+
+    // One listener on the strip, so it can be rebuilt on every load without
+    // rebinding. Unlike the Result toggles beside it, this never fetches: it
+    // narrows cases already in hand.
+    $("#filterScope").addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-scope-toggle]");
+        if (!b) return;
+        const v = b.dataset.scopeToggle;
+        if (chosenRawScopes.has(v)) chosenRawScopes.delete(v);
+        else chosenRawScopes.add(v);
+        paintScopeToggles();
+        rerender();
+    });
 
     // One listener on the group rather than one per button, so the toggles can
     // be redrawn on every taxonomy load without rebinding anything. Unlike every
@@ -234,8 +263,16 @@ export function initDetailView() {
         const card = e.target.closest("button[data-scope-card]");
         if (!card) return;
         const key = card.dataset.scopeCard;
-        if (chosenScopes.has(key)) chosenScopes.delete(key);
-        else chosenScopes.add(key);
+        if (!key) {
+            // All: press every group, including any the plan excludes. Asking
+            // for everything is the one moment adding those is not a quiet
+            // default but the thing that was clicked.
+            scopeGroups.forEach((g) => chosenScopes.add(g.key));
+        } else if (chosenScopes.has(key)) {
+            chosenScopes.delete(key);
+        } else {
+            chosenScopes.add(key);
+        }
         paintScopeCards();
         currentPage = 1;
         rebuild();
@@ -283,6 +320,8 @@ export function initDetailView() {
  */
 function clearNarrowing() {
     [...FILTERS, ...DATE_FILTERS].forEach(({ id }) => { $("#" + id).value = ""; });
+    chosenRawScopes.clear();
+    paintScopeToggles();
     $("#filterSearch").value = "";
     conditions = { deviceFamily: "", sheet: "" };
     missingOnly = false;
@@ -374,9 +413,16 @@ export function showStatusCases(ctx) {
     chosenStatuses.clear();
     (ctx.statuses || (ctx.status ? [ctx.status] : [])).forEach((k) => chosenStatuses.add(k));
 
-    if (ctx.scope && scopeGroups.some((g) => g.key === ctx.scope)) {
+    // `scopes` for a figure counted over several groups at once — Summary draws
+    // one table per *role* now, so a card may hold more than one — and `scope`
+    // for a single one. Both are filtered against the configured groups: a key
+    // this build does not know is dropped rather than narrowing the view to
+    // nothing, and if that leaves none, the default selection stands.
+    const asked = (ctx.scopes || (ctx.scope ? [ctx.scope] : []))
+        .filter((k) => scopeGroups.some((g) => g.key === k));
+    if (asked.length) {
         chosenScopes.clear();
-        chosenScopes.add(ctx.scope);
+        asked.forEach((k) => chosenScopes.add(k));
     } else {
         defaultScopes();
     }
@@ -443,6 +489,7 @@ function rebuild() {
 
     expanded.clear();
     FILTERS.forEach(({ id, field }) => populateSelect("#" + id, uniqueOf(allData, field)));
+    renderScopeToggles();
 
     if (pending) {
         // The row clicked is made of these cases, so its file, device and PIC
@@ -538,6 +585,34 @@ export function renderResultToggles() {
 }
 
 /**
+ * Draw the Scope toggles: every raw spelling present in the cases in hand.
+ *
+ * Rebuilt on every `rebuild`, exactly as `populateSelect` refilled the select it
+ * replaces — the vocabulary is the data's, not the config's, so a scope nobody
+ * has written down this load has no toggle. A pressed scope that disappears
+ * that way is dropped from the set at the same time, because a narrowing on a
+ * value no case carries would empty the table with no visible control to undo
+ * it.
+ */
+function renderScopeToggles() {
+    const values = uniqueOf(allData, "scope");
+    // Drop any pressed value the new data no longer has.
+    [...chosenRawScopes].forEach((v) => { if (!values.includes(v)) chosenRawScopes.delete(v); });
+
+    $("#filterScope").innerHTML = values.map((v) =>
+        `<button type="button" class="toggle" data-scope-toggle="${esc(v)}"`
+        + ` aria-pressed="false">${esc(v)}</button>`).join("");
+    paintScopeToggles();
+}
+
+/** Reflect `chosenRawScopes` onto the toggles. */
+function paintScopeToggles() {
+    $("#filterScope").querySelectorAll("button[data-scope-toggle]").forEach((b) => {
+        b.setAttribute("aria-pressed", String(chosenRawScopes.has(b.dataset.scopeToggle)));
+    });
+}
+
+/**
  * Draw the status card strip: every status, not only the reviewable ones.
  *
  * The leading card is "All" rather than "To review": this screen holds the whole
@@ -576,22 +651,35 @@ function paintResultToggles() {
 }
 
 /**
- * Draw one card per scope group, with the cases it holds.
+ * Draw the scope pills: All, then one per group with the cases it holds.
  *
  * Counted from the summary rows, so a group is offered — and its size is known
  * — before any of its cases have been fetched. A group the plan excludes is
- * drawn `chip-card--aside`, the card form of the dashed rule its Summary table
+ * drawn `chip-card--aside`, the pill form of the dashed rule its Summary table
  * carries, and starts unpressed: adding work nobody committed to is a choice
  * somebody makes, not a default.
+ *
+ * **All is a shortcut, not a mode.** The groups stay multi-select — several
+ * pressed at once is the normal question here — and All simply presses every
+ * one of them, reading as pressed only when they all are. That is the
+ * convention the status cards above already use, and it is why All has no
+ * "off": unpressing everything would empty the table, and a control whose only
+ * effect is to show nothing is not one worth offering. Its figure is the sum of
+ * the rest, so the row adds up to what pressing it would list.
  */
 export function renderScopeCards() {
     const counts = countsByScope();
-    $("#detailScopes").innerHTML = scopeGroups.map((g) => `
-        <button type="button" class="chip-card${g.counted === false ? " chip-card--aside" : ""}"
-                data-scope-card="${esc(g.key)}" aria-pressed="false">
-            <span class="chip-card-label">${esc(g.label)}</span>
-            <span class="chip-card-value num">${(counts[g.key] || 0).toLocaleString()}</span>
-        </button>`).join("");
+    const total = scopeGroups.reduce((n, g) => n + (counts[g.key] || 0), 0);
+    const pill = (key, label, value, cls = "") =>
+        `<button type="button" class="chip-card${cls}"`
+        + ` data-scope-card="${esc(key)}" aria-pressed="false">`
+        + `<span class="chip-card-label">${esc(label)}</span>`
+        + `<span class="chip-card-value num">${value.toLocaleString()}</span></button>`;
+
+    // All carries the empty key, the way the status strip's leading card does.
+    $("#detailScopes").innerHTML = pill("", "All", total)
+        + scopeGroups.map((g) => pill(g.key, g.label, counts[g.key] || 0,
+                                      g.counted === false ? " chip-card--aside" : "")).join("");
     paintScopeCards();
 }
 
@@ -610,15 +698,23 @@ function countsByScope() {
 
 /** Reflect `chosenScopes` onto the cards, and say what they add up to. */
 function paintScopeCards() {
+    // All is pressed only when every group is, so it reports the selection
+    // rather than claiming one: with three of four pressed it is a shortcut
+    // still worth offering, not a description of what is on screen.
+    const all = scopeGroups.length > 0 && chosenScopes.size === scopeGroups.length;
     $("#detailScopes").querySelectorAll("button[data-scope-card]").forEach((b) => {
-        b.setAttribute("aria-pressed", String(chosenScopes.has(b.dataset.scopeCard)));
+        const key = b.dataset.scopeCard;
+        b.setAttribute("aria-pressed", String(key ? chosenScopes.has(key) : all));
     });
 
     const chosen = scopeGroups.filter((g) => chosenScopes.has(g.key));
     const counts = countsByScope();
     const total = chosen.reduce((n, g) => n + (counts[g.key] || 0), 0);
+    // Naming all four when all four are pressed restates the row above it, and
+    // grows with the config; the pills are already the list.
+    const named = all ? "All scopes" : chosen.map((g) => g.label).join(" + ");
     $("#detailScopeSummary").textContent = chosen.length
-        ? `${total.toLocaleString()} cases · ${chosen.map((g) => g.label).join(" + ")}`
+        ? `${total.toLocaleString()} cases · ${named}`
         : "No scope selected";
 }
 
@@ -660,6 +756,8 @@ function applyFilters() {
         for (const { id, field } of FILTERS) {
             if (values[id] && d[field] !== values[id]) return false;
         }
+        // Empty means every scope, so an unpressed strip narrows nothing.
+        if (chosenRawScopes.size && !chosenRawScopes.has(d.scope)) return false;
         if (conditions.deviceFamily && d.device_family !== conditions.deviceFamily) return false;
         if (conditions.sheet && d.sheet !== conditions.sheet) return false;
         const from = values.filterDateFrom;
@@ -731,6 +829,8 @@ function renderStats() {
     // otherwise a closed panel hides the fact that the table is narrowed.
     const narrowing = FILTERS.filter(({ id }) => $("#" + id).value).length
         + DATE_FILTERS.filter(({ id }) => $("#" + id).value).length
+        // However many scopes are pressed, they are one narrowing.
+        + (chosenRawScopes.size ? 1 : 0)
         + (conditions.deviceFamily ? 1 : 0)
         + (conditions.sheet ? 1 : 0)
         + (missingOnly ? 1 : 0)
@@ -756,6 +856,13 @@ function renderChips() {
             + `<button type="button" data-clear="${esc(id)}" aria-label="Clear ${esc(label)} filter">✕</button></span>`);
     };
     FILTERS.forEach(({ id, label }) => push(id, label, $("#" + id).value));
+    // One chip per pressed scope rather than one listing them all, for the
+    // reason the statuses get one each: any single one can then be dropped
+    // without retyping the rest.
+    [...chosenRawScopes].forEach((v) => chips.push(
+        `<span class="chip">Scope: ${esc(v)}`
+        + `<button type="button" data-scope-toggle="${esc(v)}"`
+        + ` aria-label="Clear ${esc(v)} filter">✕</button></span>`));
     if (chosenStatuses.size < getStatuses().length) {
         // One chip per chosen status rather than one listing them all, so any
         // single one can be dropped without retyping the rest.
@@ -801,6 +908,14 @@ function renderChips() {
     $("#detailChips").querySelectorAll("button[data-clear]").forEach((b) =>
         b.addEventListener("click", () => {
             $("#" + b.dataset.clear).value = "";
+            currentPage = 1;
+            applyFilters();
+        }));
+    $("#detailChips").querySelectorAll("button[data-scope-toggle]").forEach((b) =>
+        b.addEventListener("click", () => {
+            chosenRawScopes.delete(b.dataset.scopeToggle);
+            paintScopeToggles();
+            // A narrowing, not a selection: nothing has to be fetched or rebuilt.
             currentPage = 1;
             applyFilters();
         }));

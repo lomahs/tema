@@ -155,12 +155,29 @@ geometry of someone's report workbook rather than a vocabulary. It is only ever 
 
 **Scope groups are data too.** [parser/scope_groups.json](parser/scope_groups.json) says which
 Scope strings belong to which Summary table, validated at import by `ScopeSet` in
-[parser/scope.py](parser/scope.py) exactly the way `StatusSet` validates the taxonomy. FPT work
-and JP work are separate commitments, so Summary draws one table per group rather than one table
-adding them together. The `fallback` group is mandatory and always sorts last: a typo'd scope, or
-one nobody has configured yet, lands there rather than vanishing, so **the tables always add up to
-every case loaded**. `views/summary.js` names no scope itself — it draws a block per group from the
-`scopes` list `/api/summary` serves alongside the rows.
+[parser/scope.py](parser/scope.py) exactly the way `StatusSet` validates the taxonomy. The
+`fallback` group is mandatory, always sorts last and **never counts**: a typo'd scope, or one
+nobody has configured yet, lands there rather than vanishing, so **the tables always add up to
+every case loaded**.
+
+**Summary draws one table per _role_, not one per group.** It used to be one card per scope group,
+which stopped scaling the moment a team had six of them — six tables, and no way to read the one
+figure that matters. The three roles are the ones the config already encodes, and `BUCKETS` in
+`views/summary.js` is the list: **In Scope** (`counted`), **Out Scope** (excluded), and the
+fallback, which takes its heading from its own configured label. The first two are role names so
+they are written down; the third is a configured group, so naming it here would be this module
+naming a scope. A bucket holding several groups draws a strip of multi-select scope cards — the
+same control, and the same code shape, as Review's `#detailScopes` — and drawn only when the
+bucket holds more than one, because a single card can only be pressed or else empty the table
+above it. `views/summary.js` still names no scope itself: it buckets on the `counted` and
+`fallback` flags that ride on every group in the `scopes` list `/api/summary` serves.
+
+**A bucket's rows are summed per (file, device).** `/api/summary` serves one row per
+(file, device, scope), which is what let each group have its own table; a bucket with two groups
+and no Scope column would otherwise show two rows that look like duplicates. `mergeByDevice` is
+that collapse, and it is the same one the report publisher performs by calling
+`summary_rows(by_scope=False)` — which is why a row on screen and a row in the published sheet
+still mean the same thing.
 
 **`"excluded": true` on a scope group is the same word, and the same idea, as it is on a status:
 work that is reported but not committed to.** It keeps its Summary table — the count has to stay
@@ -188,10 +205,16 @@ trusted:
   counted groups, so counting rows the destination would not show would send the reader to a
   shorter table than the number they pressed. That is why `missing_reason` rows carry `scope`, as
   `issue_rows` always did.
-- **The fallback group may not be excluded.** It is where a typo'd or unconfigured scope lands, so
-  excluding it would let a mistake drop out of every figure in the app without saying so — the
-  precise silence the fallback exists to prevent. It is also what guarantees at least one group
-  always counts.
+- **The fallback group never counts, and the config does not get a say.** This reverses an
+  earlier rule, which forbade excluding it on the grounds that a typo'd scope must not drop out
+  of every figure. It is now always out: an unrecognised scope names no commitment anyone made,
+  so it cannot sit in the denominator, and `"excluded"` on the fallback is redundant rather than
+  refused. **The cost is real and worth stating** — a misspelt Scope now reaches no figure in the
+  app at all, and Summary's third table is the only place it is visible. That table is therefore
+  not decoration: it is the whole mitigation, which is why it is drawn whenever it holds anything.
+  The guarantee the old rule was really making has moved to its own check: **at least one group
+  other than the fallback must count**, or `SCOPES.counted` is empty and every figure in the app
+  reads zero. `ScopeSet.from_dict` refuses that config at the door.
 
 **Device families are data too, and they are the one config with no fallback.**
 [parser/device_groups.json](parser/device_groups.json) says which device names Summary's
@@ -252,8 +275,8 @@ noise.
 
 **Curvature is a scale, and it means distance from the data.** `--r-sm` (6px) for inputs and
 small in-cell buttons, `--r-md` (7px) for buttons and rail nav items, `--r-lg` (10px) for cards
-and table panes, `--r-full` for badges and result toggles — things whose whole job is to be
-pressed, or read as a token. Reaching for a literal `border-radius` instead of a token is what
+and table panes, `--r-full` for badges, result toggles and scope pills — things whose whole job
+is to be pressed, or read as a token. Reaching for a literal `border-radius` instead of a token is what
 makes an interface look assembled rather than designed. Two consequences worth knowing, because
 each reverses an earlier rule:
 
@@ -351,7 +374,7 @@ Behavior worth preserving when touching the UI:
   `renderDetailHead` each replace their `<th>`s and so each calls `makeSortable` itself. None is
   bound at init any more. Binding one twice sorts twice per click and looks like nothing happened.
   Summary is the exception in shape only: it has no `renderSummaryHead`, because it draws one
-  table per scope group and cannot know how many headers it needs until the data arrives —
+  table per bucket and cannot know how many headers it needs until the data arrives —
   `renderSummary` builds heads and bodies together and binds each head as it goes. Its sort state
   is shared across the tables and a click re-renders all of them, or two tables would show two
   different orders at once.
@@ -426,12 +449,14 @@ Behavior worth preserving when touching the UI:
     under the table rather than two columns of radios: as columns they were eight controls of
     which one mattered, and they cost the Derives-from column its place on screen.
 - **Summary is laid out as the design canvas draws it**: five KPI cards, a grid of panels
-  (result breakdown, today's progress, what owes a reason), then one card per scope group. Each
-  card carries the design's chrome — Device and File selects, a three-state Rows toggle, an
-  Executed progress column, condition chips and a Prev/Next/Show-all footer. **The one control
-  the design has and this does not is the Scope select**, because the scope is the heading of the
-  card you are already reading; collapsing FPT and JP into one filtered table is the thing the
-  scope-group rule forbids. The filters are shared across cards for the reason the sort is —
+  (result breakdown, today's progress, what owes a reason), then one card per *bucket* — In
+  Scope, Out Scope and the fallback. Each card carries the design's chrome — Device and File
+  selects, a three-state Rows toggle, an Executed progress column, condition chips and a
+  Prev/Next/Show-all footer. **The design's Scope select is answered by the scope cards inside
+  each bucket**, which is the multi-select Review already uses: a select picks one group, and a
+  bucket holding two commitments needs to show either, or both summed. A bucket whose cards are
+  all unpressed keeps its card rather than disappearing — hiding the table you just emptied would
+  take the cards away with it and leave no way to press them back. The filters are shared across cards for the reason the sort is —
   "iPad only" should mean the same thing in both — and paging is not, because a page number only
   means something inside one table. **Rows cycles Split → By device type → Combined**, and none
   of the three changes a total — only how many rows carry it. `combine()` sums every device of a
@@ -470,10 +495,33 @@ Behavior worth preserving when touching the UI:
   page subtitle says so. `Files` is the exception and counts what is on screen. The Result toggles
   inside the folded filter panel edit the same `chosenStatuses` set one at a time — the cards are
   the single pick, the toggles the combination the cards cannot express — and either may fetch.
-- **Detail's scope cards are a filter over the cache, never part of the fetch key.** `/api/cases`
-  serves every scope group, so pressing a card only changes which of the cases in hand are listed
+- **Scope is asked twice, at two granularities, and both take several answers.** The cards at the
+  top of the screen pick scope *groups* (`chosenScopes`); the toggles in the filter well pick the
+  raw Scope spellings inside them (`chosenRawScopes`), because "FPT and FPT (JM Support)" is the
+  normal question and the select this replaced could only ask for one. The two differ in what they
+  do, not only in vocabulary: the cards decide which cases are on the screen at all, so
+  `clearNarrowing` leaves them alone, while the toggles only narrow what is already in hand and
+  are cleared with everything else. They differ from the Result toggles in what empty means —
+  Result decides what is *fetched*, so all-pressed is its neutral position, while an empty scope
+  strip narrows nothing, exactly as the select's `""` did. However many are pressed they count as
+  one narrowing on the folded panel's pill, and each gets its own chip so one can be dropped
+  without retyping the rest. The strip is rebuilt from the cases in hand on every `rebuild`, and a
+  pressed value the new data no longer has is dropped with it — a narrowing on a value no case
+  carries would empty the table with no visible control to undo it.
+- **Detail's scope pills are a filter over the cache, never part of the fetch key.** `/api/cases`
+  serves every scope group, so pressing one only changes which of the cases in hand are listed
   — no request. They open on the counted groups, so the figure the screen starts from is the one
-  Summary calls Total, and the line beside them names what the pressed ones add up to. "Clear all"
+  Summary calls Total, and the line beside them names what the pressed ones add up to.
+  **They are `--r-full` pills that invert when pressed**, the same shape and the same selection
+  treatment as the Result toggles, because that is what they are — a control, not a small card
+  that happens to be clickable, which `--r-md` and a sunk-paper press made them look like. They
+  keep the count `.toggle` has no room for: a scope you cannot size is a scope you cannot decide
+  about. **The leading `All` pill is a shortcut, not a mode** — the groups stay multi-select, All
+  presses every one of them, and it reads as pressed only when they all are, the convention the
+  status cards use. It has no "off", because unpressing everything empties the table and a control
+  whose only effect is to show nothing is not worth offering. An excluded group keeps its dashed
+  border *through* the press, or adding work outside the plan would look identical to adding work
+  inside it. "Clear all"
   deliberately leaves both the statuses and the scopes alone: they decide what exists on the screen
   rather than narrowing it, and a Clear that emptied the table would be offering to show nothing.
   With none pressed the table says which pick is missing rather than sitting empty.

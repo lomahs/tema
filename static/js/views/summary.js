@@ -47,8 +47,47 @@ const PAGE_SIZE = 10;
 
 /** @type {Object[]} rows from /api/summary, each carrying its scope group key */
 let groups = [];
-/** @type {ScopeGroup[]} the tables to draw, in config order */
+/** @type {ScopeGroup[]} every configured group, in config order */
 let scopes = [];
+
+/**
+ * The three tables, in the order they are drawn.
+ *
+ * Summary used to draw one table per scope group. It now draws one per *role*,
+ * because the roles are what a reader is actually comparing: what we committed
+ * to, what we are reporting but did not commit to, and what nobody has
+ * classified yet. A team with six scope groups had six tables and no way to see
+ * the first of those three figures at all.
+ *
+ * The roles come from the config, not from this file — `counted` and `fallback`
+ * ride along on every group in `/api/summary`'s `scopes` list, so no scope is
+ * ever named here. The third bucket takes its heading from the fallback group's
+ * own label for the same reason; the first two are role names, not scopes, so
+ * they are written down.
+ *
+ * `counted` is the KPI strip's denominator too — `summaryOverview` filters by
+ * the same flag — so "the total is the In Scope table" holds by construction
+ * rather than by two places agreeing to compute it the same way.
+ *
+ * @type {{key: string, title: string|null, pick: (g: ScopeGroup) => boolean}[]}
+ */
+const BUCKETS = [
+    { key: "in", title: "In Scope", pick: (g) => g.counted !== false && !g.fallback },
+    { key: "out", title: "Out Scope", pick: (g) => g.counted === false && !g.fallback },
+    // Titled from the group itself: it is one configured group, and naming it
+    // here would be this module naming a scope.
+    { key: "other", title: null, pick: (g) => !!g.fallback },
+];
+
+/**
+ * @type {Set<string>} scope group keys pressed, across every bucket.
+ *
+ * A filter over rows already fetched, never a fetch — the same arrangement as
+ * Review's scope cards, whose behaviour these copy. Every group starts pressed:
+ * unlike Review, where adding work outside the plan is a deliberate choice, a
+ * bucket exists precisely to show what is in it.
+ */
+const chosenScopes = new Set();
 
 /** @type {import("../sorting.js").SortState} shared by every table */
 const sort = { col: null, asc: true };
@@ -135,11 +174,30 @@ export function initSummaryView({ onOpenFile: open = () => {},
     $("#summaryTables").addEventListener("click", (e) => {
         const figure = e.target.closest("button[data-status]");
         if (figure) {
-            onDrillIn({ ...figure.dataset });
+            // The attribute names the *bucket* — one of this module's own three
+            // literals — and the scope keys are resolved here, from the pressed
+            // cards. Configured text never goes through a `data-` attribute:
+            // that is the rule the NUL-separated group paths are kept out of the
+            // DOM for, and a scope key is configured text.
+            const { bucket: key, ...rest } = figure.dataset;
+            onDrillIn({ ...rest, scopes: pressedScopes(key) });
             return;
         }
         const cell = e.target.closest("button[data-file]");
         if (cell) onOpenFile(cell.dataset.file);
+    });
+
+    // The scope cards never fetch: every row is already here, and pressing one
+    // is a filter over them. Delegated like the file cells, because the cards
+    // are regenerated on every render.
+    $("#summaryTables").addEventListener("click", (e) => {
+        const card = e.target.closest("button[data-scope-card]");
+        if (!card) return;
+        const key = card.dataset.scopeCard;
+        if (chosenScopes.has(key)) chosenScopes.delete(key);
+        else chosenScopes.add(key);
+        paging.clear();
+        render();
     });
 
     FILTERS.forEach((sel) => $(sel).addEventListener("change", () => {
@@ -186,6 +244,10 @@ export function renderSummary(data, dailyRows) {
     groups = data.groups || [];
     scopes = data.scopes || [];
     families = data.device_families || [];
+    // Every group pressed: a bucket exists to show what is in it, and a load
+    // arriving pre-filtered by the last one would hide rows without saying so.
+    chosenScopes.clear();
+    scopes.forEach((g) => chosenScopes.add(g.key));
     paging.clear();
 
     populateSelect("#summaryFilterDevice", uniqueOf(groups, "device"));
@@ -283,7 +345,7 @@ function combineByFamily(rows) {
  * @param {Object[]} rows One scope group's rows.
  * @returns {string} HTML, or "" when nothing was dropped.
  */
-function asideChip(rows, scopeKey) {
+function asideChip(rows, bucketKey) {
     const hidden = getStatuses().filter((s) => isExcluded(s.key));
     if (!hidden.length) return "";
 
@@ -298,10 +360,116 @@ function asideChip(rows, scopeKey) {
     // cannot reach from Summary would be the one deliberately set aside.
     const breakdown = held.map((s) =>
         `<button type="button" class="cell-link" data-status="${esc(s.key)}"`
-        + ` data-scope="${esc(scopeKey)}" title="List the ${esc(s.label)} cases">`
+        + ` data-bucket="${esc(bucketKey)}" title="List the ${esc(s.label)} cases">`
         + `${esc(s.label)}: ${totals[s.key]}</button>`).join(" · ");
     return `<span class="chip chip--aside" title="Outside the total, and not given a column here">`
         + `${breakdown} · ${n} not counted</span>`;
+}
+
+/**
+ * The scope keys a bucket is currently showing.
+ *
+ * What a figure drawn on that card was counted over, which is what a drill-in
+ * from it has to narrow to. An unknown key answers with every pressed group, so
+ * a stale attribute widens the destination rather than emptying it.
+ *
+ * @param {string} bucketKey
+ * @returns {string[]}
+ */
+function pressedScopes(bucketKey) {
+    const bucket = BUCKETS.find((b) => b.key === bucketKey);
+    const groups = bucket ? groupsOf(bucket) : scopes;
+    return groups.filter((g) => chosenScopes.has(g.key)).map((g) => g.key);
+}
+
+/** The configured groups belonging to one bucket, in config order. */
+function groupsOf(bucket) {
+    return scopes.filter(bucket.pick);
+}
+
+/**
+ * Sum a bucket's rows to one row per (file, device).
+ *
+ * `/api/summary` serves one row per (file, device, scope), which is what let
+ * each scope group have its own table. A bucket may hold several groups — two
+ * counted commitments, say — and this table has no Scope column to tell them
+ * apart, so leaving them unmerged would show two rows that look like duplicates
+ * of each other. Summing is the only reading that keeps a row identifiable by
+ * what it displays.
+ *
+ * It is the same collapse the report publisher performs by calling
+ * `summary_rows(by_scope=False)`, which is why the screen and the published
+ * sheet still agree on what one row means.
+ *
+ * `device_family` rides across untouched: every row being merged shares a
+ * (file, device), so they all carry the same family, and the Rows toggle needs
+ * it afterwards.
+ *
+ * @param {Object[]} rows
+ * @returns {Object[]}
+ */
+function mergeByDevice(rows) {
+    const byKey = new Map();
+    rows.forEach((r) => {
+        const key = groupPath(r.file, r.device);
+        if (!byKey.has(key)) byKey.set(key, []);
+        byKey.get(key).push(r);
+    });
+    return [...byKey.values()].map((sub) => ({
+        ...sumRows(sub),
+        file: sub[0].file,
+        device: sub[0].device,
+        device_family: sub[0].device_family,
+    }));
+}
+
+/**
+ * One bucket's rows: its pressed groups, merged, then grouped as Rows says.
+ *
+ * @param {Object} bucket
+ * @param {Object[]} rows Every row under the shared Device/File filters.
+ * @returns {Object[]}
+ */
+function bucketRows(bucket, rows) {
+    const keys = new Set(groupsOf(bucket).filter((g) => chosenScopes.has(g.key))
+        .map((g) => g.key));
+    return regroup(mergeByDevice(rows.filter((r) => keys.has(r.scope))));
+}
+
+/**
+ * A bucket's scope cards: one per group in it, multi-select.
+ *
+ * Drawn only where there is a choice to make. With one group in the bucket the
+ * strip would be a single card that can only be pressed or else empty the table
+ * it sits above, which is a control that asks a question with one answer.
+ *
+ * The figure on each card counts that group under the shared Device/File
+ * filters but *not* under the scope choice — a card is how you pick a scope, so
+ * its count has to say how much there is to pick, exactly as Review's status
+ * cards count over `conditioned`.
+ *
+ * @param {Object} bucket
+ * @param {Object[]} rows Every row under the shared filters.
+ * @returns {string} HTML, or "" when the bucket holds a single group.
+ */
+function scopeCards(bucket, rows) {
+    const groups = groupsOf(bucket);
+    if (groups.length < 2) return "";
+
+    const total = (key) => rows.filter((r) => r.scope === key)
+        .reduce((n, r) => n + (r.total || 0), 0);
+
+    return `<div class="scope-row">
+        <div class="scope-cards" role="group" aria-label="Scope groups">
+            ${groups.map((g) => `
+                <button type="button" class="chip-card"
+                        data-scope-card="${esc(g.key)}"
+                        aria-pressed="${chosenScopes.has(g.key)}">
+                    <span class="chip-card-label">${esc(g.label)}</span>
+                    <span class="chip-card-value num">${total(g.key).toLocaleString()}</span>
+                </button>`).join("")}
+        </div>
+    </div>`;
 }
 
 /** The chips describing what is filtered out, and how to put it back. */
@@ -337,42 +505,50 @@ function render() {
     $("#btnSummaryGrouping").textContent =
         GROUPINGS.find((g) => g.key === grouping).label;
 
-    // An empty group is not drawn: a team with no JP work should not have to
-    // scroll past an empty JP table to reach the numbers it does have.
-    const present = scopes
-        .map((s) => ({ scope: s, rows: rows.filter((r) => r.scope === s.key) }))
-        .filter((p) => p.rows.length)
-        .map((p) => ({ ...p, rows: regroup(p.rows) }));
+    // An empty bucket is not drawn: a team with no work outside the plan should
+    // not have to scroll past an empty Out Scope table to reach its figures. A
+    // bucket whose groups are all unpressed is empty for a different reason, so
+    // it keeps its card — hiding the table you just emptied would take its
+    // scope cards away with it and leave no way to press them again.
+    const present = BUCKETS
+        .map((bucket) => ({
+            bucket,
+            groups: groupsOf(bucket),
+            rows: bucketRows(bucket, rows),
+        }))
+        .filter((p) => p.groups.length
+            && (p.rows.length || p.groups.some((g) => !chosenScopes.has(g.key))));
 
     if (!present.length) {
         container.innerHTML = `<p class="empty-note">No test cases match these filters.</p>`;
         return;
     }
 
-    // Addressed by position, not by scope key: a key is configured text and
-    // would need escaping to survive an id attribute and a selector round trip.
-    container.innerHTML = chips() + present.map(({ scope, rows: r }, i) => `
+    // Addressed by position, not by bucket key, for the reason it was not
+    // addressed by scope key: an id and a selector round trip want something
+    // that never needs escaping.
+    container.innerHTML = chips() + present.map(({ bucket, groups, rows: r }, i) => `
         <section class="card card--table">
             <div class="card-head card-head--row">
-                <h2>${esc(scope.label)}</h2>
-                <!-- A group outside the plan says so on its own heading. Its
+                <h2>${esc(bucket.title ?? groups[0].label)}</h2>
+                <!-- A bucket outside the plan says so on its own heading. Its
                      table and its bar are drawn in full — the count has to stay
                      visible — but nothing in it reaches the figures above, and
                      a reader comparing the two would otherwise find them short
                      by this table with nothing on screen explaining why. The
                      dashed rule is the one the band draws where a status
                      column stops counting. -->
-                ${scope.counted === false
+                ${groups.every((g) => g.counted === false)
                     ? `<span class="chip chip--aside" title="Reported, but not counted toward the totals above">Not in total</span>`
                     : ""}
                 <!-- And what this card's dropped columns hold, if anything. -->
-                ${asideChip(r, scope.key)}
-                <!-- Each group carries its own bar: FPT and JP are separate
-                     commitments, so one of them running behind is a fact the
-                     combined figure above would hide. -->
+                ${asideChip(r, bucket.key)}
+                <!-- Each bucket carries its own bar: a commitment running behind
+                     is a fact the combined figure above would hide. -->
                 ${scopeProgress(r)}
                 <span class="count">${r.length} row${r.length === 1 ? "" : "s"}</span>
             </div>
+            ${scopeCards(bucket, rows)}
             <div class="scroll-x scroll-x--flush scroll-x--rows">
                 <table class="ledger">
                     <thead><tr id="summaryHead-${i}"></tr></thead>
@@ -392,7 +568,7 @@ function render() {
     const clearAll = $("#btnClearSummaryChips");
     if (clearAll) clearAll.addEventListener("click", () => $("#btnClearSummaryFilters").click());
 
-    present.forEach(({ scope, rows: r }, i) => renderTable(i, scope, r));
+    present.forEach(({ bucket, rows: r }, i) => renderTable(i, bucket, r));
     alignColumns();
 }
 
@@ -606,10 +782,10 @@ function regroup(rows) {
  * Fill one scope group's header, body, totals row and footer.
  *
  * @param {number} i The card's position among the drawn tables.
- * @param {ScopeGroup} scope
- * @param {Object[]} rows That group's rows, unsorted.
+ * @param {Object} bucket
+ * @param {Object[]} rows That bucket's rows, merged but unsorted.
  */
-function renderTable(i, scope, rows) {
+function renderTable(i, bucket, rows) {
     const head = `#summaryHead-${i}`;
     $(head).innerHTML =
         sortableTh("file", "File")
@@ -632,7 +808,7 @@ function renderTable(i, scope, rows) {
     const numeric = new Set(["total", ...getStatuses().map((s) => s.key)]);
     const sorted = sortRows(rows, sort, numeric);
 
-    const state = paging.get(scope.key) || { page: 1, showAll: false };
+    const state = paging.get(bucket.key) || { page: 1, showAll: false };
     const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
     const page = Math.min(Math.max(1, state.page), pageCount);
     const visible = state.showAll
@@ -657,14 +833,14 @@ function renderTable(i, scope, rows) {
             + `<td title="${esc(r.device)}">${esc(r.device)}</td>`,
         labelCols: 2,
         renderValues: (r) => statusCells(r, {
-            blankZeros: true, counted: true, link: linkFor(r, scope.key),
+            blankZeros: true, counted: true, link: linkFor(r, bucket.key),
         }) + progressCell(r),
         onToggle: () => {},
         emptyMessage: "No test cases loaded.",
     });
 
-    // The footer totals **every** row in the group, not the visible page — it
-    // answers "where does this scope stand", which paging must not change.
+    // The footer totals **every** row in the bucket, not the visible page — it
+    // answers "where does this bucket stand", which paging must not change.
     const totals = sumRows(sorted);
     // The footer totals this group under whatever the shared filters are set to,
     // so its figures lead to the same narrowing rather than to the whole group.
@@ -672,14 +848,14 @@ function renderTable(i, scope, rows) {
         `<tr><td colspan="2">Total</td>${statusCells(totals, {
             counted: true,
             link: {
-                scope: scope.key,
+                bucket: bucket.key,
                 file: $("#summaryFilterFile").value,
                 device: $("#summaryFilterDevice").value,
             },
         })}`
         + `${progressCell(totals)}</tr>`;
 
-    renderFooter(i, scope, sorted.length, page, pageCount, state.showAll);
+    renderFooter(i, bucket, sorted.length, page, pageCount, state.showAll);
 }
 
 /**
@@ -696,12 +872,17 @@ function renderTable(i, scope, rows) {
  * @param {string} scopeKey The scope group whose card it is drawn in.
  * @returns {Object} Context for `onDrillIn`.
  */
-function linkFor(r, scopeKey) {
-    if (grouping === "combined") return { file: r.file, scope: scopeKey };
+function linkFor(r, bucketKey) {
+    // `bucket`, not `scope`: a row here is merged across whichever of the
+    // bucket's groups are pressed, so no single scope key describes it — and a
+    // bucket key is one of this module's own literals, which a `data-`
+    // attribute can carry safely. The click handler turns it back into the
+    // pressed scope keys.
+    if (grouping === "combined") return { file: r.file, bucket: bucketKey };
     if (grouping === "family") {
-        return { file: r.file, device_family: r.device_family, scope: scopeKey };
+        return { file: r.file, device_family: r.device_family, bucket: bucketKey };
     }
-    return { file: r.file, device: r.device, scope: scopeKey };
+    return { file: r.file, device: r.device, bucket: bucketKey };
 }
 
 /**
@@ -728,8 +909,8 @@ function progressCell(row) {
  * `pagination.js` rather than here — two footers that drifted would be two
  * different answers to "is this all of it".
  */
-function renderFooter(i, scope, count, page, pageCount, showAll) {
-    const state = () => paging.get(scope.key) || { page: 1, showAll: false };
+function renderFooter(i, bucket, count, page, pageCount, showAll) {
+    const state = () => paging.get(bucket.key) || { page: 1, showAll: false };
     renderPageFooter({
         container: `#summaryFooter-${i}`,
         totalItems: count,
@@ -737,7 +918,7 @@ function renderFooter(i, scope, count, page, pageCount, showAll) {
         currentPage: page,
         showAll,
         unit: "file",
-        onPageChange: (p) => { paging.set(scope.key, { ...state(), page: p }); render(); },
-        onToggleAll: (all) => { paging.set(scope.key, { page: 1, showAll: all }); render(); },
+        onPageChange: (p) => { paging.set(bucket.key, { ...state(), page: p }); render(); },
+        onToggleAll: (all) => { paging.set(bucket.key, { page: 1, showAll: all }); render(); },
     });
 }

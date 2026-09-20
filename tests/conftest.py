@@ -106,3 +106,38 @@ def config_paths(tmp_path, monkeypatch):
         monkeypatch.setattr(app_config, spec.setting, str(target))
         paths[name] = target
     return paths
+
+
+#: The scope groups the tests below are written against.
+#:
+#: Deliberately *not* `parser/scope_groups.json`. That file is editable from the
+#: Config view at runtime, which is a feature — so a test asserting that
+#: "FPT (JM Support)" classifies as FPT was really asserting that nobody had
+#: exercised the feature yet, and broke the moment somebody did. Tests that care
+#: what the groups *are* pin them here; tests that care about the shipped file
+#: assert its invariants (exactly one fallback, last, never counted) rather than
+#: its contents.
+FIXED_SCOPES = {
+    "groups": [
+        {"key": "FPT", "label": "FPT", "match": ["FPT", "FPT (JM Support)"]},
+        {"key": "JP", "label": "JP", "match": ["JP"], "excluded": True},
+    ],
+    "fallback": {"key": "Other", "label": "Other"},
+}
+
+
+@pytest.fixture
+def fixed_scopes():
+    """Adopt {@link FIXED_SCOPES} for one test, then put the real ones back.
+
+    `adopt` copies onto the live singleton rather than rebinding the name, which
+    is what makes this reach the eight modules that imported `SCOPES` by name —
+    the same mechanism the Config view's save uses.
+    """
+    from parser.scope import SCOPES, ScopeSet
+
+    saved = dict(SCOPES.__dict__)
+    SCOPES.adopt(ScopeSet.from_dict(FIXED_SCOPES))
+    yield SCOPES
+    SCOPES.__dict__.clear()
+    SCOPES.__dict__.update(saved)

@@ -90,8 +90,11 @@ def layout(raw=None):
 
 
 def case(**kwargs):
+    """A publishable case. The scope defaults to a counted one: the publisher
+    passes its cases through `in_plan`, and the fallback no longer counts."""
     return models.TestCase(**{"file_name": "TC.xlsx", "sheet": "Login",
-                              "device": "iPhone", "row_num": 4, **kwargs})
+                              "device": "iPhone", "row_num": 4, "scope": "FPT",
+                              **kwargs})
 
 
 def data_rows(workbook, sheet="Summary", header_row=1):

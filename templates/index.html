@@ -249,8 +249,15 @@
                         <select id="filterDevice" class="select"><option value="">All devices</option></select>
                     </div>
                     <div class="field">
-                        <label for="filterScope">Scope</label>
-                        <select id="filterScope" class="select"><option value="">All scopes</option></select>
+                        <span class="label" id="filterScopeLabel">Scope</span>
+                        <!-- Toggles, not a select, for the reason Result is:
+                             "FPT and FPT (JM Support)" is a normal question here
+                             and a single-pick control cannot ask it. These are
+                             the raw spellings in the cells — the cards at the
+                             top of the screen pick the *groups* those spellings
+                             belong to, which is the coarser question. -->
+                        <div class="toggles" id="filterScope" role="group"
+                             aria-labelledby="filterScopeLabel"></div>
                     </div>
                     <div class="field">
                         <label for="filterPIC">PIC</label>

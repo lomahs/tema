@@ -15,19 +15,27 @@ MINIMAL = {
 
 
 def test_configured_scopes_map_to_their_group():
-    assert SCOPES.classify("FPT") == "FPT"
-    assert SCOPES.classify("FPT (JM Support)") == "FPT"
-    assert SCOPES.classify("JP") == "JP"
+    groups = ScopeSet.from_dict(MINIMAL)
+    assert groups.classify("FPT") == "FPT"
+    assert groups.classify("FPT (JM Support)") == "FPT"
+    assert groups.classify("JP") == "JP"
 
 
 def test_matching_ignores_case_and_surrounding_space():
-    assert SCOPES.classify("  fpt (JM support) ") == "FPT"
-    assert SCOPES.classify("jp") == "JP"
+    groups = ScopeSet.from_dict(MINIMAL)
+    assert groups.classify("  fpt (JM support) ") == "FPT"
+    assert groups.classify("jp") == "JP"
 
 
 def test_an_unconfigured_scope_falls_back_instead_of_vanishing():
-    """Otherwise the tables would not add up to every case that was loaded."""
-    assert SCOPES.classify("Vendor") == "Other"
+    """Otherwise the tables would not add up to every case that was loaded.
+
+    Asserted against a config this test owns: which spellings are configured is
+    the shipped file's business and changes when somebody edits it, whereas
+    *something unconfigured reaching the fallback* is the property.
+    """
+    groups = ScopeSet.from_dict(MINIMAL)
+    assert groups.classify("Vendor") == "Other"
 
 
 def test_a_blank_scope_is_not_a_case_at_all():
@@ -43,8 +51,9 @@ def test_any_scope_text_at_all_makes_a_case():
 
 
 def test_the_fallback_group_is_last():
-    assert SCOPES.keys == ["FPT", "JP", "Other"]
-    assert SCOPES.keys[-1] == SCOPES.classify("something nobody configured")
+    groups = ScopeSet.from_dict(MINIMAL)
+    assert groups.keys == ["FPT", "JP", "Other"]
+    assert groups.keys[-1] == groups.classify("something nobody configured")
 
 
 def test_a_group_labels_itself_by_key_when_unlabelled():
@@ -56,13 +65,26 @@ def test_the_shipped_config_labels_every_group():
     assert all(g.label for g in SCOPES.groups)
 
 
-def test_to_dict_carries_what_the_view_needs_to_title_its_tables():
-    assert SCOPES.to_dict() == {"groups": [
-        {"key": "FPT", "label": "FPT", "counted": True},
-        # JP work is reported but not committed to — see `scope_groups.json`.
-        {"key": "JP", "label": "JP", "counted": False},
-        {"key": "Other", "label": "Other", "counted": True},
-    ]}
+def test_the_shipped_config_holds_what_summary_needs_to_draw_three_tables():
+    """An invariant over the shipped file, not a copy of its contents.
+
+    `parser/scope_groups.json` is editable from the Config view, so asserting
+    which groups are in it asserts that nobody has used that feature. What must
+    hold whatever anybody configures is this: every group tells the view its
+    key, label and both roles; exactly one is the fallback; it sorts last and
+    never counts; and something else does, or every figure reads zero.
+    """
+    groups = SCOPES.to_dict()["groups"]
+
+    assert groups, "at least one group"
+    for g in groups:
+        assert set(g) == {"key", "label", "counted", "fallback"}
+
+    fallbacks = [g for g in groups if g["fallback"]]
+    assert len(fallbacks) == 1
+    assert groups[-1] is fallbacks[0], "the fallback sorts last"
+    assert fallbacks[0]["counted"] is False
+    assert any(g["counted"] for g in groups), "something must count"
 
 
 def test_a_custom_config_changes_the_split():
@@ -104,10 +126,10 @@ def test_the_error_message_names_the_file_it_came_from(tmp_path):
 
 
 def test_a_group_counts_toward_the_total_unless_it_says_otherwise():
-    """Every config that predates the field keeps every group in the plan."""
+    """Every configured group keeps its place in the plan; the fallback never has one."""
     plain = ScopeSet.from_dict(MINIMAL)
-    assert plain.counted == ["FPT", "JP", "Other"]
-    assert plain.excluded == []
+    assert plain.counted == ["FPT", "JP"]
+    assert plain.excluded == ["Other"]
 
 
 def test_an_excluded_group_keeps_its_place_but_leaves_the_counted_list():
@@ -120,8 +142,10 @@ def test_an_excluded_group_keeps_its_place_but_leaves_the_counted_list():
         "fallback": {"key": "Other"},
     })
     assert custom.keys == ["FPT", "JP", "Other"]
-    assert custom.counted == ["FPT", "Other"]
-    assert custom.excluded == ["JP"]
+    assert custom.counted == ["FPT"]
+    # Two groups leave the figures for different reasons: JP because the config
+    # says so, the fallback because it is the fallback.
+    assert custom.excluded == ["JP", "Other"]
 
 
 def test_is_counted_answers_for_a_raw_scope_cell_the_way_classify_does():
@@ -134,16 +158,41 @@ def test_is_counted_answers_for_a_raw_scope_cell_the_way_classify_does():
     })
     assert custom.is_counted("FPT") is True
     assert custom.is_counted("  jp ") is False
-    assert custom.is_counted("Vendor") is True, "the fallback always counts"
+    assert custom.is_counted("Vendor") is False, "the fallback never counts"
 
 
-def test_the_fallback_group_may_not_be_excluded():
-    """It is where a typo'd scope lands. Excluding it would let a mistake vanish
-    from every figure, which is the opposite of what the fallback is for."""
-    with pytest.raises(ValueError, match="fallback"):
+def test_excluding_the_fallback_is_redundant_rather_than_refused():
+    """It never counts either way, so the config saying so changes nothing.
+
+    This reverses an earlier rule. The fallback used to be the group that was
+    forbidden from being excluded, on the grounds that a typo'd scope must not
+    vanish from every figure; it is now the group that is *always* excluded,
+    and Summary's third table is where those cases stay visible instead.
+    """
+    marked = ScopeSet.from_dict({
+        "groups": [{"key": "FPT", "match": ["FPT"]}],
+        "fallback": {"key": "Other", "excluded": True},
+    })
+    plain = ScopeSet.from_dict({
+        "groups": [{"key": "FPT", "match": ["FPT"]}],
+        "fallback": {"key": "Other"},
+    })
+    assert marked.counted == plain.counted == ["FPT"]
+    assert marked.excluded == plain.excluded == ["Other"]
+
+
+def test_some_group_other_than_the_fallback_must_count():
+    """The guarantee the old fallback rule was really making.
+
+    With the fallback counted, at least one group always did. Now that it never
+    does, a config excluding every configured group would leave `counted` empty
+    and every figure in the app reading zero — so it is refused at the door
+    rather than discovered on screen.
+    """
+    with pytest.raises(ValueError, match="at least one group"):
         ScopeSet.from_dict({
-            "groups": [{"key": "FPT", "match": ["FPT"]}],
-            "fallback": {"key": "Other", "excluded": True},
+            "groups": [{"key": "FPT", "match": ["FPT"], "excluded": True}],
+            "fallback": {"key": "Other"},
         })
 
 
@@ -155,7 +204,7 @@ def test_to_dict_tells_the_view_which_groups_the_figures_include():
         ],
         "fallback": {"key": "Other"},
     }).to_dict() == {"groups": [
-        {"key": "FPT", "label": "FPT", "counted": True},
-        {"key": "JP", "label": "JP", "counted": False},
-        {"key": "Other", "label": "Other", "counted": True},
+        {"key": "FPT", "label": "FPT", "counted": True, "fallback": False},
+        {"key": "JP", "label": "JP", "counted": False, "fallback": False},
+        {"key": "Other", "label": "Other", "counted": False, "fallback": True},
     ]}

@@ -35,9 +35,15 @@ class ScopeGroup:
     #: together. Absent from a config means True, so nothing changes for a
     #: config written before the field existed.
     counted: bool = True
+    #: Whether this is the catch-all group. Exactly one group carries it, it is
+    #: always last, and it is never `counted`. Summary reports the three roles
+    #: -- counted, excluded, catch-all -- as three tables, and this is what
+    #: tells the three apart without the browser naming a scope of its own.
+    fallback: bool = False
 
     def to_dict(self) -> dict:
-        return {"key": self.key, "label": self.label, "counted": self.counted}
+        return {"key": self.key, "label": self.label, "counted": self.counted,
+                "fallback": self.fallback}
 
 
 class ScopeSet:
@@ -115,13 +121,29 @@ class ScopeSet:
             raise ValueError(f"{source}: fallback key '{fb_key}' duplicates a configured group")
         if fb_key.casefold() in lookup:
             raise ValueError(f"{source}: fallback '{fb_key}' is also a 'match' value")
-        # The fallback is the group a typo lands in. Excluding it would let a
-        # misspelled scope drop out of every figure in the app without saying
-        # so, which is precisely the silence the fallback exists to prevent.
-        if fallback.get("excluded"):
-            raise ValueError(f"{source}: the fallback group may not be 'excluded'")
+        # The fallback never counts, and the config does not get a say.
+        #
+        # It is the group an unrecognised scope lands in, and an unrecognised
+        # scope is not a commitment anybody made -- so it cannot sit in the
+        # denominator progress is read against. Summary gives it a table of its
+        # own, drawn whenever it holds anything, which is where these cases stay
+        # visible; `"excluded"` on the fallback is therefore not refused any
+        # more, it is simply redundant and ignored.
+        #
+        # What this costs is worth stating: a misspelt Scope now reaches no
+        # figure in the app except that table. The guarantee the old rule was
+        # really making -- that *something* counts -- is the one below, which is
+        # what stops a config leaving every figure in the app reading zero.
+        counted_groups = [g.key for g in groups if g.counted]
+        if not counted_groups:
+            raise ValueError(
+                f"{source}: at least one group other than the fallback must count "
+                f"toward the total; every group here is 'excluded', which would "
+                f"leave every figure in the app reading zero"
+            )
 
-        groups.append(ScopeGroup(key=fb_key, label=str(fallback.get("label") or fb_key)))
+        groups.append(ScopeGroup(key=fb_key, label=str(fallback.get("label") or fb_key),
+                                 counted=False, fallback=True))
         return cls(groups, lookup, fb_key)
 
     @staticmethod

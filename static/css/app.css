@@ -870,36 +870,60 @@ textarea.input {
 
 .scope-cards { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 
+/*
+ * A scope pill: the label, and how many cases are behind it.
+ *
+ * Shaped and pressed like `.toggle`, which is what it is — `--r-full` because
+ * its whole job is to be pressed, and a pressed one is an inverted ink block,
+ * the same selection treatment the rail and the primary buttons use. It was
+ * `--r-md` with a sunk-paper press, which read as a small card that happened to
+ * be clickable rather than as a control.
+ *
+ * It keeps the count `.toggle` has no room for, because a scope you cannot size
+ * is a scope you cannot decide about. The label is therefore set in sentence
+ * case at body size rather than as an uppercased eyebrow: "JM Support" is a
+ * name here, not a column heading over the figure beside it.
+ */
 .chip-card {
     appearance: none;
     display: inline-flex;
     align-items: baseline;
     gap: var(--sp-2);
-    padding: var(--sp-2) var(--sp-3);
+    min-height: var(--ctl-h);
+    padding: var(--sp-1) var(--sp-3);
     border: 1px solid var(--rule);
-    border-radius: var(--r-md);
+    border-radius: var(--r-full);
     background: var(--paper-raised);
     font: inherit;
+    font-size: var(--fs-sm);
+    font-weight: 500;
     color: inherit;
+    white-space: nowrap;
     cursor: pointer;
+    transition: background 90ms ease-out, color 90ms ease-out,
+                border-color 90ms ease-out;
 }
 .chip-card:hover { border-color: var(--rule-strong); }
-.chip-card[aria-pressed="true"] { border-color: var(--ink); background: var(--paper-sunk); }
+.chip-card[aria-pressed="true"] {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--ink-invert);
+}
 .chip-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
-.chip-card-label {
-    color: var(--ink-soft);
-    font-size: var(--fs-xs);
-    font-weight: 600;
-    letter-spacing: var(--ls-eyebrow);
-    text-transform: uppercase;
-}
-.chip-card[aria-pressed="true"] .chip-card-label { color: var(--ink); }
+.chip-card-label { color: inherit; }
 
+/* The count is the quieter half: you read the name to choose and the figure to
+   decide, so it recedes in both states rather than only the unpressed one. On
+   an ink block that means stepping the inverted ink down, not reaching for
+   `--ink-soft`, which is a *dark* grey and would all but vanish. */
 .chip-card-value {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-weight: 600;
+    color: var(--ink-soft);
+}
+.chip-card[aria-pressed="true"] .chip-card-value {
+    color: color-mix(in srgb, var(--ink-invert) 65%, transparent);
 }
 
 /* A group the plan excludes: the same dashed rule its Summary table carries and
@@ -909,6 +933,12 @@ textarea.input {
     border-style: dashed;
     border-color: var(--rule-strong);
     background: none;
+}
+/* Pressed, it is still an ink block — the dash has to survive on top of it, or
+   adding work outside the plan would look identical to adding work inside it. */
+.chip-card--aside[aria-pressed="true"] {
+    background: var(--ink);
+    border-color: var(--ink-invert);
 }
 
 

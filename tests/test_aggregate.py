@@ -17,9 +17,16 @@ def case(**kwargs):
     `models.TestCase` is reached through the module rather than imported by name:
     pytest tries to collect any module-level class called `Test*` and warns when
     it cannot.
+
+    The default scope is a counted one. A blank Scope is not an unrecognised
+    scope but a row that is not a case at all, so `_cases_for_config` drops it
+    before a `TestCase` exists -- a fixture defaulting to `scope=None` was
+    building something the reader never produces, and since the fallback stopped
+    counting it would drop straight out of every figure under test.
     """
     return models.TestCase(**{
         "file_name": "TC.xlsx", "sheet": "Login", "device": "iPhone", "row_num": 4,
+        "scope": "FPT",
         **kwargs,
     })
 
@@ -219,7 +226,7 @@ def test_summary_rows_are_not_split_by_scope_by_default():
     assert "scope" not in rows[0]
 
 
-def test_by_scope_splits_each_file_and_device_into_its_scope_groups():
+def test_by_scope_splits_each_file_and_device_into_its_scope_groups(fixed_scopes):
     rows, _ = aggregate.summary_rows([
         case(result="OK", scope="FPT"),
         case(result="OK", scope="FPT (JM Support)"),
@@ -230,7 +237,7 @@ def test_by_scope_splits_each_file_and_device_into_its_scope_groups():
     assert all(r["file"] == "TC.xlsx" and r["device"] == "iPhone" for r in rows)
 
 
-def test_an_unconfigured_or_blank_scope_lands_in_the_fallback_group():
+def test_an_unconfigured_or_blank_scope_lands_in_the_fallback_group(fixed_scopes):
     """Nothing may go missing: the tables have to account for every case."""
     rows, _ = aggregate.summary_rows([
         case(result="OK", scope="Vendor"),
@@ -321,13 +328,20 @@ def jp_is_not_in_the_plan():
 
 
 def test_in_plan_keeps_only_the_cases_whose_scope_group_counts(jp_is_not_in_the_plan):
+    """Neither an excluded group nor the fallback is in the plan.
+
+    "Vendor" is configured nowhere, so it lands in the fallback -- and an
+    unrecognised scope names no commitment anyone made, so it cannot sit in the
+    denominator either. Summary's third table is where those cases stay visible;
+    this is the figure they leave.
+    """
     kept = aggregate.in_plan([
         case(result="OK", scope="FPT"),
         case(result="OK", scope="JP", row_num=5),
         case(result="OK", scope="Vendor", row_num=6),
     ])
 
-    assert [c.scope for c in kept] == ["FPT", "Vendor"], "the fallback is in the plan"
+    assert [c.scope for c in kept] == ["FPT"]
 
 
 def test_daily_rows_leave_out_an_excluded_scope(jp_is_not_in_the_plan):
@@ -381,7 +395,7 @@ def test_summary_rows_still_report_an_excluded_scope(jp_is_not_in_the_plan):
 # plan excludes. A Scope column that could only ever say FPT would not be one.
 
 
-def test_file_rows_group_by_sheet_scope_and_device():
+def test_file_rows_group_by_sheet_scope_and_device(fixed_scopes):
     data = aggregate.file_rows([
         case(sheet="Login", scope="FPT", result="OK"),
         case(sheet="Login", scope="FPT", result="NG", device="iPad"),
@@ -493,7 +507,7 @@ def test_an_unknown_file_has_no_rows_and_no_cases():
     assert data == {"file": "Nope.xlsx", "rows": [], "cases": []}
 
 
-def test_every_file_case_names_the_scope_group_it_was_classified_into():
+def test_every_file_case_names_the_scope_group_it_was_classified_into(fixed_scopes):
     """The rows are keyed by group and the cases carry a raw Scope string, so
     the page would filter the two halves by two different vocabularies unless
     the classification rides along — the reasoning behind `device_family`."""
@@ -568,7 +582,7 @@ def test_status_cases_keep_work_the_plan_excludes(jp_is_not_in_the_plan):
     assert [c["scope"] for c in cases] == ["FPT", "JP"]
 
 
-def test_every_status_case_names_the_scope_group_it_was_classified_into():
+def test_every_status_case_names_the_scope_group_it_was_classified_into(fixed_scopes):
     """Detail filters by group and the cell carries a raw string — one
     vocabulary, for the reason `file_rows` carries `scope_group` too."""
     cases = aggregate.status_cases([
