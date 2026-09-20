@@ -10,6 +10,7 @@ from tcm.web import routes
 from app import create_app
 from tcm.domain import case as models
 from tcm.domain.ports import Snapshot
+from tcm.services.identity import IdentityService
 from tcm.services.publishing import SheetMissing
 from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.graph.auth import NotConfigured, NotSignedIn
@@ -23,9 +24,6 @@ def client(monkeypatch):
     app = create_app()
     app.config.update(TESTING=True)
     routes._workspace = Workspace(ExcelCaseLoader(), InMemoryCaseStore())
-    routes._reset_login()
-    # Run the background sign-in poll inline, so a test never waits on a thread.
-    monkeypatch.setattr(routes, "_spawn", lambda fn, *args: fn(*args))
     with app.test_client() as c:
         yield c
 
@@ -67,7 +65,9 @@ class FakeAuth:
 
 
 def use_auth(monkeypatch, auth):
-    monkeypatch.setattr(routes, "_auth", auth)
+    # Run the background sign-in poll inline, so a test never waits on a thread.
+    monkeypatch.setattr(routes, "_identity",
+                         IdentityService(auth, spawn=lambda fn, *args: fn(*args)))
     return auth
 
 

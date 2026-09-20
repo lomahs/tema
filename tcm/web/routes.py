@@ -1,6 +1,5 @@
 import logging
 import os
-import threading
 
 from flask import Blueprint, jsonify, request
 
@@ -13,6 +12,7 @@ from tcm.domain.scope import SCOPES
 from tcm.domain.status import STATUS
 from tcm.services import preparation as runner
 from tcm.infrastructure.excel.clearing import DEFAULT_KEEP
+from tcm.services.identity import IdentityService
 from tcm.services.publishing import SheetMissing, publish_to_url
 from tcm.infrastructure.graph.auth import GraphAuth, NotConfigured, NotSignedIn
 from tcm.infrastructure.graph.client import GraphClient, GraphError
@@ -33,25 +33,10 @@ _auth = GraphAuth(
     cache_path=config.GRAPH_TOKEN_CACHE,
 )
 
-#: A device login in progress. The user has been shown a code and is off typing
-#: it into microsoft.com/devicelogin; a background thread waits for them.
-_login = {}
-_login_lock = threading.Lock()
-
-
-def _reset_login():
-    with _login_lock:
-        _login.clear()
-        _login.update({"state": "idle", "user_code": None,
-                       "verification_uri": None, "error": None})
-
-
-_reset_login()
-
-
-def _spawn(fn, *args):
-    """Run `fn` off the request thread. Replaced in tests to run inline."""
-    threading.Thread(target=fn, args=args, daemon=True).start()
+#: The device-code sign-in flow, and at most one login in progress. Moved into
+#: the app factory in a later task; module-level here so this task changes
+#: one thing at a time.
+_identity = IdentityService(_auth)
 
 #: Moved into the app factory in the next task; module-level here so this
 #: task changes one thing at a time.
@@ -360,20 +345,7 @@ def sharepoint_status():
     folds the in-progress login into the answer rather than exposing a second
     endpoint for it.
     """
-    status = _auth.status()
-    with _login_lock:
-        pending = _login["state"] == "pending"
-        snapshot = dict(_login)
-
-    if status["state"] == "signed_in":
-        return jsonify(status)
-    if pending:
-        return jsonify({**status, "state": "pending",
-                        "user_code": snapshot["user_code"],
-                        "verification_uri": snapshot["verification_uri"]})
-    if snapshot["error"]:
-        return jsonify({**status, "error": snapshot["error"]})
-    return jsonify(status)
+    return jsonify(_identity.status())
 
 
 @api.route("/api/sharepoint/login", methods=["POST"])
@@ -385,45 +357,20 @@ def sharepoint_login():
     can take would hold the single-threaded dev server hostage.
     """
     try:
-        flow = _auth.begin_device_login()
+        body, status = _identity.begin_login()
     except NotConfigured as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         log.exception("Could not start the device login")
         return jsonify({"error": f"Could not start sign-in: {e}"}), 502
 
-    with _login_lock:
-        _login.update({"state": "pending", "error": None,
-                       "user_code": flow.get("user_code"),
-                       "verification_uri": flow.get("verification_uri")})
-
-    _spawn(_await_login, flow)
-
-    return jsonify({
-        "user_code": flow.get("user_code"),
-        "verification_uri": flow.get("verification_uri"),
-        "expires_in": flow.get("expires_in"),
-    })
-
-
-def _await_login(flow):
-    """Wait out the device flow, then leave the outcome where status can see it."""
-    try:
-        _auth.complete_device_login(flow)
-    except Exception as e:
-        log.warning("Device login did not complete: %s", e)
-        with _login_lock:
-            _login.update({"state": "failed", "error": str(e)})
-        return
-    _reset_login()
+    return jsonify(body), status
 
 
 @api.route("/api/sharepoint/logout", methods=["POST"])
 def sharepoint_logout():
     """POST /api/sharepoint/logout — forget the cached account."""
-    _auth.sign_out()
-    _reset_login()
-    return jsonify(_auth.status())
+    return jsonify(_identity.sign_out())
 
 
 @api.route("/api/report/publish", methods=["POST"])
@@ -445,7 +392,7 @@ def publish_report():
         return jsonify({"error": "No test cases loaded. Load a source first."}), 400
 
     try:
-        _auth.token()
+        _identity.token()
     except NotConfigured as e:
         return jsonify({"error": str(e)}), 400
     except NotSignedIn as e:
