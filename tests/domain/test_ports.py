@@ -20,3 +20,13 @@ def test_the_publisher_fake_is_a_report_workbook():
     """The fake and the real client answer to one interface, or they drift."""
     from tests.services.test_publisher import FakeWorkbook
     assert issubclass(FakeWorkbook, ports.ReportWorkbook)
+
+
+def test_the_excel_loader_is_a_case_loader():
+    from tcm.infrastructure.excel.loader import ExcelCaseLoader
+    assert issubclass(ExcelCaseLoader, ports.CaseLoader)
+
+
+def test_the_memory_store_is_a_case_store():
+    from tcm.infrastructure.store.memory import InMemoryCaseStore
+    assert issubclass(InMemoryCaseStore, ports.CaseStore)

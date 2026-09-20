@@ -8,7 +8,6 @@ from tcm.services import aggregation as aggregate
 import tcm.settings as config
 from tcm.services import settings_store as config_store
 from tcm.infrastructure.dialog import DialogError, pick_files, pick_folder
-from tcm.infrastructure.excel.reader import load_from_folder, load_from_files
 from tcm.domain.device import DEVICES
 from tcm.domain.scope import SCOPES
 from tcm.domain.status import STATUS
@@ -17,12 +16,15 @@ from tcm.infrastructure.excel.clearing import DEFAULT_KEEP
 from tcm.services.publishing import SheetMissing, publish_to_url
 from tcm.infrastructure.graph.auth import GraphAuth, NotConfigured, NotSignedIn
 from tcm.infrastructure.graph.client import GraphClient, GraphError
+from tcm.infrastructure.excel.loader import ExcelCaseLoader
+from tcm.infrastructure.store.memory import InMemoryCaseStore
+from tcm.services.workspace import Workspace
 
 log = logging.getLogger(__name__)
 
 api = Blueprint("api", __name__)
 
-#: The signed-in identity. Module-level for the same reason `_data` is: this is
+#: The signed-in identity. Module-level for the same reason `_workspace` is: this is
 #: a single-user local tool, and there is one person at the keyboard.
 _auth = GraphAuth(
     client_id=config.GRAPH_CLIENT_ID,
@@ -51,51 +53,9 @@ def _spawn(fn, *args):
     """Run `fn` off the request thread. Replaced in tests to run inline."""
     threading.Thread(target=fn, args=args, daemon=True).start()
 
-# In-memory store
-_data = {
-    "cases": [],
-    "file_results": [],
-    "source": None,  # {"type": "folder"|"files", "value": str|list}
-}
-
-
-def _load(source_type: str, value):
-    """Load a folder or file list into the in-memory store.
-
-    The store is only updated once the load succeeds, so a failed call leaves
-    the previously loaded data — and the `source` that `/api/reload` reuses —
-    untouched.
-
-    Args:
-        source_type: Either "folder" or "files".
-        value: A folder path, or a list of file paths.
-
-    Returns:
-        A `(body, http_status)` tuple, ready to hand to `jsonify`.
-    """
-    if source_type == "folder":
-        path = os.path.abspath(value)
-        if not os.path.isdir(path):
-            return {"error": f"Folder not found: {value}"}, 400
-        cases, file_results = load_from_folder(path)
-        source = {"type": "folder", "value": path}
-    else:
-        paths = [os.path.abspath(f) for f in value]
-        missing = [f for f in paths if not os.path.isfile(f)]
-        if missing:
-            return {"error": f"Files not found: {missing}"}, 400
-        cases, file_results = load_from_files(paths)
-        source = {"type": "files", "value": paths}
-
-    # Only remember the source once the load actually got that far.
-    _data["source"] = source
-    _data["cases"] = cases
-    _data["file_results"] = file_results
-    return {
-        "loaded": len(cases),
-        "file_count": len(file_results),
-        "file_results": file_results,
-    }, 200
+#: Moved into the app factory in the next task; module-level here so this
+#: task changes one thing at a time.
+_workspace = Workspace(ExcelCaseLoader(), InMemoryCaseStore())
 
 
 @api.route("/api/load", methods=["POST"])
@@ -106,9 +66,9 @@ def load_data():
     """
     body = request.get_json(silent=True) or {}
     if "folder" in body:
-        result, status = _load("folder", body["folder"])
+        result, status = _workspace.load_folder(body["folder"])
     elif "files" in body and isinstance(body["files"], list):
-        result, status = _load("files", body["files"])
+        result, status = _workspace.load_files(body["files"])
     else:
         return jsonify({"error": "Provide 'folder' or 'files' in request body"}), 400
     return jsonify(result), status
@@ -120,10 +80,7 @@ def reload_data():
 
     Errors with 400 if nothing has been loaded yet.
     """
-    src = _data["source"]
-    if not src:
-        return jsonify({"error": "No data loaded yet. Use /api/load first."}), 400
-    result, status = _load(src["type"], src["value"])
+    result, status = _workspace.reload()
     return jsonify(result), status
 
 
@@ -240,12 +197,12 @@ def get_cases():
                      f"expected one of {', '.join(STATUS.keys)}"
         }), 400
 
-    return jsonify(aggregate.status_cases(_data["cases"], key))
+    return jsonify(aggregate.status_cases(_workspace.cases, key))
 
 
 @api.route("/api/summary")
 def get_summary():
-    groups, missing_reason = aggregate.summary_rows(_data["cases"], by_scope=True)
+    groups, missing_reason = aggregate.summary_rows(_workspace.cases, by_scope=True)
     # The rows stay whole — Summary draws a table per group, including one that
     # is out of the plan — but the "Missing reason" figure is a link into
     # Review, and Review holds only cases in the plan. A count of rows the
@@ -282,7 +239,7 @@ def get_file():
     if not name:
         return jsonify({"error": "No file name given."}), 400
 
-    data = aggregate.file_rows(_data["cases"], name)
+    data = aggregate.file_rows(_workspace.cases, name)
     if not data["cases"]:
         return jsonify({"error": f"No loaded file is called {name}."}), 404
     return jsonify(data)
@@ -291,13 +248,13 @@ def get_file():
 @api.route("/api/daily")
 def get_daily():
     """Stats grouped by file, device, PIC, and test_date."""
-    return jsonify(aggregate.daily_rows(_data["cases"]))
+    return jsonify(aggregate.daily_rows(_workspace.cases))
 
 
 @api.route("/api/productivity")
 def get_productivity():
     """Cases executed per working day, per PIC."""
-    return jsonify(aggregate.productivity_rows(_data["cases"]))
+    return jsonify(aggregate.productivity_rows(_workspace.cases))
 
 
 # --- Preparing the workbooks -----------------------------------------------
@@ -320,14 +277,14 @@ def _requested_files(body) -> tuple[list[str], dict | None]:
     skipped: the user cannot have chosen it, and these operations overwrite
     files.
     """
-    if not _data["source"]:
+    if not _workspace.source:
         return [], ({"error": "No data loaded yet. Use /api/load first."}, 400)
 
     raw = body.get("files")
     if not isinstance(raw, list) or not raw:
         return [], ({"error": "Provide 'files' as a non-empty list of paths"}, 400)
 
-    allowed = {os.path.abspath(p) for p in runner.source_workbooks(_data["source"])}
+    allowed = {os.path.abspath(p) for p in _workspace.source_workbooks()}
     paths = [os.path.abspath(p) for p in raw]
     unknown = [p for p in paths if p not in allowed]
     if unknown:
@@ -339,10 +296,10 @@ def _requested_files(body) -> tuple[list[str], dict | None]:
 @api.route("/api/prepare/files")
 def prepare_files():
     """GET /api/prepare/files - the loaded source's workbooks and their state."""
-    if not _data["source"]:
+    if not _workspace.source:
         return jsonify({"error": "No data loaded yet. Use /api/load first."}), 400
 
-    return jsonify({"files": runner.describe(runner.source_workbooks(_data["source"]))})
+    return jsonify({"files": runner.describe(_workspace.source_workbooks())})
 
 
 @api.route("/api/prepare/tool-data", methods=["POST"])
@@ -482,7 +439,7 @@ def publish_report():
     if not url:
         return jsonify({"error": "Provide the SharePoint 'url' of the report file"}), 400
 
-    if not _data["cases"]:
+    if not _workspace.cases:
         # Publishing nothing would clear the day's rows and write none back, so
         # a mis-click before loading must not reach the file.
         return jsonify({"error": "No test cases loaded. Load a source first."}), 400
@@ -496,7 +453,7 @@ def publish_report():
 
     graph = GraphClient(_auth.token)
     try:
-        result = publish_to_url(_data["cases"], graph, url, run_date=body.get("run_date"))
+        result = publish_to_url(_workspace.cases, graph, url, run_date=body.get("run_date"))
     except (SheetMissing, ValueError) as e:
         return jsonify({"error": str(e)}), 400
     except GraphError as e:

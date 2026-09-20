@@ -7,6 +7,9 @@ from app import create_app
 from tcm.domain.device import DEVICES
 from tcm.domain.scope import SCOPES
 from tcm.domain.status import STATUS
+from tcm.infrastructure.excel.loader import ExcelCaseLoader
+from tcm.infrastructure.store.memory import InMemoryCaseStore
+from tcm.services.workspace import Workspace
 from tests.conftest import config_row, write_workbook
 
 
@@ -14,7 +17,7 @@ from tests.conftest import config_row, write_workbook
 def client():
     app = create_app()
     app.config.update(TESTING=True)
-    routes._data.update({"cases": [], "file_results": [], "source": None})
+    routes._workspace = Workspace(ExcelCaseLoader(), InMemoryCaseStore())
     with app.test_client() as c:
         yield c
 
@@ -123,7 +126,7 @@ def test_reload_before_any_load_is_rejected(client):
 def test_load_rejects_a_missing_folder(client):
     res = client.post("/api/load", json={"folder": "/nope/not/here"})
     assert res.status_code == 400
-    assert routes._data["source"] is None, "a failed load must not become the reload source"
+    assert routes._workspace.source is None, "a failed load must not become the reload source"
 
 
 def test_load_without_a_source_is_rejected(client):
@@ -190,7 +193,7 @@ def test_browsing_does_not_disturb_the_loaded_source(client, workbook_dir, monke
 
     client.post("/api/browse", json={"mode": "folder"})
 
-    assert routes._data["source"] == {"type": "folder", "value": workbook_dir}
+    assert routes._workspace.source == {"type": "folder", "value": workbook_dir}
 
 
 def test_cases_carry_a_server_computed_status(client, workbook_dir):

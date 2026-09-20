@@ -12,8 +12,11 @@ from openpyxl import load_workbook
 
 from tcm.web import routes
 from app import create_app
+from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.excel.reader import parse_tool_data
 from tcm.infrastructure.excel.workbook import has_tool_data
+from tcm.infrastructure.store.memory import InMemoryCaseStore
+from tcm.services.workspace import Workspace
 from tests.conftest import config_row, write_workbook
 
 
@@ -21,7 +24,7 @@ from tests.conftest import config_row, write_workbook
 def client():
     app = create_app()
     app.config.update(TESTING=True)
-    routes._data.update({"cases": [], "file_results": [], "source": None})
+    routes._workspace = Workspace(ExcelCaseLoader(), InMemoryCaseStore())
     with app.test_client() as c:
         yield c
 

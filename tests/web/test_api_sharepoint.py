@@ -9,16 +9,20 @@ import pytest
 from tcm.web import routes
 from app import create_app
 from tcm.domain import case as models
+from tcm.domain.ports import Snapshot
 from tcm.services.publishing import SheetMissing
+from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.graph.auth import NotConfigured, NotSignedIn
 from tcm.infrastructure.graph.client import GraphError
+from tcm.infrastructure.store.memory import InMemoryCaseStore
+from tcm.services.workspace import Workspace
 
 
 @pytest.fixture
 def client(monkeypatch):
     app = create_app()
     app.config.update(TESTING=True)
-    routes._data.update({"cases": [], "file_results": [], "source": None})
+    routes._workspace = Workspace(ExcelCaseLoader(), InMemoryCaseStore())
     routes._reset_login()
     # Run the background sign-in poll inline, so a test never waits on a thread.
     monkeypatch.setattr(routes, "_spawn", lambda fn, *args: fn(*args))
@@ -68,8 +72,10 @@ def use_auth(monkeypatch, auth):
 
 
 def load_a_case():
-    routes._data["cases"] = [models.TestCase(
+    cases = [models.TestCase(
         file_name="TC.xlsx", sheet="Login", device="iPhone", row_num=4, result="OK")]
+    routes._workspace._store.put(Snapshot(cases=cases))
+    return cases
 
 
 # --- status ----------------------------------------------------------------
@@ -166,7 +172,7 @@ def publishes(monkeypatch, result=None, raises=None):
 def test_publishing_writes_what_is_loaded_and_reports_back(client, monkeypatch):
     use_auth(monkeypatch, FakeAuth("signed_in", "qa@contoso.com"))
     seen = publishes(monkeypatch)
-    load_a_case()
+    cases = load_a_case()
 
     res = client.post("/api/report/publish",
                       json={"url": "https://contoso.sharepoint.com/r.xlsx"})
@@ -174,7 +180,7 @@ def test_publishing_writes_what_is_loaded_and_reports_back(client, monkeypatch):
     assert res.status_code == 200
     assert res.get_json()["file"] == "QA Report.xlsx"
     assert res.get_json()["sheets"][0]["appended"] == 1
-    assert seen["cases"] == routes._data["cases"]
+    assert seen["cases"] == cases
     assert seen["url"] == "https://contoso.sharepoint.com/r.xlsx"
 
 
