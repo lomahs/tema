@@ -13,3 +13,6 @@ snapshots/
 
 # Microsoft Graph refresh tokens, if GRAPH_TOKEN_CACHE points inside the repo
 graph_token_cache.json
+
+# Worktrees created for isolated work
+.claude/worktrees/
