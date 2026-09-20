@@ -8,8 +8,8 @@ from datetime import date, datetime
 import pandas as pd
 from openpyxl.utils import column_index_from_string
 
-from parser.models import CASE_COLUMNS, SheetConfig, TestCase
-from parser.scope import SCOPES
+from tcm.domain.case import CASE_COLUMNS, SheetConfig, TestCase
+from tcm.domain.scope import SCOPES
 
 log = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import pytest
 
 from api import routes
 from app import create_app
-from parser import models
+from tcm.domain import case as models
 from report.publisher import SheetMissing
 from sharepoint.auth import NotConfigured, NotSignedIn
 from sharepoint.client import GraphError

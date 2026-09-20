@@ -26,8 +26,8 @@ from dataclasses import dataclass
 
 from openpyxl.utils import get_column_letter
 
-from parser.models import SheetConfig
-from parser.sheet_labels import LABELS, RESULT_FIELDS
+from tcm.domain.case import SheetConfig
+from tcm.domain.sheet_labels import LABELS, RESULT_FIELDS
 
 
 log = logging.getLogger(__name__)

@@ -6,7 +6,7 @@ import pytest
 from parser.excel_reader import (
     find_workbooks, load_file, load_from_files, load_from_folder,
 )
-from parser.models import SheetConfig
+from tcm.domain.case import SheetConfig
 from tests.conftest import config_row, write_workbook
 
 # One device block in A-G, a second in A,B + H-L.

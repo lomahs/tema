@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from openpyxl import load_workbook
 
 from parser.excel_reader import TOOL_DATA_COLUMNS, TOOL_DATA_SHEET
-from parser.models import SheetConfig
+from tcm.domain.case import SheetConfig
 from parser.tool_data_builder import Unresolved, detect_workbook_configs
 from prepare.workbook import read_sheets
 

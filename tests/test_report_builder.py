@@ -1,6 +1,6 @@
 """Turning aggregate rows into the cell grid a sheet's layout asks for."""
 from report.builder import build_rows
-from report.layout import ReportLayout
+from tcm.domain.report_layout import ReportLayout
 
 
 def sheet_layout(dataset, columns, **overrides):
@@ -35,7 +35,7 @@ def test_the_run_date_is_stamped_on_every_row():
 
 
 def test_status_columns_carry_the_counts_in_taxonomy_order():
-    from parser.status import STATUS
+    from tcm.domain.status import STATUS
 
     layout = sheet_layout("summary", [{"field": "run_date"}, {"expand": "statuses"}])
     counts = {**STATUS.zero_counts(), "OK": 5, "NG": 2}

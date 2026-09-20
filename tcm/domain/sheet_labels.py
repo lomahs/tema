@@ -26,7 +26,8 @@ from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
-DEFAULT_LABELS_PATH = os.path.join(os.path.dirname(__file__), "sheet_labels.json")
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_LABELS_PATH = os.path.join(_ROOT, "config", "sheet_labels.json")
 
 # The two columns every device block on a sheet shares, as `SheetConfig` names them.
 HEADER_FIELDS = ("test_no_col", "scope_col")
@@ -147,7 +148,7 @@ class SheetLabels:
 
 
 def _load_default() -> SheetLabels:
-    from config import SHEET_LABELS_CONFIG
+    from tcm.settings import SHEET_LABELS_CONFIG
 
     path = SHEET_LABELS_CONFIG
     try:

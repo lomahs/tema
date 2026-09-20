@@ -9,10 +9,10 @@ import json
 import pytest
 
 import config_store
-from parser.scope import SCOPES
-from parser.sheet_labels import LABELS
-from parser.status import STATUS
-from report.layout import LAYOUT
+from tcm.domain.scope import SCOPES
+from tcm.domain.sheet_labels import LABELS
+from tcm.domain.status import STATUS
+from tcm.domain.report_layout import LAYOUT
 
 #: Every test here writes a config and mutates the live singletons.
 pytestmark = pytest.mark.usefixtures("restore_configs")
@@ -82,7 +82,7 @@ def test_an_unknown_config_name_is_refused(config_paths):
 # --- applying live ---------------------------------------------------------
 
 def test_saving_the_taxonomy_reaches_an_already_imported_STATUS(config_paths):
-    """`from parser.status import STATUS` binds the object, so it is mutated.
+    """`from tcm.domain.status import STATUS` binds the object, so it is mutated.
 
     Five modules hold that binding. If `save` built a new StatusSet instead of
     changing this one, four of them would go on classifying by the old rules.
@@ -216,7 +216,7 @@ def test_a_refusal_names_the_file_without_its_whole_path(config_paths):
 # --- device families -------------------------------------------------------
 
 def test_saving_device_families_changes_how_a_device_is_classified(config_paths):
-    from parser.device import DEVICES
+    from tcm.domain.device import DEVICES
 
     assert DEVICES.classify("Galaxy S24") == "Galaxy S24"
 

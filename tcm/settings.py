@@ -3,21 +3,23 @@ import os
 PORT = int(os.environ.get("PORT", 5000))
 DEBUG = os.environ.get("DEBUG", "1") not in ("0", "false", "False", "")
 
+# The repository root: this file lives at <root>/tcm/settings.py.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_CONFIG_DIR = os.path.join(_ROOT, "config")
+
 # Result -> status taxonomy. Point at your own file to change the vocabulary
-# without touching code; falls back to parser/result_status.json.
+# without touching code; falls back to config/result_status.json.
 RESULT_STATUS_CONFIG = os.environ.get(
     "RESULT_STATUS_CONFIG",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "parser", "result_status.json"),
+    os.path.join(_CONFIG_DIR, "result_status.json"),
 )
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Which Scope values belong to which Summary table. Same idea as
 # RESULT_STATUS_CONFIG: the vocabulary is data, so renaming a scope or adding a
 # third table is a config edit, not a code change.
 SCOPE_GROUPS_CONFIG = os.environ.get(
     "SCOPE_GROUPS_CONFIG",
-    os.path.join(_HERE, "parser", "scope_groups.json"),
+    os.path.join(_CONFIG_DIR, "scope_groups.json"),
 )
 
 # Which device names belong to which device family, for Summary's "By device
@@ -26,14 +28,14 @@ SCOPE_GROUPS_CONFIG = os.environ.get(
 # SCOPE_GROUPS_CONFIG — testing a new model is a config edit, not a code change.
 DEVICE_GROUPS_CONFIG = os.environ.get(
     "DEVICE_GROUPS_CONFIG",
-    os.path.join(_HERE, "parser", "device_groups.json"),
+    os.path.join(_CONFIG_DIR, "device_groups.json"),
 )
 
 # Which column of the SharePoint report workbook holds which value. Same idea as
 # RESULT_STATUS_CONFIG: point at your own file to match your report's shape.
 REPORT_LAYOUT_CONFIG = os.environ.get(
     "REPORT_LAYOUT_CONFIG",
-    os.path.join(_HERE, "report", "report_layout.json"),
+    os.path.join(_CONFIG_DIR, "report_layout.json"),
 )
 
 # The labels TOOL_DATA detection looks for when reading a sheet's layout. Point
@@ -41,7 +43,7 @@ REPORT_LAYOUT_CONFIG = os.environ.get(
 # rather than "結果", and so on).
 SHEET_LABELS_CONFIG = os.environ.get(
     "SHEET_LABELS_CONFIG",
-    os.path.join(_HERE, "parser", "sheet_labels.json"),
+    os.path.join(_CONFIG_DIR, "sheet_labels.json"),
 )
 
 # --- Microsoft Graph -------------------------------------------------------

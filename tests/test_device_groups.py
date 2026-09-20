@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from parser.device import DEVICES, DeviceSet
+from tcm.domain.device import DEVICES, DeviceSet
 
 MINIMAL = {
     "families": [

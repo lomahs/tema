@@ -16,11 +16,12 @@ from dataclasses import dataclass
 
 from openpyxl.utils import column_index_from_string, get_column_letter
 
-from parser.status import STATUS
+from tcm.domain.status import STATUS
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "report_layout.json")
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_CONFIG_PATH = os.path.join(_ROOT, "config", "report_layout.json")
 
 #: The column every sheet must carry: it is the key the publisher deletes on,
 #: so re-running on the same day replaces that day's rows instead of doubling them.
@@ -199,7 +200,7 @@ def _parse_column(col, where: str, dataset: str, known: list[str], status_set) -
 
 
 def _load_default() -> ReportLayout:
-    from config import REPORT_LAYOUT_CONFIG
+    from tcm.settings import REPORT_LAYOUT_CONFIG
 
     path = REPORT_LAYOUT_CONFIG
     try:

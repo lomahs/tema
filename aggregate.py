@@ -7,9 +7,9 @@ taxonomy stays the single place where the vocabulary is defined.
 """
 from collections import Counter, defaultdict
 
-from parser.device import DEVICES
-from parser.scope import SCOPES
-from parser.status import STATUS
+from tcm.domain.device import DEVICES
+from tcm.domain.scope import SCOPES
+from tcm.domain.status import STATUS
 
 
 def _group_counts(cases, key_fn):

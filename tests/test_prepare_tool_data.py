@@ -10,7 +10,7 @@ import pytest
 from openpyxl import load_workbook
 
 from parser.excel_reader import TOOL_DATA_SHEET, parse_tool_data
-from parser.models import SheetConfig
+from tcm.domain.case import SheetConfig
 from prepare.tool_data import detect_file, diff_configs, write_tool_data_sheet
 from prepare.workbook import has_tool_data, read_sheets
 from tests.conftest import config_row, write_workbook

@@ -5,13 +5,13 @@ import threading
 from flask import Blueprint, jsonify, request
 
 import aggregate
-import config
+import tcm.settings as config
 import config_store
 from api.filedialog import DialogError, pick_files, pick_folder
 from parser.excel_reader import load_from_folder, load_from_files
-from parser.device import DEVICES
-from parser.scope import SCOPES
-from parser.status import STATUS
+from tcm.domain.device import DEVICES
+from tcm.domain.scope import SCOPES
+from tcm.domain.status import STATUS
 from prepare import runner
 from prepare.clear import DEFAULT_KEEP
 from report.publisher import SheetMissing, publish_to_url

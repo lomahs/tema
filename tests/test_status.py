@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from parser.status import STATUS, StatusSet
+from tcm.domain.status import STATUS, StatusSet
 
 MINIMAL = {
     "statuses": [
@@ -218,7 +218,7 @@ def test_tone_is_served_to_the_ui():
 # see that a Cancel naming no PIC was never in the plan.
 
 def _case(result, pic=None):
-    from parser import models
+    from tcm.domain import case as models
     return models.TestCase(file_name="TC.xlsx", sheet="Login", device="iPhone",
                            result=result, pic=pic)
 

@@ -71,12 +71,12 @@ def make_workbook(tmp_path):
 def restore_configs():
     """Put the live config singletons back after a test has written over them."""
     import config_store
-    from parser.scope import SCOPES
-    from parser.sheet_labels import LABELS
-    from parser.status import STATUS
-    from report.layout import LAYOUT
+    from tcm.domain.scope import SCOPES
+    from tcm.domain.sheet_labels import LABELS
+    from tcm.domain.status import STATUS
+    from tcm.domain.report_layout import LAYOUT
 
-    from parser.device import DEVICES
+    from tcm.domain.device import DEVICES
 
     saved = [(obj, dict(obj.__dict__)) for obj in (STATUS, SCOPES, DEVICES, LABELS, LAYOUT)]
     yield config_store
@@ -92,7 +92,7 @@ def config_paths(tmp_path, monkeypatch):
     The repo's own JSON must never be the thing under test: a save that went to
     the wrong place would rewrite the shipped taxonomy.
     """
-    import config as app_config
+    import tcm.settings as app_config
     import config_store
 
     paths = {}
@@ -134,7 +134,7 @@ def fixed_scopes():
     is what makes this reach the eight modules that imported `SCOPES` by name —
     the same mechanism the Config view's save uses.
     """
-    from parser.scope import SCOPES, ScopeSet
+    from tcm.domain.scope import SCOPES, ScopeSet
 
     saved = dict(SCOPES.__dict__)
     SCOPES.adopt(ScopeSet.from_dict(FIXED_SCOPES))

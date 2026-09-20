@@ -8,8 +8,8 @@ from datetime import datetime
 
 import pytest
 
-from parser import models
-from report.layout import ReportLayout
+from tcm.domain import case as models
+from tcm.domain.report_layout import ReportLayout
 from report.publisher import SheetMissing, publish
 from sharepoint.workbook import UsedRange
 
@@ -273,7 +273,7 @@ def test_publishing_twice_into_a_table_is_idempotent_as_well():
 # --- all three datasets ----------------------------------------------------
 
 def test_every_sheet_in_the_layout_is_published():
-    from report.layout import ReportLayout as RL
+    from tcm.domain.report_layout import ReportLayout as RL
 
     wb = FakeWorkbook({"Summary": [["h"]], "Daily": [["h"]], "Issues": [["h"]]})
     cases = [case(result="NG", test_date="2026-08-05", pic="lee", case_no="TC-2")]
@@ -285,7 +285,7 @@ def test_every_sheet_in_the_layout_is_published():
 
 
 def test_the_issues_sheet_holds_only_the_cases_the_taxonomy_flags():
-    from report.layout import ReportLayout as RL
+    from tcm.domain.report_layout import ReportLayout as RL
 
     wb = FakeWorkbook({"Summary": [["h"]], "Daily": [["h"]], "Issues": [["h"]]})
     cases = [case(result="OK", case_no="TC-1", test_date="2026-08-05"),
@@ -378,7 +378,7 @@ def test_publishing_to_a_url_resolves_the_link_and_names_the_file():
 def test_a_scope_group_outside_the_plan_reaches_no_sheet():
     """Summary's own table still shows it; the published report does not, or the
     report's totals would not be the ones the app reports progress against."""
-    from parser.scope import SCOPES, ScopeSet
+    from tcm.domain.scope import SCOPES, ScopeSet
 
     saved = dict(SCOPES.__dict__)
     SCOPES.adopt(ScopeSet.from_dict({

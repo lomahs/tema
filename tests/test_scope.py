@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from parser.scope import SCOPES, ScopeSet
+from tcm.domain.scope import SCOPES, ScopeSet
 
 MINIMAL = {
     "groups": [

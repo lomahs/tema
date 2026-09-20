@@ -15,7 +15,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
 from parser.excel_reader import TOOL_DATA_SHEET, TOOL_DATA_COLUMNS
-from parser.status import STATUS
+from tcm.domain.status import STATUS
 
 log = logging.getLogger(__name__)
 

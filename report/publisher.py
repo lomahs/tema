@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 
 import aggregate
 from report.builder import build_rows
-from report.layout import LAYOUT, ReportLayout, SheetLayout
+from tcm.domain.report_layout import LAYOUT, ReportLayout, SheetLayout
 from sharepoint.links import share_url_to_item
 from sharepoint.workbook import Workbook
 

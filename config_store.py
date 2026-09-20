@@ -22,7 +22,7 @@ import. So the new text goes to a temp file beside the target and `os.replace`
 swaps it in, which is one filesystem operation.
 
 **An applied edit mutates the live object rather than replacing it.** Five
-modules hold `from parser.status import STATUS`, and rebinding the name in
+modules hold `from tcm.domain.status import STATUS`, and rebinding the name in
 `parser.status` would reach none of them. `adopt` is what makes one save reach
 all of them; see `StatusSet.adopt`.
 
@@ -38,12 +38,12 @@ import tempfile
 from dataclasses import dataclass
 from typing import Callable
 
-import config
-from parser.device import DEVICES, DeviceSet
-from parser.scope import SCOPES, ScopeSet
-from parser.sheet_labels import HEADER_FIELDS, LABELS, RESULT_FIELDS, SheetLabels
-from parser.status import DERIVE_CONDITIONS, STATUS, TONES, StatusSet
-from report.layout import LAYOUT, ReportLayout
+import tcm.settings as config
+from tcm.domain.device import DEVICES, DeviceSet
+from tcm.domain.scope import SCOPES, ScopeSet
+from tcm.domain.sheet_labels import HEADER_FIELDS, LABELS, RESULT_FIELDS, SheetLabels
+from tcm.domain.status import DERIVE_CONDITIONS, STATUS, TONES, StatusSet
+from tcm.domain.report_layout import LAYOUT, ReportLayout
 
 log = logging.getLogger(__name__)
 

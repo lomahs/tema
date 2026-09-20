@@ -1,7 +1,7 @@
 import logging
 from flask import Flask, render_template
 from api.routes import api
-from config import PORT, DEBUG
+from tcm.settings import PORT, DEBUG
 
 logging.basicConfig(
     level=logging.DEBUG if DEBUG else logging.INFO,

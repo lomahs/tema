@@ -22,7 +22,8 @@ from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "scope_groups.json")
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_CONFIG_PATH = os.path.join(_ROOT, "config", "scope_groups.json")
 
 
 @dataclass(frozen=True)
@@ -183,7 +184,7 @@ class ScopeSet:
 
 
 def _load_default() -> ScopeSet:
-    from config import SCOPE_GROUPS_CONFIG
+    from tcm.settings import SCOPE_GROUPS_CONFIG
 
     path = SCOPE_GROUPS_CONFIG
     try:

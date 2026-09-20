@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from report.layout import ReportLayout
+from tcm.domain.report_layout import ReportLayout
 
 MINIMAL = {
     "sheets": [
@@ -35,7 +35,7 @@ def test_the_shipped_default_covers_all_three_datasets():
 
 
 def test_a_status_expansion_becomes_one_column_per_status_in_taxonomy_order():
-    from parser.status import STATUS
+    from tcm.domain.status import STATUS
 
     sheet = ReportLayout.from_dict(MINIMAL).sheets[0]
 
@@ -49,7 +49,7 @@ def test_an_excluded_status_gets_no_report_column():
     It also means adding an excluded status never widens the published sheet, so
     the workbook on SharePoint needs no hand-edited header.
     """
-    from parser.status import STATUS
+    from tcm.domain.status import STATUS
 
     sheet = ReportLayout.from_dict(MINIMAL).sheets[0]
     fields = [c.field for c in sheet.columns]

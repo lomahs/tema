@@ -32,7 +32,8 @@ from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "device_groups.json")
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_CONFIG_PATH = os.path.join(_ROOT, "config", "device_groups.json")
 
 
 @dataclass(frozen=True)
@@ -132,7 +133,7 @@ class DeviceSet:
 
 
 def _load_default() -> DeviceSet:
-    from config import DEVICE_GROUPS_CONFIG
+    from tcm.settings import DEVICE_GROUPS_CONFIG
 
     path = DEVICE_GROUPS_CONFIG
     try:

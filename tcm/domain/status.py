@@ -11,7 +11,8 @@ from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "result_status.json")
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_CONFIG_PATH = os.path.join(_ROOT, "config", "result_status.json")
 
 DEFAULT_BADGE = "bg-secondary"
 
@@ -130,7 +131,7 @@ class StatusSet:
     def adopt(self, other: "StatusSet") -> None:
         """Become `other`, in place.
 
-        Five modules hold `from parser.status import STATUS`, and an imported
+        Five modules hold `from tcm.domain.status import STATUS`, and an imported
         binding cannot be reassigned by whoever rebinds the original. So the
         singleton stays the singleton and its contents change: editing the
         taxonomy from the Config view reaches every one of them at once.
@@ -326,7 +327,7 @@ class StatusSet:
 
 
 def _load_default() -> StatusSet:
-    from config import RESULT_STATUS_CONFIG
+    from tcm.settings import RESULT_STATUS_CONFIG
 
     path = RESULT_STATUS_CONFIG
     try:

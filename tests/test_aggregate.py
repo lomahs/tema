@@ -7,8 +7,8 @@ them without going anywhere near HTTP.
 import pytest
 
 import aggregate
-from parser import models
-from parser.scope import SCOPES
+from tcm.domain import case as models
+from tcm.domain.scope import SCOPES
 
 
 def case(**kwargs):
@@ -312,7 +312,7 @@ def test_the_device_families_of_a_file_add_up_to_its_combined_row():
 @pytest.fixture
 def jp_is_not_in_the_plan():
     """A taxonomy where JP work is reported but not counted toward the total."""
-    from parser.scope import SCOPES, ScopeSet
+    from tcm.domain.scope import SCOPES, ScopeSet
 
     saved = dict(SCOPES.__dict__)
     SCOPES.adopt(ScopeSet.from_dict({

@@ -4,9 +4,9 @@ import pytest
 
 from api import routes
 from app import create_app
-from parser.device import DEVICES
-from parser.scope import SCOPES
-from parser.status import STATUS
+from tcm.domain.device import DEVICES
+from tcm.domain.scope import SCOPES
+from tcm.domain.status import STATUS
 from tests.conftest import config_row, write_workbook
 
 
@@ -520,7 +520,7 @@ def fpt_is_not_in_the_plan():
     the workbook holds no JP cases, so every figure that adds groups together is
     still empty, which is what these tests are about.
     """
-    from parser.scope import ScopeSet
+    from tcm.domain.scope import ScopeSet
 
     saved = dict(SCOPES.__dict__)
     SCOPES.adopt(ScopeSet.from_dict({
