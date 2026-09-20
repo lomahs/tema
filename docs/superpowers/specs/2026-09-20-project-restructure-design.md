@@ -122,14 +122,14 @@ Each has exactly one implementation today and a named reason to exist.
 
 | Port | Implementation | Reason |
 |---|---|---|
-| `ReportWorkbook` | `graph.workbook.Workbook` | `tests/test_publisher.py:17` `FakeWorkbook` already implements exactly its 7 public methods — this writes down an interface that exists |
+| `ReportWorkbook` | `graph.workbook.Workbook` | `tests/test_publisher.py:17` `FakeWorkbook` already implements exactly its 8 public methods — this writes down an interface that exists |
 | `CaseLoader` | `excel.reader.ExcelCaseLoader` | lets `Workspace` be tested without building `.xlsx` fixtures |
 | `CaseStore` | `store.memory.InMemoryCaseStore` | the database seam |
 | `ConfigRepository` | `config_repo.JsonFileConfigRepository` | the settings-in-a-database seam; also isolates the atomic-write logic |
 | `TokenProvider` | `graph.auth.GraphAuth` | per-user tokens later; fakeable now |
 | `FilePicker` | `dialog.NativeDialog` | `tests/test_filedialog.py` already fakes it |
 
-`ReportWorkbook`'s seven methods are `worksheet_names`, `used_range`,
+`ReportWorkbook`'s eight methods are `worksheet_names`, `used_range`,
 `write_values`, `delete_rows`, `table_at`, `table_rows`, `table_add_rows`,
 `table_delete_row`. Widening the port means widening the fake — the rule
 `CLAUDE.md` already states, now enforced by a type.

@@ -6,58 +6,76 @@ Flask web app đọc test case từ các file Excel (.xlsx) và tổng hợp ti�
 
 ```
 test-case-management/
-├── app.py                  # Flask app factory + route "/"
-├── config.py               # PORT, DEBUG, đường dẫn config, thiết lập Graph
-├── aggregate.py            # tổng hợp summary / daily / productivity / issues
+├── app.py                  # entry point: chạy app factory trong tcm/web/app.py
+├── pyproject.toml          # metadata + cấu hình pytest
 ├── requirements.txt
-├── api/
-│   └── routes.py           # Blueprint /api/* + in-memory store
-├── report/
-│   ├── layout.py           # ReportLayout: cột nào của file báo cáo giữ gì
-│   ├── report_layout.json  # cấu hình layout mặc định
-│   ├── builder.py          # dòng tổng hợp -> lưới ô theo layout
-│   └── publisher.py        # ghi 3 bảng vào workbook trên SharePoint
-├── sharepoint/
-│   ├── auth.py             # đăng nhập device code (MSAL), cache token
-│   ├── client.py           # HTTP client cho Graph, retry khi bị throttle
-│   ├── links.py            # URL SharePoint -> driveItem
-│   └── workbook.py         # sửa workbook tại chỗ qua Excel workbook API
-├── parser/
-│   ├── models.py           # SheetConfig, TestCase, CASE_COLUMNS (dataclass)
-│   ├── status.py           # StatusSet: result -> status
+├── config/                 # các file JSON cấu hình (taxonomy, scope, device, nhãn sheet, layout báo cáo)
 │   ├── result_status.json  # cấu hình phân loại kết quả
-│   ├── scope.py            # ScopeSet: Scope -> nhóm bảng Summary
 │   ├── scope_groups.json   # cấu hình nhóm Scope (Summary tách bảng)
-│   ├── device.py           # DeviceSet: tên device -> dòng device
 │   ├── device_groups.json  # cấu hình gộp device (iPhone Min/Max -> iPhone)
-│   ├── excel_reader.py     # đọc TOOL_DATA + test case từ .xlsx
-│   ├── sheet_labels.py     # SheetLabels: nhãn cột mà dò layout tìm
 │   ├── sheet_labels.json   # cấu hình nhãn ("結果", "確認日", "Pad"/"Phone"…)
-│   └── tool_data_builder.py # dò layout của sheet -> các dòng TOOL_DATA
-├── prepare/                # nơi duy nhất ghi vào chính file nguồn
-│   ├── workbook.py         # đọc sheet / kiểm tra có TOOL_DATA chưa
-│   ├── tool_data.py        # tạo, ghi và so sánh (diff) sheet TOOL_DATA
-│   ├── clear.py            # lập kế hoạch & xoá ô kết quả của vòng test cũ
-│   └── runner.py           # chạy 2 thao tác trên nhiều file, lỗi tính theo file
+│   └── report_layout.json  # cấu hình layout mặc định của báo cáo
+├── tcm/
+│   ├── settings.py          # PORT, DEBUG, đường dẫn config, thiết lập Graph
+│   ├── domain/               # model + luật nghiệp vụ thuần, không phụ thuộc I/O
+│   │   ├── case.py            # SheetConfig, TestCase, CASE_COLUMNS (dataclass)
+│   │   ├── status.py          # StatusSet: result -> status
+│   │   ├── scope.py           # ScopeSet: Scope -> nhóm bảng Summary
+│   │   ├── device.py          # DeviceSet: tên device -> dòng device
+│   │   └── sheet_labels.py    # SheetLabels: nhãn cột mà dò layout tìm
+│   ├── infrastructure/       # I/O cụ thể: đọc/ghi Excel, gọi Graph, dựng layout báo cáo
+│   │   ├── dialog.py           # hộp thoại chọn folder/file phía OS
+│   │   ├── excel/
+│   │   │   ├── reader.py        # đọc TOOL_DATA + test case từ .xlsx
+│   │   │   ├── detection.py     # dò layout của sheet -> các dòng TOOL_DATA
+│   │   │   ├── workbook.py      # đọc sheet / kiểm tra có TOOL_DATA chưa
+│   │   │   ├── tool_data.py     # tạo, ghi và so sánh (diff) sheet TOOL_DATA
+│   │   │   └── clearing.py      # lập kế hoạch & xoá ô kết quả của vòng test cũ
+│   │   ├── graph/
+│   │   │   ├── auth.py          # đăng nhập device code (MSAL), cache token
+│   │   │   ├── client.py        # HTTP client cho Graph, retry khi bị throttle
+│   │   │   ├── links.py         # URL SharePoint -> driveItem
+│   │   │   └── workbook.py      # sửa workbook tại chỗ qua Excel workbook API
+│   │   └── report/
+│   │       ├── layout.py        # ReportLayout: cột nào của file báo cáo giữ gì
+│   │       └── builder.py       # dòng tổng hợp -> lưới ô theo layout
+│   ├── services/              # nghiệp vụ điều phối domain + infrastructure
+│   │   ├── aggregation.py      # tổng hợp summary / daily / productivity / issues
+│   │   ├── publishing.py       # ghi 3 bảng vào workbook trên SharePoint
+│   │   ├── preparation.py      # chạy 2 thao tác trên nhiều file, lỗi tính theo file (thao tác trên file nguồn)
+│   │   └── settings_store.py   # đọc/ghi các file JSON cấu hình, validate rồi áp dụng
+│   └── web/
+│       ├── app.py              # Flask app factory
+│       └── routes.py           # Blueprint /api/* + in-memory store
 ├── tools/
 │   ├── generate_samples.py   # sinh file .xlsx mẫu
 │   └── sample_config.json    # config mặc định cho generator
 ├── tests/
 │   ├── conftest.py             # helper dựng file .xlsx cho test
-│   ├── test_status.py
-│   ├── test_excel_reader.py
-│   ├── test_api.py
-│   ├── test_aggregate.py
-│   ├── test_report_layout.py
-│   ├── test_report_builder.py
-│   ├── test_publisher.py
-│   ├── test_publish_integration.py
-│   ├── test_sharepoint_*.py
-│   ├── test_api_sharepoint.py
-│   ├── test_api_prepare.py
-│   ├── test_prepare_clear.py
-│   ├── test_prepare_tool_data.py
-│   └── test_generate_samples.py
+│   ├── test_layering.py        # kiểm tra ranh giới import giữa các layer (đi qua AST)
+│   ├── test_generate_samples.py
+│   ├── domain/
+│   │   ├── test_status.py
+│   │   ├── test_scope.py
+│   │   └── test_device_groups.py
+│   ├── infrastructure/
+│   │   ├── test_excel_reader.py
+│   │   ├── test_filedialog.py
+│   │   ├── test_report_layout.py
+│   │   ├── test_report_builder.py
+│   │   ├── test_sharepoint_*.py
+│   │   ├── test_prepare_clear.py
+│   │   └── test_prepare_tool_data.py
+│   ├── services/
+│   │   ├── test_aggregate.py
+│   │   ├── test_config_store.py
+│   │   ├── test_publisher.py
+│   │   └── test_publish_integration.py
+│   └── web/
+│       ├── test_api.py
+│       ├── test_api_config.py
+│       ├── test_api_sharepoint.py
+│       └── test_api_prepare.py
 ├── templates/
 │   └── index.html          # UI 3 tab: Summary / Daily / Detail
 └── static/

@@ -16,44 +16,72 @@ Use the project venv (Python 3.14) — it holds Flask/pandas/openpyxl:
 ```bash
 .venv/bin/python app.py                      # http://127.0.0.1:5000
 .venv/bin/python -m pytest -q                # all tests
-.venv/bin/python -m pytest tests/test_api.py::test_reload_reuses_the_remembered_source -q   # one test
+.venv/bin/python -m pytest tests/web/test_api.py::test_reload_reuses_the_remembered_source -q   # one test
 .venv/bin/python -m tools.generate_samples --out samples/generated --seed 1  # synthetic .xlsx
 RESULT_STATUS_CONFIG=/path/my_status.json .venv/bin/python app.py            # alternate taxonomy
 ```
 
-`PORT` and `DEBUG` are env vars (see [config.py](config.py)); `DEBUG` defaults to on.
+`PORT` and `DEBUG` are env vars (see [tcm/settings.py](tcm/settings.py)); `DEBUG` defaults to
+on. `RESULT_STATUS_CONFIG` and its siblings each default to a file that ships in
+[config/](config/) — set the env var to point at your own instead of editing the shipped one.
 There is no linter or formatter configured.
 
 ## Architecture
 
-Read flow: browser → `/api/load` → [parser/excel_reader.py](parser/excel_reader.py) →
-in-memory `_data` dict in [api/routes.py](api/routes.py) → [aggregate.py](aggregate.py) →
+Read flow: browser → `/api/load` → [tcm/infrastructure/excel/reader.py](tcm/infrastructure/excel/reader.py) →
+in-memory `_data` dict in [tcm/web/routes.py](tcm/web/routes.py) → [tcm/services/aggregation.py](tcm/services/aggregation.py) →
 the GET endpoints → ES modules under [static/js/](static/js/).
 
-Write flow: `/api/report/publish` → [report/publisher.py](report/publisher.py) →
-[sharepoint/workbook.py](sharepoint/workbook.py) → Microsoft Graph. Reading stays local;
+Write flow: `/api/report/publish` → [tcm/services/publishing.py](tcm/services/publishing.py) →
+[tcm/infrastructure/graph/workbook.py](tcm/infrastructure/graph/workbook.py) → Microsoft Graph. Reading stays local;
 Graph is only ever used to write.
+
+## Layering
+
+The package is layered, and the layering is enforced, not aspirational:
+
+| Layer | May import |
+|---|---|
+| `tcm/settings.py` | nothing from the package — it sits outside the layers deliberately |
+| `tcm/domain/` | `tcm.domain`, `tcm.settings` only — never flask, pandas, openpyxl, requests or msal |
+| `tcm/infrastructure/` | `tcm.domain`, `tcm.settings` |
+| `tcm/services/` | `tcm.domain`, `tcm.infrastructure`, `tcm.services`, `tcm.settings` |
+| `tcm/web/` | anything — the only layer that imports flask |
+
+`services → infrastructure` is deliberate, not a hole in the rule: a service that needs to
+swap its I/O — the fake Graph transport in the publisher tests, for instance — takes a port as
+an argument at that one named boundary, and everywhere else it reaches infrastructure
+concretely. That is narrower than a rule requiring every service call to go through an
+injected interface, and it is the one this codebase chose, because a port at every I/O edge
+is a lot of indirection for a single-user local tool to carry.
+
+[tests/test_layering.py](tests/test_layering.py) is what makes this a rule rather than a
+convention: it walks each module's AST and asserts the import table above, so a stray
+`import openpyxl` in `tcm/domain/` fails the suite instead of drifting in unnoticed. That is
+not a hypothetical — it is what caught `ReportLayout` importing `openpyxl` while that module
+was briefly placed under `tcm/domain/` during the restructure, which is why the report layout
+now lives in `tcm/infrastructure/report/` instead.
 
 **TOOL_DATA is the schema.** Test case sheets have no fixed layout. Each workbook carries a
 `TOOL_DATA` sheet whose rows say, per (sheet, device): the row span and the Excel column
 letter for each field. One sheet usually has several device blocks, so several TOOL_DATA
-rows share a sheet — [load_file](parser/excel_reader.py) groups configs by sheet and parses
+rows share a sheet — [load_file](tcm/infrastructure/excel/reader.py) groups configs by sheet and parses
 each sheet once (`dtype=object`, `header=None`) before slicing per device. Sheets are parsed
 positionally by column letter, never by header name.
 
 **Errors are per-file, not fatal.** `load_files` catches per workbook and reports
 `{"file", "status", "error"}` so one malformed TOOL_DATA row doesn't sink a batch. Excel lock
-files (`~$*.xlsx`) are skipped. `prepare/runner.py` follows the same rule for the same reason.
+files (`~$*.xlsx`) are skipped. `tcm/services/preparation.py` follows the same rule for the same reason.
 
 **Two definitions exist so they can't be written twice.** `find_workbooks(folder)` in
-`excel_reader` is *the* answer to "every workbook under here" — loading, the prepare endpoints
+`tcm/infrastructure/excel/reader.py` is *the* answer to "every workbook under here" — loading, the prepare endpoints
 and the sample generator all resolve a folder through it, so a file one of them acts on is
-always one the others can see, lock-file skipping included. `CASE_COLUMNS` in [parser/models.py](parser/models.py)
-is *the* `TestCase`→`SheetConfig` mapping; the reader and `prepare/clear.py` both walk rows by
+always one the others can see, lock-file skipping included. `CASE_COLUMNS` in [tcm/domain/case.py](tcm/domain/case.py)
+is *the* `TestCase`→`SheetConfig` mapping; the reader and `tcm/infrastructure/excel/clearing.py` both walk rows by
 it, and reading a row two different ways is how a case ends up classified two different ways.
 
-**The status taxonomy is data, not code.** [parser/result_status.json](parser/result_status.json)
-maps raw Result strings → status keys, and `StatusSet` in [parser/status.py](parser/status.py)
+**The status taxonomy is data, not code.** [config/result_status.json](config/result_status.json)
+maps raw Result strings → status keys, and `StatusSet` in [tcm/domain/status.py](tcm/domain/status.py)
 validates it at import time. Exactly one status must set `"empty": true` (blank cells → NYS) and
 exactly one `"fallback": true` (unknown values → Other) — the fallback is what makes every case
 land in exactly one column, which several tests assert. `needs_reason` lists the
@@ -77,7 +105,7 @@ the shipped case: `対象外` with no PIC was never in the plan, whereas `対象
 decision someone made and still owes a reason. So `STATUS.classify(result)` — pure, result-string
 only — is no longer the whole story, and **every aggregate calls `STATUS.classify_case(case)`
 instead**; `classify` survives for the config and the sample generator. `DERIVE_CONDITIONS` in
-`parser/status.py` is the closed set of conditions the JSON may name (`no_pic` today). Derivation
+`tcm/domain/status.py` is the closed set of conditions the JSON may name (`no_pic` today). Derivation
 is one step by construction: a derived status may not itself be derived from, may not carry
 `match` / `empty` / `fallback`, and two statuses may not claim the same source. Adding a second
 condition means one entry in that table, not a new branch in the aggregates.
@@ -86,7 +114,7 @@ condition means one entry in that table, not a new branch in the aggregates.
 count has to stay visible — but is left out of `total`, so a case outside the plan cannot inflate
 the denominator progress is read against. The invariant is therefore *not* "total equals the sum
 of every status column" but the narrower **"total equals the sum of `STATUS.counted`"**; that is
-what `_counted_total` in `aggregate.py` computes and what the reconcile tests assert. Two things
+what `_counted_total` in `tcm/services/aggregation.py` computes and what the reconcile tests assert. Two things
 follow, and both are enforced rather than left to the config: `needs_reason` may not name an
 excluded status (a case outside the plan owes nobody an explanation), and `{"expand": "statuses"}`
 expands over `counted`, so an excluded status gets **no report column** — which is what keeps the
@@ -105,14 +133,14 @@ which ones they are is being told to go back to the spreadsheet. A status may no
 refuses it.
 
 **Cases are served one status at a time, and that is what makes Detail affordable.**
-`status_cases(cases, key)` in `aggregate.py` is the slice behind a figure, and `/api/cases?status=`
+`status_cases(cases, key)` in `tcm/services/aggregation.py` is the slice behind a figure, and `/api/cases?status=`
 its `jsonify` wrapper; `views/detail.js` keeps a `Map` of what it has fetched, so pressing NG twice
 costs one request and pressing OK costs only the OKs. It replaced `/api/data`, which shipped every
 in-plan case on every load — 10 MB of JSON before anyone had clicked anything, on the twelve sample
 workbooks — and `fetchAll` no longer carries cases at all. Three things hold it together:
 
 - **The slices partition the load.** A case classifies as exactly one status, so two chosen statuses
-  are a union with nothing counted twice and nothing unreachable. `tests/test_aggregate.py` asserts
+  are a union with nothing counted twice and nothing unreachable. `tests/services/test_aggregate.py` asserts
   it against `STATUS.keys` directly, because every other property here rests on it.
 - **It keeps work the plan excludes**, and names the `scope_group` and `device_family` of each case
   so the view can filter by them. Its coverage is Summary's, not Review's — the reasoning
@@ -126,10 +154,10 @@ Adding or renaming a status means editing only that JSON. Backend, `/api/statuse
 sample generator all read from it — never hard-code status keys in Python or JS.
 
 **Those JSON files are editable from the app, and an edit applies without a restart.**
-[config_store.py](config_store.py) is the one place that writes them — `config.py` says *where*
+[tcm/services/settings_store.py](tcm/services/settings_store.py) is the one place that writes them — `tcm/settings.py` says *where*
 each file is, this says how to check an edit, how to write it, and how to make it take effect.
 `/api/config` and `PUT /api/config/<name>` are `jsonify` wrappers around its two functions, the
-same arrangement as `aggregate.py` and `prepare/runner.py`. Four things about it are load-bearing:
+same arrangement as `tcm/services/aggregation.py` and `tcm/services/preparation.py`. Four things about it are load-bearing:
 
 - **Validation is not written twice.** An edit is checked by building a throwaway instance through
   the config class's own `from_dict`, so every invariant above holds for an edit made from the
@@ -140,7 +168,7 @@ same arrangement as `aggregate.py` and `prepare/runner.py`. Four things about it
   `_load_default` raises at import. So the text goes to a temp file beside the target and
   `os.replace` swaps it in.
 - **`adopt` is why one save reaches everything.** `STATUS`, `SCOPES`, `DEVICES` and `LABELS`
-  are imported *by name* into eight modules, and rebinding the name in `parser.status` would
+  are imported *by name* into eight modules, and rebinding the name in `tcm.domain.status` would
   reach none of them.
   So each class has an `adopt(other)` that copies the validated state onto `self`: the singleton
   stays the singleton and its contents change. `SheetLabels` is no longer a frozen dataclass for
@@ -150,12 +178,12 @@ same arrangement as `aggregate.py` and `prepare/runner.py`. Four things about it
   when the report layout is *built*, which happens once at import — so without that step a
   taxonomy edit would leave the publisher writing the column set the old taxonomy had.
 
-`report/report_layout.json` is deliberately **not** editable from the app: its columns are the
+`config/report_layout.json` is deliberately **not** editable from the app: its columns are the
 geometry of someone's report workbook rather than a vocabulary. It is only ever rebuilt.
 
-**Scope groups are data too.** [parser/scope_groups.json](parser/scope_groups.json) says which
+**Scope groups are data too.** [config/scope_groups.json](config/scope_groups.json) says which
 Scope strings belong to which Summary table, validated at import by `ScopeSet` in
-[parser/scope.py](parser/scope.py) exactly the way `StatusSet` validates the taxonomy. The
+[tcm/domain/scope.py](tcm/domain/scope.py) exactly the way `StatusSet` validates the taxonomy. The
 `fallback` group is mandatory, always sorts last and **never counts**: a typo'd scope, or one
 nobody has configured yet, lands there rather than vanishing, so **the tables always add up to
 every case loaded**.
@@ -184,7 +212,7 @@ work that is reported but not committed to.** It keeps its Summary table — the
 visible, so the card is drawn in full and marked `chip--aside`, the dashed rule that means "the
 sum stops here" — and it leaves *every figure that adds groups together*: the KPI strip, Daily,
 Productivity and the published report — and it is the one Detail card a reader has to press for
-themselves. `in_plan(cases)` in [aggregate.py](aggregate.py)
+themselves. `in_plan(cases)` in [tcm/services/aggregation.py](tcm/services/aggregation.py)
 is the one definition of "counts toward the total", and `SCOPES.counted` / `SCOPES.is_counted`
 the one definition of which groups do. Three things follow, and each is enforced rather than
 trusted:
@@ -193,7 +221,7 @@ trusted:
   is drawn per group, so filtering it would delete the table instead of the figure. The report
   publisher passes `in_plan(cases)` at the call site instead; `daily_rows`, `productivity_rows`
   and `issue_rows` apply it themselves, because a figure is all they produce. That also keeps
-  the invariant `tests/test_aggregate.py` asserts — a file's scope rows add up to its unscoped
+  the invariant `tests/services/test_aggregate.py` asserts — a file's scope rows add up to its unscoped
   row — true of whatever list `summary_rows` is handed.
 - **Detail draws a card for such a group rather than dropping it**, which is the one place in the
   app where work outside the plan can be added to a figure — because there it is a reader pressing
@@ -217,10 +245,10 @@ trusted:
   reads zero. `ScopeSet.from_dict` refuses that config at the door.
 
 **Device families are data too, and they are the one config with no fallback.**
-[parser/device_groups.json](parser/device_groups.json) says which device names Summary's
+[config/device_groups.json](config/device_groups.json) says which device names Summary's
 "By device type" rows add together — `iPhone Min size` and `iPhone Max size` are two device
 blocks in a workbook but one handset to anyone reading the totals — validated at import by
-`DeviceSet` in [parser/device.py](parser/device.py) the way `ScopeSet` validates the scopes.
+`DeviceSet` in [tcm/domain/device.py](tcm/domain/device.py) the way `ScopeSet` validates the scopes.
 Two things differ from `ScopeSet`, and both follow from what a device name is. **Matching is by
 substring**, because a device name is written freehand and carries the model, the size and
 sometimes the OS version, so nobody will enumerate the spellings; order therefore decides, and
@@ -235,7 +263,7 @@ classification; the merge itself is client-side, in `combineByFamily`.
 
 **A blank Scope is not an unrecognised scope — it is not a case.** A section heading, a spacer, or
 the slack at the end of a generously sized `start_row`–`end_row` block carries no Scope, and
-`SCOPES.is_unscoped` in `parser/scope.py` is the one definition of that. The reader drops those
+`SCOPES.is_unscoped` in `tcm/domain/scope.py` is the one definition of that. The reader drops those
 rows in `_cases_for_config` before a `TestCase` exists, so they reach no view, no aggregate and no
 published report, and the per-file `cases: n` that `load_files` reports — the number the Tools
 view shows — is already net of them. Filtering later, per view, is what would let that
@@ -245,7 +273,7 @@ fallback, so no caller can manufacture a case belonging to no table; it simply n
 **`file_rows(cases, file_name)` is Summary cut one level finer, and the only aggregate that
 keeps work outside the plan.** It groups one workbook by (sheet, scope, device), which is
 `summary_rows(by_scope=True)` with the sheet added, so a file's sheet rows add up to its
-Summary rows — `tests/test_aggregate.py` asserts it directly, the same property that pins the
+Summary rows — `tests/services/test_aggregate.py` asserts it directly, the same property that pins the
 scope rows to the unscoped one. Two things differ from every other aggregate, and both follow
 from the page being *about one workbook* rather than about progress: it does not run through
 `in_plan`, because the file page draws a Scope column and a Scope filter and a filter whose
@@ -262,7 +290,7 @@ rather than every case of every workbook on every load.
 `summary_rows(cases, by_scope=False)` is one function serving two granularities. `/api/summary`
 passes `by_scope=True` and each row gains a `scope` key; the report publisher does not, so its
 sheet keeps one row per (file, device) and the SharePoint workbook needs no new column. They
-cannot drift: the scope rows of a file add up to its unscoped row, which `tests/test_aggregate.py`
+cannot drift: the scope rows of a file add up to its unscoped row, which `tests/services/test_aggregate.py`
 asserts directly.
 
 **No CSS framework.** The UI is hand-written CSS in two files:
@@ -573,20 +601,20 @@ Behavior worth preserving when touching the UI:
   from it would not reconcile with Summary's total. Its label names the day being compared
   *against*, not the latest one.
 
-**Aggregation is shared, not owned by the routes.** [aggregate.py](aggregate.py) holds
+**Aggregation is shared, not owned by the routes.** [tcm/services/aggregation.py](tcm/services/aggregation.py) holds
 `summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` as plain functions over
 `TestCase` lists. The five GET endpoints are `jsonify` wrappers around them, and the report
 publisher calls the same functions — so the numbers on screen and the numbers in the
 SharePoint report cannot drift. Put new aggregation here, not in a route.
 
-**Graph writes in place, never round-trips the file.** [sharepoint/workbook.py](sharepoint/workbook.py)
+**Graph writes in place, never round-trips the file.** [tcm/infrastructure/graph/workbook.py](tcm/infrastructure/graph/workbook.py)
 edits the report workbook through Graph's Excel workbook API: `usedRange` to find the end,
 `range(...)/delete` with `shift: Up` to remove rows, `range(...)` PATCH to write. Downloading
 the file, editing it with openpyxl and `PUT /content`-ing it back would destroy charts, pivots
 and formatting in a hand-built report — do not switch to that. Its interface is deliberately
-seven methods wide because `tests/test_publisher.py` drives the publisher through a stand-in
+eight methods wide because `tests/services/test_publisher.py` drives the publisher through a stand-in
 that implements exactly those; widening it means widening the fake.
-`tests/test_publish_integration.py` runs the real client, links and workbook against a fake
+`tests/services/test_publish_integration.py` runs the real client, links and workbook against a fake
 Graph service that parses the addresses it is sent, which is what stops the two from drifting.
 
 **`run_date` is the idempotency key.** Every published row carries it, and the publisher
@@ -596,22 +624,22 @@ again. Range mode deletes contiguous blocks bottom-up (deleting shifts rows up);
 deletes indices descending (deleting renumbers). `_normalise_date` exists because a
 Date-formatted column comes back from Graph as an Excel serial number, not `"2026-09-06"`.
 
-**The report layout is data too.** [report/report_layout.json](report/report_layout.json) says
+**The report layout is data too.** [config/report_layout.json](config/report_layout.json) says
 which sheet and column each value goes to, validated at import by `ReportLayout` the same way
 `StatusSet` validates the taxonomy. `{"expand": "statuses"}` widens a sheet by one column per
 status in taxonomy order, and `"issue": true` in `result_status.json` decides what reaches the
 Issues sheet — so neither status keys nor column positions are ever hard-coded in Python or JS.
 
-**`prepare/` is the only code that writes to the source workbooks.** Everything else treats
-them as read-only. [prepare/tool_data.py](prepare/tool_data.py) gives a workbook the TOOL_DATA
-sheet the reader needs — `parser/tool_data_builder.py` works out the layout from the labels in
-[parser/sheet_labels.json](parser/sheet_labels.json), and this writes the result in —
-while [prepare/clear.py](prepare/clear.py) empties last round's result cells.
-[prepare/workbook.py](prepare/workbook.py) holds the one reader both need, and
-[prepare/runner.py](prepare/runner.py) is the layer above: it walks a list of workbooks,
+**No code outside `tcm/infrastructure/excel/` and `tcm/services/preparation.py` writes to the source workbooks.** Everything else treats
+them as read-only. [tcm/infrastructure/excel/tool_data.py](tcm/infrastructure/excel/tool_data.py) gives a workbook the TOOL_DATA
+sheet the reader needs — `tcm/infrastructure/excel/detection.py` works out the layout from the labels in
+[config/sheet_labels.json](config/sheet_labels.json), and this writes the result in —
+while [tcm/infrastructure/excel/clearing.py](tcm/infrastructure/excel/clearing.py) empties last round's result cells.
+[tcm/infrastructure/excel/workbook.py](tcm/infrastructure/excel/workbook.py) holds the one reader both need, and
+[tcm/services/preparation.py](tcm/services/preparation.py) is the layer above: it walks a list of workbooks,
 isolates the failures per file the way `load_files` does, and returns plain dicts. The three
 `/api/prepare/*` endpoints are `jsonify` wrappers around it — the same arrangement as
-`aggregate.py`, and for the same reason. Put new batch behaviour in `runner.py`, not in a route;
+`tcm/services/aggregation.py`, and for the same reason. Put new batch behaviour in `preparation.py`, not in a route;
 what stays in the route is what is genuinely about the request, which is the two guards below.
 **The app is the only way in.** These operations once had argparse shells in `tools/`; they
 were deleted once the Tools view covered them, because two front doors to an irreversible write is
@@ -631,7 +659,7 @@ Three rules hold across both operations, and each is enforced rather than truste
   corrected it by eye; detection is a best-effort first pass. `diff_configs` matches blocks on
   `(sheet, device)` and reports changed fields, so "Create TOOL_DATA" becomes "Check TOOL_DATA"
   once a workbook has one — and `preparePanel.js` only offers Apply when something would change.
-- **Only the loaded source's files may be touched.** `_requested_files` in `api/routes.py`
+- **Only the loaded source's files may be touched.** `_requested_files` in `tcm/web/routes.py`
   resolves the source through `runner.source_workbooks` and refuses any path not in it, so a
   stray path in a request body cannot reach a workbook the user never chose. A folder is
   re-globbed rather than remembered, so a file dropped in since the last load still appears.
@@ -652,4 +680,4 @@ pytest only, Python side only (no JS test framework — verify UI changes by run
 syntax check). No test touches the network: Graph is always a fake transport.
 [tests/conftest.py](tests/conftest.py) builds real `.xlsx` fixtures in `tmp_path` via
 `config_row()` + `write_workbook()`; use those helpers rather than checking in binaries.
-`tests/test_api.py` resets `routes._data` between tests since the store is global.
+`tests/web/test_api.py` resets `routes._data` between tests since the store is global.
