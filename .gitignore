@@ -16,3 +16,6 @@ graph_token_cache.json
 
 # Worktrees created for isolated work
 .claude/worktrees/
+
+# Agent scratch: plan ledgers and review diffs
+.superpowers/
