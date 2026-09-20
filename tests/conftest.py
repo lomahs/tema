@@ -70,7 +70,7 @@ def make_workbook(tmp_path):
 @pytest.fixture
 def restore_configs():
     """Put the live config singletons back after a test has written over them."""
-    import config_store
+    from tcm.services import settings_store as config_store
     from tcm.domain.scope import SCOPES
     from tcm.domain.sheet_labels import LABELS
     from tcm.domain.status import STATUS
@@ -93,7 +93,7 @@ def config_paths(tmp_path, monkeypatch):
     the wrong place would rewrite the shipped taxonomy.
     """
     import tcm.settings as app_config
-    import config_store
+    from tcm.services import settings_store as config_store
 
     paths = {}
     for name, spec in config_store.CONFIGS.items():

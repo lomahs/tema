@@ -6,7 +6,7 @@ them without going anywhere near HTTP.
 """
 import pytest
 
-import aggregate
+from tcm.services import aggregation as aggregate
 from tcm.domain import case as models
 from tcm.domain.scope import SCOPES
 

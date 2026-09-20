@@ -9,7 +9,7 @@ import pytest
 from api import routes
 from app import create_app
 from tcm.domain import case as models
-from report.publisher import SheetMissing
+from tcm.services.publishing import SheetMissing
 from tcm.infrastructure.graph.auth import NotConfigured, NotSignedIn
 from tcm.infrastructure.graph.client import GraphError
 

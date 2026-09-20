@@ -10,7 +10,7 @@ import pytest
 
 from tcm.domain import case as models
 from tcm.infrastructure.report.layout import ReportLayout
-from report.publisher import SheetMissing, publish
+from tcm.services.publishing import SheetMissing, publish
 from tcm.infrastructure.graph.workbook import UsedRange
 
 
@@ -341,7 +341,7 @@ def test_nothing_loaded_still_clears_the_days_stale_rows():
 # --- tying the link, the session and the publish together -------------------
 
 def test_publishing_to_a_url_resolves_the_link_and_names_the_file():
-    from report import publisher
+    from tcm.services import publishing as publisher
 
     opened = []
 

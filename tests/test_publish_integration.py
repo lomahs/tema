@@ -11,7 +11,7 @@ from openpyxl.utils import column_index_from_string
 
 from tcm.domain import case as models
 from tcm.infrastructure.report.layout import ReportLayout
-from report.publisher import publish_to_url
+from tcm.services.publishing import publish_to_url
 from tcm.infrastructure.graph.client import GraphClient
 
 LAYOUT = ReportLayout.from_dict({"sheets": [{

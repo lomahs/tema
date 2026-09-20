@@ -8,7 +8,7 @@ because there is no way to roll back a half-finished one.
 import logging
 from datetime import date, datetime, timedelta
 
-import aggregate
+from tcm.services import aggregation as aggregate
 from tcm.infrastructure.report.builder import build_rows
 from tcm.infrastructure.report.layout import LAYOUT, ReportLayout, SheetLayout
 from tcm.infrastructure.graph.links import share_url_to_item

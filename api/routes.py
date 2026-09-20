@@ -4,17 +4,17 @@ import threading
 
 from flask import Blueprint, jsonify, request
 
-import aggregate
+from tcm.services import aggregation as aggregate
 import tcm.settings as config
-import config_store
+from tcm.services import settings_store as config_store
 from tcm.infrastructure.dialog import DialogError, pick_files, pick_folder
 from tcm.infrastructure.excel.reader import load_from_folder, load_from_files
 from tcm.domain.device import DEVICES
 from tcm.domain.scope import SCOPES
 from tcm.domain.status import STATUS
-from prepare import runner
+from tcm.services import preparation as runner
 from tcm.infrastructure.excel.clearing import DEFAULT_KEEP
-from report.publisher import SheetMissing, publish_to_url
+from tcm.services.publishing import SheetMissing, publish_to_url
 from tcm.infrastructure.graph.auth import GraphAuth, NotConfigured, NotSignedIn
 from tcm.infrastructure.graph.client import GraphClient, GraphError
 

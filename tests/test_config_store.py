@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-import config_store
+from tcm.services import settings_store as config_store
 from tcm.domain.scope import SCOPES
 from tcm.domain.sheet_labels import LABELS
 from tcm.domain.status import STATUS
