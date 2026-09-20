@@ -1,7 +1,7 @@
 """Workspace holds the load; the routes only report it."""
 import pytest
 
-from tcm.domain.case import TestCase
+from tcm.domain import case as models
 from tcm.domain.ports import Snapshot
 from tcm.infrastructure.store.memory import InMemoryCaseStore
 from tcm.services.workspace import Workspace
@@ -28,9 +28,13 @@ class FakeLoader:
 
 
 def case(**kw):
-    return TestCase(file_name=kw.pop("file_name", "TC.xlsx"),
-                    sheet=kw.pop("sheet", "Login"),
-                    device=kw.pop("device", "iPhone"), **kw)
+    """`models.TestCase` is reached through the module rather than imported by
+    name: pytest tries to collect any module-level class called `Test*` and
+    warns when it cannot. See `tests/services/test_aggregate.py`.
+    """
+    return models.TestCase(file_name=kw.pop("file_name", "TC.xlsx"),
+                           sheet=kw.pop("sheet", "Login"),
+                           device=kw.pop("device", "iPhone"), **kw)
 
 
 def workspace(**kw):

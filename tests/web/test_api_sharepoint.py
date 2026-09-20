@@ -72,9 +72,18 @@ def use_auth(monkeypatch, auth):
 
 
 def load_a_case():
+    """Seed a case without going through a loader.
+
+    Builds the store, populates it through `put` -- the port's own public
+    method -- then hands it to a fresh `Workspace`, rather than reaching past
+    `_workspace` into its private `_store`. The loader is never called on this
+    path, so `ExcelCaseLoader` stands in unused.
+    """
     cases = [models.TestCase(
         file_name="TC.xlsx", sheet="Login", device="iPhone", row_num=4, result="OK")]
-    routes._workspace._store.put(Snapshot(cases=cases))
+    store = InMemoryCaseStore()
+    store.put(Snapshot(cases=cases))
+    routes._workspace = Workspace(ExcelCaseLoader(), store)
     return cases
 
 
