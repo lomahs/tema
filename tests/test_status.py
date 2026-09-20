@@ -177,7 +177,9 @@ def test_tone_derives_from_the_badge_when_unset():
 
 def test_the_shipped_taxonomy_names_a_tone_for_every_status():
     tone = {s.key: s.tone for s in STATUS.statuses}
-    assert tone == {"OK": "success", "NG": "danger", "NG-OK": "warn",
+    # NG-OK shares OK's tone: a case that failed and then passed is a good
+    # outcome, and the tone names what a status *means*.
+    assert tone == {"OK": "success", "NG": "danger", "NG-OK": "success",
                     "Pending": "warn", "Cancel": "neutral", "NYS": "neutral",
                     "OOS": "muted", "Other": "muted"}
 

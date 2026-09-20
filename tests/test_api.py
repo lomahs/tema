@@ -265,7 +265,8 @@ def test_summary_flags_only_cases_that_need_a_reason_and_lack_one(client, workbo
     flagged = {(m["device"], m["case_no"]) for m in body["missing_reason"]}
 
     assert ("iPhone", "TC-3") in flagged      # NG, no ticket and no note
-    assert ("iPhone", "TC-4") in flagged      # Other is in needs_reason
+    assert ("iPhone", "TC-4") not in flagged  # Other is excluded: outside the
+                                              # plan, so it owes nobody a reason
     assert ("iPhone", "TC-2") not in flagged  # NG but has BUG-1
     assert ("iPhone", "TC-1") not in flagged  # OK
     assert ("iPhone", "TC-5") not in flagged  # not yet started
@@ -387,10 +388,11 @@ def test_missing_reason_rows_carry_their_status(client, workbook_dir):
     load(client, workbook_dir)
     rows = client.get("/api/summary").get_json()["missing_reason"]
     assert rows, "fixture should produce at least one case owing a reason"
-    assert all(r["status"] in STATUS.keys for r in rows)
+    # Stronger than "a key the taxonomy names": only a status that owes a
+    # reason can be missing one, which is the rule the excluded fallback broke.
+    assert all(r["status"] in STATUS.needs_reason for r in rows)
     by_case = {r["case_no"]: r["status"] for r in rows}
     assert by_case["TC-3"] == "NG"
-    assert by_case["TC-4"] == "Other"
 
 
 # --- Out Of Scope, end to end ---------------------------------------------
