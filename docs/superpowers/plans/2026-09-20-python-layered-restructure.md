@@ -22,8 +22,11 @@
 - Status keys, scope keys and device names are never hard-coded in Python. They come from the JSON configs.
 - Docstring style is Google; comments say *why*, not *what*. Match the surrounding code.
 - No new dependency is added by this plan.
-- One task, one commit. Commit messages end with:
-  `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
+- One task, one commit. Every commit ends with the `Co-Authored-By:` line **your
+  own harness specifies for the model you are** — the attribution names who did
+  the work, so a task implemented by Haiku signs as Haiku. The example commit
+  messages below all show `Claude Opus 5` because that is the model that wrote
+  this plan; substitute your own rather than copying that line verbatim.
 
 ## The layering rule
 
