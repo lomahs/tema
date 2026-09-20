@@ -30,3 +30,13 @@ def test_the_excel_loader_is_a_case_loader():
 def test_the_memory_store_is_a_case_store():
     from tcm.infrastructure.store.memory import InMemoryCaseStore
     assert issubclass(InMemoryCaseStore, ports.CaseStore)
+
+
+def test_the_json_repository_is_a_config_repository():
+    from tcm.infrastructure.config_repo import JsonFileConfigRepository
+    assert issubclass(JsonFileConfigRepository, ports.ConfigRepository)
+
+
+def test_the_native_dialog_is_a_file_picker():
+    from tcm.infrastructure.dialog import NativeDialog
+    assert issubclass(NativeDialog, ports.FilePicker)

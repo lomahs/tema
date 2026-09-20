@@ -145,3 +145,13 @@ def pick_folder(initial: str | None = None) -> list[str]:
 def pick_files(initial: str | None = None) -> list[str]:
     """Ask for one or more .xlsx files. Returns the paths, `[]` if cancelled."""
     return _run_dialog("files", initial)
+
+
+class NativeDialog:
+    """The FilePicker port, answered by the OS dialog."""
+
+    def pick_folder(self, initial=None):
+        return pick_folder(initial)
+
+    def pick_files(self, initial=None):
+        return pick_files(initial)

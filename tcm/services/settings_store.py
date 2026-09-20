@@ -35,7 +35,6 @@ edit would leave the publisher writing the column set the old taxonomy had.
 import json
 import logging
 import os
-import tempfile
 from dataclasses import dataclass
 from typing import Callable
 
@@ -44,9 +43,12 @@ from tcm.domain.device import DEVICES, DeviceSet
 from tcm.domain.scope import SCOPES, ScopeSet
 from tcm.domain.sheet_labels import HEADER_FIELDS, LABELS, RESULT_FIELDS, SheetLabels
 from tcm.domain.status import DERIVE_CONDITIONS, STATUS, TONES, StatusSet
+from tcm.infrastructure.config_repo import JsonFileConfigRepository
 from tcm.infrastructure.report.layout import LAYOUT, ReportLayout
 
 log = logging.getLogger(__name__)
+
+_repo = JsonFileConfigRepository()
 
 
 def _adopt_statuses(new: StatusSet) -> None:
@@ -115,8 +117,8 @@ def read_all() -> dict:
     for name in CONFIGS:
         path = path_of(name)
         try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
+            text = _repo.read_text(path)
+            data = json.loads(text)
             error = None
         except Exception as e:
             # A config the app started with cannot be unreadable, but one
@@ -157,27 +159,8 @@ def save(name: str, raw: dict) -> dict:
     # every refusal buries the half that says what is wrong with the edit.
     value = spec.build(raw, os.path.basename(path))  # ValueError if invalid
 
-    _write_atomically(path, json.dumps(raw, indent=2, ensure_ascii=False) + "\n")
+    _repo.write_text(path, json.dumps(raw, indent=2, ensure_ascii=False) + "\n")
     spec.apply(value)
     log.info("Saved %s config to %s", name, path)
 
     return read_all()["configs"][name]
-
-
-def _write_atomically(path: str, text: str) -> None:
-    """Replace `path`'s contents in one filesystem operation.
-
-    In the same directory, because `os.replace` is only atomic within a
-    filesystem — and because a temp file next to the target is one the user can
-    see and delete if the process dies between the two calls.
-    """
-    directory = os.path.dirname(os.path.abspath(path)) or "."
-    fd, temp = tempfile.mkstemp(dir=directory, prefix=".config-", suffix=".json")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(temp, path)
-    except Exception:
-        if os.path.exists(temp):
-            os.unlink(temp)
-        raise
