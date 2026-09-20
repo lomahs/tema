@@ -234,6 +234,18 @@ def load_file(file_path: str) -> list[TestCase]:
     return cases
 
 
+def exclude_lock_files(paths: list[str]) -> list[str]:
+    """Every path in `paths` that does not name an Excel lock file.
+
+    An open workbook leaves ``~$name.xlsx`` beside it — not a workbook anyone
+    meant to act on. This is the one place that tests a basename against
+    `LOCK_FILE_PREFIX`; every caller that needs the rule, whether it is
+    scanning a folder or filtering an explicit list a user picked, goes
+    through here rather than writing the check again.
+    """
+    return [p for p in paths if not os.path.basename(p).startswith(LOCK_FILE_PREFIX)]
+
+
 def find_workbooks(folder_path: str) -> list[str]:
     """Every .xlsx under `folder_path`, recursively, in a stable order.
 
@@ -243,7 +255,7 @@ def find_workbooks(folder_path: str) -> list[str]:
     file one of them acts on is always one the other can see.
     """
     paths = sorted(glob.glob(os.path.join(folder_path, "**", "*.xlsx"), recursive=True))
-    return [p for p in paths if not os.path.basename(p).startswith(LOCK_FILE_PREFIX)]
+    return exclude_lock_files(paths)
 
 
 def load_files(file_paths: list[str]) -> tuple[list[TestCase], list[dict]]:
@@ -265,9 +277,10 @@ def load_files(file_paths: list[str]) -> tuple[list[TestCase], list[dict]]:
     """
     all_cases = []
     file_results = []
+    kept = set(exclude_lock_files(file_paths))
     for path in file_paths:
         name = os.path.basename(path)
-        if name.startswith(LOCK_FILE_PREFIX):
+        if path not in kept:
             log.debug("Skipping Excel lock file %s", name)
             continue
         try:

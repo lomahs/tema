@@ -42,6 +42,9 @@ class CaseLoader(Protocol):
     def find_workbooks(self, folder_path: str) -> list[str]:
         ...
 
+    def exclude_lock_files(self, paths: list[str]) -> list[str]:
+        ...
+
 
 @runtime_checkable
 class CaseStore(Protocol):

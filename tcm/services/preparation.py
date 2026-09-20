@@ -15,7 +15,7 @@ whose TOOL_DATA is unreadable must not sink a batch of forty.
 import logging
 import os
 
-from tcm.infrastructure.excel.reader import LOCK_FILE_PREFIX, find_workbooks, parse_tool_data
+from tcm.infrastructure.excel.reader import exclude_lock_files, find_workbooks, parse_tool_data
 from tcm.infrastructure.excel.clearing import apply_plan, plan_file
 from tcm.infrastructure.excel.tool_data import detect_file, diff_configs, write_tool_data_sheet
 from tcm.infrastructure.excel.workbook import has_tool_data
@@ -35,8 +35,7 @@ def source_workbooks(source: dict | None) -> list[str]:
         return []
     if source["type"] == "folder":
         return find_workbooks(source["value"])
-    return [p for p in source["value"]
-            if not os.path.basename(p).startswith(LOCK_FILE_PREFIX)]
+    return exclude_lock_files(source["value"])
 
 
 def describe(paths: list[str]) -> list[dict]:

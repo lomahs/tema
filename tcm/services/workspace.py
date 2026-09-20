@@ -63,14 +63,18 @@ class Workspace:
         """Every workbook the loaded source names, re-globbed rather than remembered.
 
         A file dropped into the folder since the last load still appears, which
-        is what the prepare endpoints check a request's paths against.
+        is what the prepare endpoints check a request's paths against. An
+        explicit file list is filtered through the loader too: a workbook open
+        in another program leaves a lock file beside it, and a multi-select
+        that swept one up must not hand a write guard something to treat as
+        part of the source.
         """
         src = self.source
         if not src:
             return []
         if src["type"] == "folder":
             return self._loader.find_workbooks(src["value"])
-        return list(src["value"])
+        return self._loader.exclude_lock_files(src["value"])
 
     def _remember(self, source, cases, file_results):
         self._store.put(Snapshot(cases=cases, file_results=file_results, source=source))

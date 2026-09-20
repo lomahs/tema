@@ -13,3 +13,6 @@ class ExcelCaseLoader:
 
     def find_workbooks(self, folder_path):
         return reader.find_workbooks(folder_path)
+
+    def exclude_lock_files(self, paths):
+        return reader.exclude_lock_files(paths)
