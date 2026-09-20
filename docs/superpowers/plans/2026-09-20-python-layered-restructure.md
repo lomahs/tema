@@ -13,6 +13,9 @@
 ## Global Constraints
 
 - Run every command with the project venv: `.venv/bin/python`. Never bare `python`.
+- **Invoke git as `/usr/bin/git`, always.** A shell hook rewrites bare `git` to `rtk git`, and this worktree-isolated session refuses that wrapper — every bare `git` command fails with a refusal, not a git error. This applies to every command in this plan: read `/usr/bin/git mv`, `/usr/bin/git add`, `/usr/bin/git commit` wherever the steps below write `git`.
+- **Do not put the word `git` inside a heredoc passed to `python`/`bash -c`.** The same guard refuses it. Write such a script to a file first, then run the file.
+- The work happens in the worktree `.claude/worktrees/layered-restructure` on branch `refactor/layered-architecture`. `.venv` there is a symlink to the main checkout's; it is excluded via `.git/info/exclude`, so never `git add` it.
 - **The suite must read `450 passed` after every task.** It is green at commit `d7fdb32`. A task that leaves it red is not done.
 - **Phase 1 contains no logic edits.** Not a docstring fix, not a rename, not an obvious tidy. Only import lines, file paths and module locations change. A module that is wrong stays wrong; it gets its own commit after phase 1.
 - **Move files with `git mv`**, never delete-and-create — rename detection is what makes the diff reviewable.
@@ -1117,8 +1120,9 @@ class CaseStore(Protocol):
 class ReportWorkbook(Protocol):
     """The report workbook, edited in place.
 
-    Exactly the seven methods `tests/services/test_publisher.py`'s FakeWorkbook
-    implements. Widening this means widening the fake, which is the point:
+    Exactly the eight methods `tests/services/test_publisher.py`'s FakeWorkbook
+    implements. (CLAUDE.md has long said "seven methods wide" -- it is wrong,
+    and Task 15 corrects it.) Widening this means widening the fake, which is the point:
     downloading the file, rewriting it and putting it back would destroy the
     charts and pivots in a hand-built report.
     """
@@ -1951,7 +1955,7 @@ for r in rules: print(r)
 print(len(rules), 'rules')
 "
 ```
-Expected: 18 rules — 17 `/api/*` plus `/` — and `/static/<path:filename>`, so 19 lines. Compare against `git show HEAD~1` if anything looks missing.
+Expected: **20 rules** — 18 `/api/*`, `/`, and `/static/<path:filename>`. This was verified against the pre-split app, so a different count means the split dropped a route; diff the two lists rather than guessing which.
 
 - [ ] **Step 8: Exercise the app by hand**
 
@@ -2099,19 +2103,26 @@ MSG
 
 Add a section stating: where a port exists, a service takes it as a constructor argument; the rule bounding the set; and that `create_app` is the only place implementations are chosen.
 
-- [ ] **Step 2: Replace the "Out of scope by decision" paragraph**
+- [ ] **Step 2: Correct "seven methods wide"**
+
+`CLAUDE.md` says the Graph workbook interface is "deliberately seven methods wide". It is eight: `worksheet_names`, `used_range`, `write_values`, `delete_rows`, `table_at`, `table_rows`, `table_add_rows`, `table_delete_row`. The spec inherited the error from it. Fix both files.
+
+- [ ] **Step 3: Replace the "Out of scope by decision" paragraph**
 
 It currently says the `_data` dict, `_auth` and the `_login` dict are deliberate module-level state. They are objects now. Replace it with what is *still* true and now matters more: the four vocabulary singletons are process-global and `settings_store.save()` mutates them in place via `adopt()`, which a multi-user version will have to face.
 
-- [ ] **Step 3: Verify**
+- [ ] **Step 4: Verify**
 
 Run: `grep -n "_data\|_login\|_auth\b" CLAUDE.md`
 Expected: only the new paragraph about the vocabulary singletons.
 
+Run: `grep -n "seven methods" CLAUDE.md docs/superpowers/specs/2026-09-20-project-restructure-design.md`
+Expected: no hits.
+
 Run: `.venv/bin/python -m pytest 2>&1 | tail -3`
 Expected: all passing.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add CLAUDE.md README.md
