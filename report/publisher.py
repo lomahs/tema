@@ -9,10 +9,10 @@ import logging
 from datetime import date, datetime, timedelta
 
 import aggregate
-from report.builder import build_rows
+from tcm.infrastructure.report.builder import build_rows
 from tcm.infrastructure.report.layout import LAYOUT, ReportLayout, SheetLayout
-from sharepoint.links import share_url_to_item
-from sharepoint.workbook import Workbook
+from tcm.infrastructure.graph.links import share_url_to_item
+from tcm.infrastructure.graph.workbook import Workbook
 
 log = logging.getLogger(__name__)
 

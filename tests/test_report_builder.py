@@ -1,5 +1,5 @@
 """Turning aggregate rows into the cell grid a sheet's layout asks for."""
-from report.builder import build_rows
+from tcm.infrastructure.report.builder import build_rows
 from tcm.infrastructure.report.layout import ReportLayout
 
 

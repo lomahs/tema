@@ -10,8 +10,8 @@ from api import routes
 from app import create_app
 from tcm.domain import case as models
 from report.publisher import SheetMissing
-from sharepoint.auth import NotConfigured, NotSignedIn
-from sharepoint.client import GraphError
+from tcm.infrastructure.graph.auth import NotConfigured, NotSignedIn
+from tcm.infrastructure.graph.client import GraphError
 
 
 @pytest.fixture

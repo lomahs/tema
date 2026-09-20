@@ -11,8 +11,8 @@ import subprocess
 
 import pytest
 
-from api import filedialog
-from api.filedialog import DialogError, pick_files, pick_folder
+from tcm.infrastructure import dialog as filedialog
+from tcm.infrastructure.dialog import DialogError, pick_files, pick_folder
 
 
 def stub_dialog(monkeypatch, *, paths=None, returncode=0, stderr="", record=None):

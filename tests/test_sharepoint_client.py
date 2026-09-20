@@ -1,8 +1,8 @@
 """The Graph HTTP layer, driven by a fake transport. Nothing here touches the network."""
 import pytest
 
-from sharepoint.client import GraphClient, GraphError
-from sharepoint.links import share_url_to_item
+from tcm.infrastructure.graph.client import GraphClient, GraphError
+from tcm.infrastructure.graph.links import share_url_to_item
 
 
 class Reply:

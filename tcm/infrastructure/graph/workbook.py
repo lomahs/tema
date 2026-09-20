@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 
 from openpyxl.utils import get_column_letter
 
-from sharepoint.client import GraphError
-from sharepoint.links import DriveItemRef
+from tcm.infrastructure.graph.client import GraphError
+from tcm.infrastructure.graph.links import DriveItemRef
 
 log = logging.getLogger(__name__)
 

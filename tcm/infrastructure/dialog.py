@@ -28,14 +28,15 @@ class DialogError(RuntimeError):
     """The dialog could not be shown — tkinter missing, crashed, or timed out."""
 
 
-#: Project root, so the child can import this module back.
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#: Project root, so the child can import this module back. One directory
+#: deeper than before the move into tcm/infrastructure/.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # The child re-imports this module rather than carrying the dialog logic as one
 # big string, which keeps that logic readable and unit-testable.
 _CHILD_BOOTSTRAP = (
     "import sys; sys.path.insert(0, {root!r}); "
-    "from api.filedialog import _child_main; _child_main()"
+    "from tcm.infrastructure.dialog import _child_main; _child_main()"
 ).format(root=_PROJECT_ROOT)
 
 

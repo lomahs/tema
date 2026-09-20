@@ -5,7 +5,7 @@ import stat
 
 import pytest
 
-from sharepoint.auth import GraphAuth, NotConfigured, NotSignedIn
+from tcm.infrastructure.graph.auth import GraphAuth, NotConfigured, NotSignedIn
 
 
 class FakeMsalApp:

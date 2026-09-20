@@ -3,9 +3,9 @@ import re
 
 import pytest
 
-from sharepoint.client import GraphError
-from sharepoint.links import DriveItemRef
-from sharepoint.workbook import Workbook
+from tcm.infrastructure.graph.client import GraphError
+from tcm.infrastructure.graph.links import DriveItemRef
+from tcm.infrastructure.graph.workbook import Workbook
 
 REF = DriveItemRef(drive_id="b!DRIVE", item_id="01ITEM", name="Report.xlsx")
 PREFIX = "/drives/b!DRIVE/items/01ITEM/workbook"

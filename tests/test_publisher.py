@@ -11,7 +11,7 @@ import pytest
 from tcm.domain import case as models
 from tcm.infrastructure.report.layout import ReportLayout
 from report.publisher import SheetMissing, publish
-from sharepoint.workbook import UsedRange
+from tcm.infrastructure.graph.workbook import UsedRange
 
 
 class FakeWorkbook:
