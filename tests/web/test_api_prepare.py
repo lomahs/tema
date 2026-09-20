@@ -10,7 +10,6 @@ import os
 import pytest
 from openpyxl import load_workbook
 
-from tcm.web import routes
 from app import create_app
 from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.excel.reader import parse_tool_data
@@ -22,9 +21,8 @@ from tests.conftest import config_row, write_workbook
 
 @pytest.fixture
 def client():
-    app = create_app()
+    app = create_app(workspace=Workspace(ExcelCaseLoader(), InMemoryCaseStore()))
     app.config.update(TESTING=True)
-    routes._workspace = Workspace(ExcelCaseLoader(), InMemoryCaseStore())
     with app.test_client() as c:
         yield c
 

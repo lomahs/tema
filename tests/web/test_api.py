@@ -2,7 +2,6 @@ from datetime import datetime
 
 import pytest
 
-from tcm.web import routes
 from app import create_app
 from tcm.domain.device import DEVICES
 from tcm.domain.scope import SCOPES
@@ -10,14 +9,14 @@ from tcm.domain.status import STATUS
 from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.store.memory import InMemoryCaseStore
 from tcm.services.workspace import Workspace
+from tcm.web.blueprints import source
 from tests.conftest import config_row, write_workbook
 
 
 @pytest.fixture
 def client():
-    app = create_app()
+    app = create_app(workspace=Workspace(ExcelCaseLoader(), InMemoryCaseStore()))
     app.config.update(TESTING=True)
-    routes._workspace = Workspace(ExcelCaseLoader(), InMemoryCaseStore())
     with app.test_client() as c:
         yield c
 
@@ -126,7 +125,8 @@ def test_reload_before_any_load_is_rejected(client):
 def test_load_rejects_a_missing_folder(client):
     res = client.post("/api/load", json={"folder": "/nope/not/here"})
     assert res.status_code == 400
-    assert routes._workspace.source is None, "a failed load must not become the reload source"
+    assert client.application.extensions["workspace"].source is None, \
+        "a failed load must not become the reload source"
 
 
 def test_load_without_a_source_is_rejected(client):
@@ -138,7 +138,7 @@ def test_load_without_a_source_is_rejected(client):
 # the dialog itself.
 
 def test_browse_returns_the_folder_the_user_picked(client, monkeypatch):
-    monkeypatch.setattr(routes, "pick_folder", lambda initial=None: ["/data/project1"])
+    monkeypatch.setattr(source, "pick_folder", lambda initial=None: ["/data/project1"])
     res = client.post("/api/browse", json={"mode": "folder"})
     assert res.status_code == 200
     assert res.get_json()["paths"] == ["/data/project1"]
@@ -146,7 +146,7 @@ def test_browse_returns_the_folder_the_user_picked(client, monkeypatch):
 
 def test_browse_returns_every_file_the_user_picked(client, monkeypatch):
     picked = ["/data/TC one.xlsx", "/data/TC two.xlsx"]
-    monkeypatch.setattr(routes, "pick_files", lambda initial=None: list(picked))
+    monkeypatch.setattr(source, "pick_files", lambda initial=None: list(picked))
     res = client.post("/api/browse", json={"mode": "files"})
     assert res.status_code == 200
     assert res.get_json()["paths"] == picked
@@ -159,13 +159,13 @@ def test_browse_passes_the_current_input_as_the_starting_directory(client, monke
         seen["initial"] = initial
         return []
 
-    monkeypatch.setattr(routes, "pick_folder", fake_pick)
+    monkeypatch.setattr(source, "pick_folder", fake_pick)
     client.post("/api/browse", json={"mode": "folder", "initial": "/data/last-used"})
     assert seen["initial"] == "/data/last-used"
 
 
 def test_a_cancelled_browse_is_not_an_error(client, monkeypatch):
-    monkeypatch.setattr(routes, "pick_folder", lambda initial=None: [])
+    monkeypatch.setattr(source, "pick_folder", lambda initial=None: [])
     res = client.post("/api/browse", json={"mode": "folder"})
     assert res.status_code == 200
     assert res.get_json()["paths"] == []
@@ -178,9 +178,9 @@ def test_browse_rejects_an_unknown_mode(client):
 
 def test_browse_reports_a_dialog_that_cannot_open(client, monkeypatch):
     def boom(initial=None):
-        raise routes.DialogError("tkinter unavailable")
+        raise source.DialogError("tkinter unavailable")
 
-    monkeypatch.setattr(routes, "pick_folder", boom)
+    monkeypatch.setattr(source, "pick_folder", boom)
     res = client.post("/api/browse", json={"mode": "folder"})
     assert res.status_code == 500
     assert "tkinter unavailable" in res.get_json()["error"]
@@ -189,11 +189,11 @@ def test_browse_reports_a_dialog_that_cannot_open(client, monkeypatch):
 def test_browsing_does_not_disturb_the_loaded_source(client, workbook_dir, monkeypatch):
     """Browse only fills in the input; loading stays an explicit second step."""
     load(client, workbook_dir)
-    monkeypatch.setattr(routes, "pick_folder", lambda initial=None: ["/data/elsewhere"])
+    monkeypatch.setattr(source, "pick_folder", lambda initial=None: ["/data/elsewhere"])
 
     client.post("/api/browse", json={"mode": "folder"})
 
-    assert routes._workspace.source == {"type": "folder", "value": workbook_dir}
+    assert client.application.extensions["workspace"].source == {"type": "folder", "value": workbook_dir}
 
 
 def test_cases_carry_a_server_computed_status(client, workbook_dir):
