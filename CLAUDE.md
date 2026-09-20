@@ -44,7 +44,7 @@ The package is layered, and the layering is enforced, not aspirational:
 |---|---|
 | `tcm/settings.py` | nothing from the package — it sits outside the layers deliberately |
 | `tcm/domain/` | `tcm.domain`, `tcm.settings` only — never flask, pandas, openpyxl, requests or msal |
-| `tcm/infrastructure/` | `tcm.domain`, `tcm.settings` |
+| `tcm/infrastructure/` | `tcm.domain`, `tcm.infrastructure`, `tcm.settings` |
 | `tcm/services/` | `tcm.domain`, `tcm.infrastructure`, `tcm.services`, `tcm.settings` |
 | `tcm/web/` | anything — the only layer that imports flask |
 

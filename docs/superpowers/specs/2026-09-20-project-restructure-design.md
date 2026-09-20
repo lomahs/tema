@@ -46,7 +46,7 @@ Taken with the user on 2026-09-20.
 | Python depth | Single layered package with concrete dependencies | Layers readable from the file listing, no framework ceremony |
 | Ports | Yes — `Protocol` at the I/O boundaries | User's call, overriding a YAGNI recommendation; scoped by the rule below |
 | Multi-user | Not implemented; seams placed | Behaviour must stay identical for the move to be verifiable |
-| App state | `Workspace` / `IdentityService` objects | Testability: `tests/test_api.py` currently resets `routes._data` by hand |
+| App state | `Workspace` / `IdentityService` objects | Testability: `tests/web/test_api.py` currently resets `routes._data` by hand |
 | Sequencing | Land in-flight work, fix red tests, then move | A refactor claiming "behaviour identical" needs a green baseline |
 
 **The rule that bounds the ports:** a port exists where a test already needs a
@@ -122,12 +122,12 @@ Each has exactly one implementation today and a named reason to exist.
 
 | Port | Implementation | Reason |
 |---|---|---|
-| `ReportWorkbook` | `graph.workbook.Workbook` | `tests/test_publisher.py:17` `FakeWorkbook` already implements exactly its 8 public methods — this writes down an interface that exists |
+| `ReportWorkbook` | `graph.workbook.Workbook` | `tests/services/test_publisher.py:17` `FakeWorkbook` already implements exactly its 8 public methods — this writes down an interface that exists |
 | `CaseLoader` | `excel.reader.ExcelCaseLoader` | lets `Workspace` be tested without building `.xlsx` fixtures |
 | `CaseStore` | `store.memory.InMemoryCaseStore` | the database seam |
 | `ConfigRepository` | `config_repo.JsonFileConfigRepository` | the settings-in-a-database seam; also isolates the atomic-write logic |
 | `TokenProvider` | `graph.auth.GraphAuth` | per-user tokens later; fakeable now |
-| `FilePicker` | `dialog.NativeDialog` | `tests/test_filedialog.py` already fakes it |
+| `FilePicker` | `dialog.NativeDialog` | `tests/infrastructure/test_filedialog.py` already fakes it |
 
 `ReportWorkbook`'s eight methods are `worksheet_names`, `used_range`,
 `write_values`, `delete_rows`, `table_at`, `table_rows`, `table_add_rows`,
