@@ -1,12 +1,12 @@
 """The labels that locate a test case sheet's columns, driven by a JSON config.
 
-`parser/tool_data_builder.py` reads a sheet's layout the way a person would:
-it looks for "No." to find the test case number column, "結果" to find the
-result column, and a cell saying "Pad" or "Phone" to find where a device's
-block starts. Those labels are one team's spreadsheet vocabulary, so - like
-the result taxonomy in `parser/status.py` and the scope groups in
-`parser/scope.py` - they are data. A team whose sheets say "Status" instead of
-"結果" edits `parser/sheet_labels.json` and nothing else.
+`tcm/infrastructure/excel/detection.py` reads a sheet's layout the way a
+person would: it looks for "No." to find the test case number column, "結果" to
+find the result column, and a cell saying "Pad" or "Phone" to find where a
+device's block starts. Those labels are one team's spreadsheet vocabulary, so -
+like the result taxonomy in `tcm/domain/status.py` and the scope groups in
+`tcm/domain/scope.py` - they are data. A team whose sheets say "Status" instead
+of "結果" edits `config/sheet_labels.json` and nothing else.
 
 *How* each label is matched stays in code, because it is behaviour rather than
 vocabulary, and each of the three kinds needs a different rule:

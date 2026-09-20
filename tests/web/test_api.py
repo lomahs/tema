@@ -131,7 +131,8 @@ def test_load_without_a_source_is_rejected(client):
 
 
 # --- /api/browse -----------------------------------------------------------
-# The OS dialog is stubbed; `tests/test_filedialog.py` covers the dialog itself.
+# The OS dialog is stubbed; `tests/infrastructure/test_filedialog.py` covers
+# the dialog itself.
 
 def test_browse_returns_the_folder_the_user_picked(client, monkeypatch):
     monkeypatch.setattr(routes, "pick_folder", lambda initial=None: ["/data/project1"])

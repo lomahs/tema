@@ -2,12 +2,12 @@
 
 The report file already exists and is formatted by hand, so the app must be told
 which of its columns holds what. That mapping is a JSON file rather than code,
-for the same reason `parser/result_status.json` is: changing the report's shape
+for the same reason `config/result_status.json` is: changing the report's shape
 should not mean editing Python.
 
 A column is either a named field of the dataset, or `{"expand": "statuses"}`,
 which becomes one column per status **in taxonomy order**. Flagging a new status
-in `parser/result_status.json` therefore widens the report on its own.
+in `config/result_status.json` therefore widens the report on its own.
 """
 import json
 import logging

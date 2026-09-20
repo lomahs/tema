@@ -12,8 +12,8 @@ This module automates that first pass:
 4. Data starts at the first row below the header whose test-number cell is
    filled, and runs to the sheet's last non-blank row.
 
-Every label matched along the way comes from `parser/sheet_labels.json`
-via `parser.sheet_labels`, so adapting to differently-headed sheets is a
+Every label matched along the way comes from `config/sheet_labels.json`
+via `tcm.domain.sheet_labels`, so adapting to differently-headed sheets is a
 config edit rather than a change here.
 
 The result is a best-effort list of `SheetConfig`; sheets where a header row

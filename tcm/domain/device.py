@@ -6,8 +6,8 @@ Summary, but one commitment to anyone reading the totals. This is what lets
 Summary's third Rows mode add them together.
 
 Which names belong to which family is data, not code — the same reasoning as
-`parser/scope.py` and `parser/status.py`: a team that tests a new handset edits
-`parser/device_groups.json` and nothing else.
+`tcm/domain/scope.py` and `tcm/domain/status.py`: a team that tests a new
+handset edits `config/device_groups.json` and nothing else.
 
 Two things differ from `ScopeSet`, and both follow from what a device name is.
 

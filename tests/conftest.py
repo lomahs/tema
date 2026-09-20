@@ -32,7 +32,7 @@ def write_workbook(path, tool_data, cells):
 
     `tool_data=None` builds a workbook with no TOOL_DATA sheet at all — the
     state a real test case workbook arrives in before anyone has described its
-    layout, and the one `prepare.tool_data` exists to fix.
+    layout, and the one `tcm.infrastructure.excel.tool_data` exists to fix.
     """
     wb = Workbook()
     default = wb.active
@@ -110,7 +110,7 @@ def config_paths(tmp_path, monkeypatch):
 
 #: The scope groups the tests below are written against.
 #:
-#: Deliberately *not* `parser/scope_groups.json`. That file is editable from the
+#: Deliberately *not* `config/scope_groups.json`. That file is editable from the
 #: Config view at runtime, which is a feature — so a test asserting that
 #: "FPT (JM Support)" classifies as FPT was really asserting that nobody had
 #: exercised the feature yet, and broke the moment somebody did. Tests that care

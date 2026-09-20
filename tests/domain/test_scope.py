@@ -68,7 +68,7 @@ def test_the_shipped_config_labels_every_group():
 def test_the_shipped_config_holds_what_summary_needs_to_draw_three_tables():
     """An invariant over the shipped file, not a copy of its contents.
 
-    `parser/scope_groups.json` is editable from the Config view, so asserting
+    `config/scope_groups.json` is editable from the Config view, so asserting
     which groups are in it asserts that nobody has used that feature. What must
     hold whatever anybody configures is this: every group tells the view its
     key, label and both roles; exactly one is the fallback; it sorts last and

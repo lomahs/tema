@@ -1,10 +1,10 @@
 """Give a workbook the TOOL_DATA sheet the reader needs, or check the one it has.
 
-`parser.tool_data_builder` works out where a sheet keeps its test numbers,
-scopes and per-device result columns. This module is the workbook end of that:
-it runs the detection over a file, writes the result in as a TOOL_DATA sheet,
-and — once a workbook already has one — compares the two so a person can see
-what detection would change before allowing it.
+`tcm.infrastructure.excel.detection` works out where a sheet keeps its test
+numbers, scopes and per-device result columns. This module is the workbook end
+of that: it runs the detection over a file, writes the result in as a TOOL_DATA
+sheet, and — once a workbook already has one — compares the two so a person can
+see what detection would change before allowing it.
 
 The comparison is what makes re-running safe. A TOOL_DATA sheet someone
 corrected by hand is the authority on that workbook; detection is a best-effort

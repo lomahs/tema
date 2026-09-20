@@ -7,9 +7,9 @@ from typing import Optional
 #:
 #: The two dataclasses below are two halves of one idea — where a value lives,
 #: and the value once read — so the mapping between them belongs here rather
-#: than in each module that walks a sheet. Both the reader and `prepare.clear`
-#: read rows by it, and reading a row two different ways is how a case ends up
-#: classified two different ways.
+#: than in each module that walks a sheet. Both the reader and
+#: `tcm.infrastructure.excel.clearing` read rows by it, and reading a row two
+#: different ways is how a case ends up classified two different ways.
 CASE_COLUMNS = (
     ("case_no", "test_no_col"),
     ("scope", "scope_col"),
@@ -36,7 +36,8 @@ class SheetConfig:
         end_row: Last data row, 1-based and inclusive.
         test_no_col: Column letter of the test case number.
         scope_col: Column letter of the scope / responsible party.
-        result_col: Column letter of the result (classified via `parser.status`).
+        result_col: Column letter of the result, classified via
+            `tcm.domain.status`.
         test_date_col: Column letter of the execution date.
         pic_col: Column letter of the person in charge who ran the case.
         ticket_id_col: Column letter of the bug ticket id, when the result needs one.
@@ -75,7 +76,7 @@ class TestCase:
         row_num: 1-based Excel row number, for pointing a tester back at the cell.
         case_no: Test case number as written in the sheet.
         scope: Scope / responsible party (e.g. "FPT", "JP").
-        result: Raw result text; `parser.status.STATUS.classify` maps it to a
+        result: Raw result text; `tcm.domain.status.STATUS.classify` maps it to a
             status key. `None` means the case has not been run.
         test_date: Execution date, normalised to "YYYY-MM-DD".
         pic: Person in charge who executed the case.

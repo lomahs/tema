@@ -1,8 +1,8 @@
 """Publishing a report into a workbook, against a stand-in for the real one.
 
 `FakeWorkbook` keeps a real grid of cells and implements exactly the interface
-`sharepoint.workbook.Workbook` offers, so these tests exercise the arithmetic
-that decides *where* rows land without going near Graph.
+`tcm.infrastructure.graph.workbook.Workbook` offers, so these tests exercise
+the arithmetic that decides *where* rows land without going near Graph.
 """
 from datetime import datetime
 

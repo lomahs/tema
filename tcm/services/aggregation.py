@@ -134,8 +134,8 @@ def file_rows(cases, file_name):
     Summary answers "how do the files compare"; this answers "what is in this
     one". So it is `summary_rows(by_scope=True)` cut once more, by the sheet each
     case was read from — a file's sheet rows add up to its Summary rows, which
-    `tests/test_aggregate.py` asserts directly, the same property that stops the
-    scope rows and the unscoped ones drifting.
+    `tests/services/test_aggregate.py` asserts directly, the same property that
+    stops the scope rows and the unscoped ones drifting.
 
     Two things differ from every other aggregate here, and both follow from the
     page being *about one file* rather than about progress:
@@ -209,8 +209,8 @@ def status_cases(cases, status_key):
     browser being handed every case of every workbook before anyone has looked
     at one, and it only works because the slices **partition** the load — a case
     classifies as exactly one status, so two pressed cards can be unioned
-    without double-counting and no case is unreachable. `tests/test_aggregate.py`
-    asserts that directly.
+    without double-counting and no case is unreachable.
+    `tests/services/test_aggregate.py` asserts that directly.
 
     Cases are classified with `classify_case` rather than `classify`, like every
     other aggregate here: `対象外` with a PIC is a Cancel someone decided on and
@@ -271,7 +271,7 @@ def productivity_rows(cases):
     """Cases executed per working day, per PIC.
 
     "Executed" is whatever the taxonomy flags as such (`STATUS.executed`), so
-    the measure follows `parser/result_status.json` rather than a hard-coded
+    the measure follows `config/result_status.json` rather than a hard-coded
     OK/NG list. A day only counts as worked when it carries at least one
     executed case: a day spent on cases that ended Pending would otherwise
     dilute the rate. Undated cases belong to no day, so they are left out
@@ -309,7 +309,7 @@ def issue_rows(cases):
     """Every case whose status the taxonomy flags as an issue, in source order.
 
     Which statuses those are is `STATUS.issue`, not a list of keys spelled out
-    here — flagging a new status in `parser/result_status.json` is all it takes
+    here — flagging a new status in `config/result_status.json` is all it takes
     for it to start appearing in the report.
 
     Source order is kept deliberately: the rows then read in the same sequence

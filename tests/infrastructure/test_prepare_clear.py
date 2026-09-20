@@ -1,8 +1,9 @@
-"""Planning and applying a results wipe, as `prepare.clear` exposes it.
+"""Planning and applying a results wipe, as the clearing module exposes it.
 
-The rules that matter are all about restraint: a row already empty is not
-worth listing, a kept status is left alone, and nothing outside the five
-result columns is ever touched.
+`tcm.infrastructure.excel.clearing` is the code under test here. The rules
+that matter are all about restraint: a row already empty is not worth listing,
+a kept status is left alone, and nothing outside the five result columns is
+ever touched.
 """
 
 import pytest

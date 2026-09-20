@@ -262,9 +262,10 @@ def test_sheet_config_round_trips_through_to_dict():
 def test_each_file_result_carries_the_path_it_was_read_from(tmp_path):
     """A basename does not identify a workbook; the folder scan is recursive.
 
-    The Tools view joins these results to `prepare.runner.describe` to put a
-    workbook's TOOL_DATA state on the same row as its case count, and two
-    subfolders may each hold a "TC.xlsx".
+    The Tools view joins these results to
+    `tcm.services.preparation.describe` to put a workbook's TOOL_DATA state on
+    the same row as its case count, and two subfolders may each hold a
+    "TC.xlsx".
     """
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()

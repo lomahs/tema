@@ -260,8 +260,8 @@ def load_files(file_paths: list[str]) -> tuple[list[TestCase], list[dict]]:
 
     `path` is there because `file` is only a basename and the folder scan is
     recursive: two subfolders may each hold a "TC.xlsx", and the Tools view
-    joins these results to `prepare.runner.describe` on the path to put a
-    workbook's case count and its TOOL_DATA state on one row.
+    joins these results to `tcm.services.preparation.describe` on the path to
+    put a workbook's case count and its TOOL_DATA state on one row.
     """
     all_cases = []
     file_results = []

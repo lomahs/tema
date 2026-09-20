@@ -1,11 +1,12 @@
 """Reading and writing the editable config files.
 
-`config.py` says *where* each config file is; this says how to read one, how to
-check an edit, how to write it without being able to leave a broken file behind,
-and how to make it take effect in a running app. The Config view is the only
-caller, and `/api/config` is a `jsonify` wrapper around these two functions —
-the same arrangement as `aggregate.py` and `prepare/runner.py`, for the same
-reason: the rules live here, and what stays in the route is the request.
+`tcm/settings.py` says *where* each config file is; this says how to read one,
+how to check an edit, how to write it without being able to leave a broken file
+behind, and how to make it take effect in a running app. The Config view is the
+only caller, and `/api/config` is a `jsonify` wrapper around these two functions
+— the same arrangement as `tcm/services/aggregation.py` and
+`tcm/services/preparation.py`, for the same reason: the rules live here, and
+what stays in the route is the request.
 
 Three things are worth knowing.
 
@@ -60,7 +61,7 @@ def _adopt_statuses(new: StatusSet) -> None:
 class ConfigFile:
     """One editable config: where it lives, how to check it, how to apply it."""
 
-    #: Attribute on `config` holding the path. Read at call time rather than
+    #: Attribute on `tcm.settings` holding the path. Read at call time rather than
     #: captured here, so pointing the app at another file — or a test at a
     #: temp copy — takes effect without rebuilding this table.
     setting: str
@@ -70,7 +71,7 @@ class ConfigFile:
     apply: Callable[[object], None]
 
 
-#: The files the Config view may edit. `report/report_layout.json` is not here:
+#: The files the Config view may edit. `config/report_layout.json` is not here:
 #: its columns are the geometry of someone's report workbook rather than a
 #: vocabulary, and it is rebuilt from disk whenever the taxonomy changes.
 CONFIGS: dict[str, ConfigFile] = {

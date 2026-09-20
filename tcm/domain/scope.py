@@ -3,8 +3,8 @@
 The Summary view reports FPT work and JP work as separate tables, because they
 are separate commitments and adding them together answers no question anyone
 asks. Which Scope strings belong to which table is data, not code — the same
-reasoning as `parser/status.py`: a team that renames a scope, or wants a third
-table, edits `parser/scope_groups.json` and nothing else.
+reasoning as `tcm/domain/status.py`: a team that renames a scope, or wants a
+third table, edits `config/scope_groups.json` and nothing else.
 
 Every scope reaches exactly one group. Anything the config does not name — a
 typo, or a scope nobody has configured yet — lands in the fallback group, so

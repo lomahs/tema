@@ -1,6 +1,6 @@
 """The aggregation layer, exercised directly on `TestCase` objects.
 
-`tests/test_api.py` covers the same numbers as they come out of the endpoints;
+`tests/web/test_api.py` covers the same numbers as they come out of the endpoints;
 these tests pin the functions themselves, because the report publisher consumes
 them without going anywhere near HTTP.
 """

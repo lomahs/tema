@@ -1,12 +1,12 @@
 """Running the two preparation operations over a set of workbooks.
 
-`tool_data` and `clear` each know how to handle one workbook. This is the layer
+`tool_data` and `clearing` each know how to handle one workbook. This is the layer
 above: it walks a list of them, isolates the failures, and returns plain dicts.
 
-It exists for the same reason `aggregate.py` does: the endpoints are `jsonify`
-wrappers around these functions, which keeps the per-file walking and the error
-isolation out of the routes. Nothing here imports Flask or touches the request;
-the routes own the HTTP.
+It exists for the same reason `tcm/services/aggregation.py` does: the
+endpoints are `jsonify` wrappers around these functions, which keeps the
+per-file walking and the error isolation out of the routes. Nothing here
+imports Flask or touches the request; the routes own the HTTP.
 
 **Errors are per-file, not fatal**, exactly as in `load_files`: one workbook
 whose TOOL_DATA is unreadable must not sink a batch of forty.

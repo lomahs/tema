@@ -7,7 +7,8 @@ a case cancelled out of scope stays out of scope from one round to the next.
 The rows themselves, and every other column, are left exactly as they are.
 
 Which rows and columns to touch comes from the workbook's TOOL_DATA sheet, so
-`prepare.tool_data` has to have run on a workbook that has none.
+`tcm.infrastructure.excel.tool_data` has to have run on a workbook that has
+none.
 
 Planning is separate from applying because a cleared cell is not recoverable
 from the file: `/api/prepare/clear` shows the plan first and writes only on a

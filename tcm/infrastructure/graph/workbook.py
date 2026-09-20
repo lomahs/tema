@@ -52,7 +52,8 @@ class Workbook:
 
     Args:
         client: A `GraphClient`, or anything with the same get/post/patch/delete.
-        ref: Which file, from `sharepoint.links.share_url_to_item`.
+        ref: Which file, from
+            `tcm.infrastructure.graph.links.share_url_to_item`.
         chunk_size: Rows per write call.
     """
 

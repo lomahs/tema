@@ -307,7 +307,7 @@ def get_productivity():
 # to the source files themselves, before or between loads - so unlike every
 # other endpoint here, these two write to disk.
 #
-# The work itself lives in `prepare.runner`, which the CLIs call too; these are
+# The work itself lives in `tcm.services.preparation`; these endpoints are
 # `jsonify` wrappers with the two guards that are genuinely about the request:
 # which files may be touched, and whether `keep` names real statuses.
 

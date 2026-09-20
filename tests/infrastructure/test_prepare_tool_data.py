@@ -1,9 +1,10 @@
 """Detecting a workbook's TOOL_DATA, writing it, and diffing it against what
 is already there.
 
-`parser.tool_data_builder` does the detecting; this covers the workbook-level
-operations around it — reading the sheets, replacing the sheet in place, and
-the comparison that turns "Create" into "Check" once a workbook has one.
+`tcm.infrastructure.excel.detection` does the detecting; this covers the
+workbook-level operations around it — reading the sheets, replacing the sheet
+in place, and the comparison that turns "Create" into "Check" once a workbook
+has one.
 """
 
 import pytest

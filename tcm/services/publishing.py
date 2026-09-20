@@ -41,8 +41,8 @@ def publish(cases, workbook, layout: ReportLayout = LAYOUT, run_date=None) -> di
 
     Args:
         cases: Loaded `TestCase` objects.
-        workbook: An open `sharepoint.workbook.Workbook`, or anything offering
-            the same operations.
+        workbook: An open `tcm.infrastructure.graph.workbook.Workbook`, or
+            anything offering the same operations.
         layout: Which sheet and columns each dataset goes to.
         run_date: The day being published, "YYYY-MM-DD". Defaults to today.
 

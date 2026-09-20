@@ -1,8 +1,8 @@
 """The SharePoint endpoints: signing in, and publishing what is loaded.
 
 Both the auth object and the publish call are replaced with stand-ins, following
-the pattern `tests/test_api.py` uses for the file dialog — patch the name as the
-routes module imported it.
+the pattern `tests/web/test_api.py` uses for the file dialog — patch the name
+as the routes module imported it.
 """
 import pytest
 
