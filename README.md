@@ -22,11 +22,16 @@ test-case-management/
 │   │   ├── status.py          # StatusSet: result -> status
 │   │   ├── scope.py           # ScopeSet: Scope -> nhóm bảng Summary
 │   │   ├── device.py          # DeviceSet: tên device -> dòng device
-│   │   └── sheet_labels.py    # SheetLabels: nhãn cột mà dò layout tìm
+│   │   ├── sheet_labels.py    # SheetLabels: nhãn cột mà dò layout tìm
+│   │   └── ports.py           # 6 Protocol ở ranh giới I/O + Snapshot (một lần load)
 │   ├── infrastructure/       # I/O cụ thể: đọc/ghi Excel, gọi Graph, dựng layout báo cáo
 │   │   ├── dialog.py           # hộp thoại chọn folder/file phía OS
+│   │   ├── config_repo.py      # đọc/ghi file JSON cấu hình trên đĩa (ghi nguyên tử)
+│   │   ├── store/
+│   │   │   └── memory.py        # CaseStore giữ lần load hiện tại trong bộ nhớ
 │   │   ├── excel/
 │   │   │   ├── reader.py        # đọc TOOL_DATA + test case từ .xlsx
+│   │   │   ├── loader.py        # CaseLoader: đọc theo folder / theo danh sách file
 │   │   │   ├── detection.py     # dò layout của sheet -> các dòng TOOL_DATA
 │   │   │   ├── workbook.py      # đọc sheet / kiểm tra có TOOL_DATA chưa
 │   │   │   ├── tool_data.py     # tạo, ghi và so sánh (diff) sheet TOOL_DATA
@@ -40,13 +45,21 @@ test-case-management/
 │   │       ├── layout.py        # ReportLayout: cột nào của file báo cáo giữ gì
 │   │       └── builder.py       # dòng tổng hợp -> lưới ô theo layout
 │   ├── services/              # nghiệp vụ điều phối domain + infrastructure
+│   │   ├── workspace.py        # nguồn đang load + các case của nó (CaseLoader + CaseStore)
+│   │   ├── identity.py         # ai đang đăng nhập Graph, tiến trình device login
 │   │   ├── aggregation.py      # tổng hợp summary / daily / productivity / issues
 │   │   ├── publishing.py       # ghi 3 bảng vào workbook trên SharePoint
 │   │   ├── preparation.py      # chạy 2 thao tác trên nhiều file, lỗi tính theo file (thao tác trên file nguồn)
 │   │   └── settings_store.py   # đọc/ghi các file JSON cấu hình, validate rồi áp dụng
 │   └── web/
-│       ├── app.py              # Flask app factory
-│       └── routes.py           # Blueprint /api/* + in-memory store
+│       ├── app.py              # Flask app factory: nơi duy nhất chọn implementation
+│       └── blueprints/         # /api/* tách theo tài nguyên, lấy workspace/identity từ app.extensions
+│           ├── source.py        # /api/load, /api/reload, /api/browse, /api/prepare/files
+│           ├── analytics.py     # /api/summary, /api/daily, /api/productivity, /api/cases, /api/file, /api/statuses
+│           ├── prepare.py       # /api/prepare/tool-data, /api/prepare/clear
+│           ├── settings.py      # /api/config (+ PUT /api/config/<name>)
+│           ├── sharepoint.py    # /api/sharepoint/*, /api/report/publish
+│           └── pages.py         # trang "/"
 ├── tools/
 │   ├── generate_samples.py   # sinh file .xlsx mẫu
 │   └── sample_config.json    # config mặc định cho generator
@@ -57,9 +70,11 @@ test-case-management/
 │   ├── domain/
 │   │   ├── test_status.py
 │   │   ├── test_scope.py
-│   │   └── test_device_groups.py
+│   │   ├── test_device_groups.py
+│   │   └── test_ports.py        # mỗi port có đúng một implementation khớp nó
 │   ├── infrastructure/
 │   │   ├── test_excel_reader.py
+│   │   ├── test_config_repo.py
 │   │   ├── test_filedialog.py
 │   │   ├── test_report_layout.py
 │   │   ├── test_report_builder.py
@@ -68,6 +83,8 @@ test-case-management/
 │   │   └── test_prepare_tool_data.py
 │   ├── services/
 │   │   ├── test_aggregate.py
+│   │   ├── test_workspace.py
+│   │   ├── test_identity.py
 │   │   ├── test_config_store.py
 │   │   ├── test_publisher.py
 │   │   └── test_publish_integration.py
@@ -75,32 +92,39 @@ test-case-management/
 │       ├── test_api.py
 │       ├── test_api_config.py
 │       ├── test_api_sharepoint.py
-│       └── test_api_prepare.py
+│       ├── test_api_prepare.py
+│       └── test_app.py          # trang "/" và asset tĩnh render được
 ├── templates/
-│   └── index.html          # UI 3 tab: Summary / Daily / Detail
+│   └── index.html          # UI: rail + 7 view (Summary / Daily / Productivity / Detail / File / Tools / Config)
 └── static/
     ├── css/
     │   ├── tokens.css      # design token: màu, chữ, khoảng cách, dark mode
-    │   └── app.css         # component: ledger, status band, drawer, pager
+    │   └── app.css         # component: ledger, status band, panel, pager
     └── js/                 # ES modules, nạp qua <script type="module">
-        ├── main.js         # entry point: wiring + chuyển tab
+        ├── main.js         # entry point: wiring + chuyển view
+        ├── shell.js        # rail tối: nav, thẻ nguồn đang load, tiêu đề trang
         ├── dom.js          # $, $$, esc
         ├── api.js          # mọi lời gọi fetch tới /api/*
         ├── theme.js        # sáng/tối, đọc token CSS ra màu cụ thể
-        ├── setupDrawer.js  # ngăn Setup + dòng tóm tắt nguồn trên thanh trên
         ├── sourcePanel.js  # chọn folder/file, Load & Reload, localStorage
         ├── reportPanel.js  # đăng nhập SharePoint + nút Publish
+        ├── preparePanel.js # tạo/kiểm TOOL_DATA, xoá kết quả vòng cũ
+        ├── filesTable.js   # một bảng file dùng chung cho 2 panel trên
+        ├── target.js       # số case/người/ngày (localStorage), plan của Daily
         ├── taxonomy.js     # status từ /api/statuses + scaffolding bảng
         ├── groupedTable.js # bảng gộp nhóm, đóng/mở, dòng cha cộng dồn
         ├── sorting.js      # sort theo cột (asc -> desc -> bỏ sort)
         ├── filters.js      # uniqueOf, populateSelect
-        ├── pagination.js   # phân trang (theo dòng hoặc theo nhóm)
+        ├── pagination.js   # phân trang (theo dòng hoặc theo nhóm) + footer dùng chung
         ├── charts.js       # Chart.js, màu lấy từ tone của taxonomy
         └── views/
             ├── summary.js  # gộp theo file, mở ra thành device
+            ├── summaryOverview.js # dải KPI phía trên các bảng Summary
             ├── daily.js    # tiến độ theo ngày, gộp theo ngày
             ├── productivity.js # năng suất theo thành viên
-            └── detail.js   # stat, filter, tìm kiếm, bảng, phân trang
+            ├── detail.js   # stat, filter, tìm kiếm, bảng, phân trang
+            ├── file.js     # báo cáo cho một workbook (vào bằng cách bấm tên file)
+            └── config.js   # sửa 4 file JSON cấu hình ngay trong app
 ```
 
 ## Chạy

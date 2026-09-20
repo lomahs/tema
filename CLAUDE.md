@@ -5,7 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Overview
 
 Flask web app that reads test cases out of Excel workbooks (`.xlsx`) and aggregates
-progress / results into three views (Summary, Daily, Detail). Single-user local tool:
+progress / results into the views the rail lists (Summary, Daily, Productivity, Detail,
+Tools, Config) plus the File page they drill into. Single-user local tool:
 no database, no build step, no auth. README.md is written in Vietnamese and holds the
 full Excel-format and sample-generator reference.
 
@@ -28,9 +29,11 @@ There is no linter or formatter configured.
 
 ## Architecture
 
-Read flow: browser → `/api/load` → [tcm/infrastructure/excel/reader.py](tcm/infrastructure/excel/reader.py) →
-in-memory `_data` dict in [tcm/web/routes.py](tcm/web/routes.py) → [tcm/services/aggregation.py](tcm/services/aggregation.py) →
-the GET endpoints → ES modules under [static/js/](static/js/).
+Read flow: browser → `/api/load` in [tcm/web/blueprints/source.py](tcm/web/blueprints/source.py) →
+[Workspace](tcm/services/workspace.py) → [tcm/infrastructure/excel/reader.py](tcm/infrastructure/excel/reader.py) →
+the `CaseStore` the workspace keeps the load in ([tcm/infrastructure/store/memory.py](tcm/infrastructure/store/memory.py)) →
+[tcm/services/aggregation.py](tcm/services/aggregation.py) → the GET endpoints → ES modules under
+[static/js/](static/js/).
 
 Write flow: `/api/report/publish` → [tcm/services/publishing.py](tcm/services/publishing.py) →
 [tcm/infrastructure/graph/workbook.py](tcm/infrastructure/graph/workbook.py) → Microsoft Graph. Reading stays local;
@@ -61,6 +64,51 @@ convention: it walks each module's AST and asserts the import table above, so a 
 not a hypothetical — it is what caught `ReportLayout` importing `openpyxl` while that module
 was briefly placed under `tcm/domain/` during the restructure, which is why the report layout
 now lives in `tcm/infrastructure/report/` instead.
+
+## Ports and the composition root
+
+There are six ports, all of them in [tcm/domain/ports.py](tcm/domain/ports.py): `CaseLoader`,
+`CaseStore`, `ReportWorkbook`, `ConfigRepository`, `TokenProvider` and `FilePicker`. Where one
+exists, the service that needs it takes it as a constructor argument — `Workspace(loader, store)`,
+`IdentityService(auth)` — instead of importing an implementation and being stuck with it.
+**What bounds the set is that a port exists where a test already needs a stand-in, or where a
+swap is genuinely planned**, never wherever a boundary could be drawn. Without that rule the
+next one is added for a seam nobody will ever cross, and a tool this size pays for the
+indirection in every call site while getting nothing back — the same reasoning the layering
+section gives for letting services reach infrastructure concretely. `ReportWorkbook` is the
+clearest case: the publisher has been driven through a hand-written `FakeWorkbook` since it was
+first tested, so that interface already existed and had simply never been written down; naming
+it changed no behaviour and made the fake checkable against the real client. `CaseStore` is the
+other kind — the database seam, where a `SqlCaseStore` with the same two methods is what a
+multi-user version swaps in.
+
+**`create_app` in [tcm/web/app.py](tcm/web/app.py) is the only place implementations are
+chosen.** It builds the shipped `Workspace` over the Excel loader and the in-memory store, and
+the shipped `IdentityService` over Graph, puts both on `app.extensions`, and registers the
+blueprints; a blueprint reaches for them through the `workspace()` / `identity()` helpers in
+`tcm/web/blueprints/__init__.py` and never imports either. It takes `workspace` and `identity`
+arguments for the sake of tests: an app over fakes is built by passing them, not by patching a
+module attribute and remembering to put it back. That is what removed the per-test reset the
+suite used to need — each test gets its own app, so there is no shared store to clear.
+
+**What the port checks prove is narrower than it looks.**
+[tests/domain/test_ports.py](tests/domain/test_ports.py) asserts `issubclass(impl, Port)` for
+each of the six, because a Protocol nothing is checked against is a comment. But `issubclass`
+against a `runtime_checkable` Protocol is `hasattr`-based: it catches a method that was deleted
+or renamed, and it catches nothing else. Dropping `width` from `delete_rows`, reordering its
+parameters, or changing what it returns all still pass. **The ports pin each interface's shape,
+not its contract** — a reader who takes them for a type check will trust them to keep `Workbook`
+and `FakeWorkbook` agreeing on signatures, which is exactly what they cannot do. What holds
+those two together is `tests/services/test_publish_integration.py`, which runs the real client,
+links and workbook against a fake Graph service that parses the addresses it is sent.
+
+`FilePicker` is the one port with no production caller: `NativeDialog` in
+[tcm/infrastructure/dialog.py](tcm/infrastructure/dialog.py) answers it and is checked against
+it, but `/api/browse` in `tcm/web/blueprints/source.py` still calls the module-level
+`pick_folder` / `pick_files` directly — wiring it through the factory rewrites six monkeypatches
+in `tests/web/test_api.py`, and that was left for its own change. It is therefore the one of the
+six that does not yet meet the rule above, which is worth knowing before anyone reads it as a
+live seam.
 
 **TOOL_DATA is the schema.** Test case sheets have no fixed layout. Each workbook carries a
 `TOOL_DATA` sheet whose rows say, per (sheet, device): the row span and the Excel column
@@ -659,8 +707,9 @@ Three rules hold across both operations, and each is enforced rather than truste
   corrected it by eye; detection is a best-effort first pass. `diff_configs` matches blocks on
   `(sheet, device)` and reports changed fields, so "Create TOOL_DATA" becomes "Check TOOL_DATA"
   once a workbook has one — and `preparePanel.js` only offers Apply when something would change.
-- **Only the loaded source's files may be touched.** `_requested_files` in `tcm/web/routes.py`
-  resolves the source through `runner.source_workbooks` and refuses any path not in it, so a
+- **Only the loaded source's files may be touched.** `_requested_files` in
+  `tcm/web/blueprints/prepare.py`
+  resolves the source through `workspace().source_workbooks()` and refuses any path not in it, so a
   stray path in a request body cannot reach a workbook the user never chose. A folder is
   re-globbed rather than remembered, so a file dropped in since the last load still appears.
 
@@ -668,10 +717,25 @@ Three rules hold across both operations, and each is enforced rather than truste
 That is what makes the keep set honest: `対象外` with a PIC is Cancel and `対象外` without one is
 Out Of Scope, so keeping Cancel must not decide the fate of rows that were never in the plan.
 
-**Out of scope by decision:** the module-level `_data` dict in `api/routes.py` stays global
-mutable state; it is deliberate for a single-user local tool. The same goes for `_auth` and
-the `_login` dict guarded by `_login_lock` — one person is at the keyboard. Device sign-in
-runs on a background thread via `_spawn`, which tests replace to run inline.
+**Out of scope by decision: the four vocabulary singletons stay process-global, and `adopt()` is
+the price of it.** `STATUS`, `SCOPES`, `DEVICES` and `LABELS` are imported *by name* into
+eight modules across the package, so `settings_store.save()` cannot replace them — rebinding the
+name in `tcm.domain.status` would reach none of the importers, and a save from the Config view
+would validate, write the file and change nothing on screen. It mutates them in place through
+`adopt()` instead, which is the mechanism the config section above sets out. **The cost is the
+one a second user would meet first:** the taxonomy is
+process state, not request state, so one person renaming a status or marking it excluded changes
+what every figure on somebody else's screen *means*, mid-session, with no reload and nothing on
+the page to say it happened. That is the first thing a multi-user version has to face, and it is
+harder than the data it reports on — the loaded cases already have a seam to put a per-user store
+behind, and the vocabularies have none.
+
+`Workspace` and `IdentityService` are one instance per process too, but there the seam is placed
+rather than crossed: both are constructed in `create_app` and reached through
+`current_app.extensions`, so making them per-session is a change to the factory rather than to
+every caller. Device sign-in still runs on a background thread — the device flow takes as long as
+the user takes to type a code into a browser — through the `spawn` argument `IdentityService`
+takes, which tests pass to run the wait inline.
 
 ## Tests
 
@@ -680,4 +744,5 @@ pytest only, Python side only (no JS test framework — verify UI changes by run
 syntax check). No test touches the network: Graph is always a fake transport.
 [tests/conftest.py](tests/conftest.py) builds real `.xlsx` fixtures in `tmp_path` via
 `config_row()` + `write_workbook()`; use those helpers rather than checking in binaries.
-`tests/web/test_api.py` resets `routes._data` between tests since the store is global.
+`tests/web/test_api.py` builds its own app per test through `create_app(workspace=...)` rather
+than clearing a store between them — the reason the factory takes that argument at all.
