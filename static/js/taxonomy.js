@@ -307,7 +307,7 @@ export function statusHeadCells(th, { counted = false } = {}) {
  * **They are controls, not readouts.** Each card filters the table to its own
  * status, and the first clears that filter — the design's tab row, which is the
  * quick single pick over the same state the Result toggles inside the filter
- * panel edit one at a time. `views/detail.js` binds them; this only builds them,
+ * panel edit one at a time. `views/detail/index.js` binds them; this only builds them,
  * because the status list is configurable and nothing may hard-code it.
  *
  * {@link setTaxonomy} must have run first.

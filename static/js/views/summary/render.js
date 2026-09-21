@@ -1,342 +1,33 @@
 /**
- * Summary view: one card per scope group, each holding a flat table.
+ * Every DOM write Summary makes: the bucket cards, their scope tabs, the
+ * tables and their footers, and the column alignment pass.
  *
- * FPT work and JP work are separate commitments, so they are reported as
- * separate tables. A single table adding them together answers no question
- * anyone asks, and the two rarely move for the same reason. The backend splits
- * the rows; which Scope belongs to which table is configured in
- * `config/scope_groups.json`, so this module never names a scope itself.
+ * Reads `state.js` and, for a bucket's rows and its scope groups, `buckets.js`.
+ * Nothing here decides which rows belong to a bucket — that is `buckets.js`'s
+ * job — and nothing here fetches.
  *
- * That is the one place this screen departs from the design canvas, which has a
- * single table and a Scope dropdown. Everything else it draws is the design's:
- * the Device and File selects, the Rows toggle, the Executed
- * progress column, the condition chips and the Prev/Next/Show-all footer. The
- * Scope select is the one control that would be meaningless here — the scope is
- * the heading of the card you are already reading.
- *
- * The filters are shared across the cards, for the reason the sort is: the
- * tables have identical columns, so "iPad only" ought to mean the same thing
- * everywhere at once rather than in whichever table you happened to set it in.
- * Paging is *not* shared — a page number only means something within one table.
- *
- * The tables are deliberately **not** grouped internally. Every row carries its
- * own file and device, which is what makes it sortable on any column, readable
- * without opening anything, and safe to select and paste into Excel — a roll-up
- * row interleaved among the data would paste as a duplicate total.
- *
- * Owns the summary dataset, the scope group list, the shared filter and sort
- * state, and each card's page. The KPI cards and panels above the tables are
- * `summaryOverview.js` — it owns none of that state and re-renders on a
- * different trigger, so it is kept out of here.
+ * Unlike Detail's split, nothing here has to reach back into `index.js`: the
+ * event handlers that call `render()` again (a filter chip's ×, a page change)
+ * are themselves defined inside `render()` and `renderFooter()`, in this same
+ * module, so they call the local `render` directly rather than through a
+ * callback. `buckets.js` never calls anything in this file at all, so there is
+ * no cycle for a hook to break — the callback seam Detail's split needed
+ * between its `filters.js` and `render.js` has no counterpart here.
  */
-import { $, $$, esc } from "../dom.js";
-import { populateSelect, uniqueOf } from "../filters.js";
-import { groupPath, renderGroupedTable } from "../groupedTable.js";
-import { renderPageFooter } from "../pagination.js";
-import { makeSortable, paintSortIndicators, sortableTh, sortRows } from "../sorting.js";
+import { $, $$, esc } from "../../dom.js";
+import { renderGroupedTable } from "../../groupedTable.js";
+import { renderPageFooter } from "../../pagination.js";
+import { makeSortable, paintSortIndicators, sortableTh, sortRows } from "../../sorting.js";
 import {
     getCountedStatuses, getStatuses, isExcluded, statusCells, statusHeadCells,
     sumRows,
-} from "../taxonomy.js";
-import { executedPct, progressBar, renderOverview, scopeProgress } from "./summaryOverview.js";
-
-/** @typedef {{key: string, label: string}} ScopeGroup */
-
-/** Files per page, per card. The design's page size. */
-const PAGE_SIZE = 10;
-
-/** @type {Object[]} rows from /api/summary, each carrying its scope group key */
-let groups = [];
-/** @type {ScopeGroup[]} every configured group, in config order */
-let scopes = [];
-
-/**
- * The three tables, in the order they are drawn.
- *
- * Summary used to draw one table per scope group. It now draws one per *role*,
- * because the roles are what a reader is actually comparing: what we committed
- * to, what we are reporting but did not commit to, and what nobody has
- * classified yet. A team with six scope groups had six tables and no way to see
- * the first of those three figures at all.
- *
- * The roles come from the config, not from this file — `counted` and `fallback`
- * ride along on every group in `/api/summary`'s `scopes` list, so no scope is
- * ever named here. The third bucket takes its heading from the fallback group's
- * own label for the same reason; the first two are role names, not scopes, so
- * they are written down.
- *
- * `counted` is the KPI strip's denominator too — `summaryOverview` filters by
- * the same flag — so "the total is the In Scope table" holds by construction
- * rather than by two places agreeing to compute it the same way.
- *
- * @type {{key: string, title: string|null, pick: (g: ScopeGroup) => boolean}[]}
- */
-const BUCKETS = [
-    { key: "in", title: "In Scope", pick: (g) => g.counted !== false && !g.fallback },
-    { key: "out", title: "Out Scope", pick: (g) => g.counted === false && !g.fallback },
-    // Titled from the group itself: it is one configured group, and naming it
-    // here would be this module naming a scope.
-    { key: "other", title: null, pick: (g) => !!g.fallback },
-];
-
-/**
- * @type {Set<string>} scope group keys pressed, across every bucket.
- *
- * A filter over rows already fetched, never a fetch — the same arrangement as
- * Review's scope cards, whose behaviour these copy. Every group starts pressed:
- * unlike Review, where adding work outside the plan is a deliberate choice, a
- * bucket exists precisely to show what is in it.
- */
-const chosenScopes = new Set();
-
-/** @type {import("../sorting.js").SortState} shared by every table */
-const sort = { col: null, asc: true };
-
-/**
- * How many rows a file gets.
- *
- * - `split` — one per (file, device): the granularity the backend serves and
- *   the report writes.
- * - `family` — one per (file, device family): "iPhone Min size" and "iPhone Max
- *   size" are two device blocks in the workbook but one handset to anyone
- *   reading the totals. Which names make a family is configured in
- *   `config/device_groups.json` and arrives on the row as `device_family`, so
- *   this module names no device of its own.
- * - `combined` — one per file, every device summed.
- *
- * The design defaults to combined. This defaults to split, because per-device
- * is what this table has always shown and what the published report is keyed
- * on; collapsing it silently would be a change of meaning, not of layout.
- *
- * None of the three changes a total — only how many rows carry it.
- *
- * @type {"split"|"family"|"combined"}
- */
-let grouping = "split";
-
-/** The cycle the Rows button walks, and what it reads in each state. */
-const GROUPINGS = [
-    { key: "split", label: "Split" },
-    { key: "family", label: "By device type" },
-    { key: "combined", label: "Combined" },
-];
-
-/** @type {{key: string, label: string}[]} from /api/summary, for naming a family */
-let families = [];
-
-/** @type {Map<string, {page: number, showAll: boolean}>} keyed by scope key */
-const paging = new Map();
-
-/** No expansion here — the tables are flat — but the widget wants the set. */
-const noExpansion = new Set();
-
-const FILTERS = ["#summaryFilterDevice", "#summaryFilterFile"];
-
-/**
- * Called with a file name when one is clicked.
- *
- * A file cell is a way into the file view, but this module must not import it —
- * `main.js` owns the views, the same arrangement that keeps `views/detail.js`
- * out of here for the Missing reason jump.
- */
-let onOpenFile = () => {};
-
-/**
- * Called with a status figure's context when one is pressed.
- *
- * Every number in the status band is a way into the cases it counts, and this
- * module must no more import the view that lists them than it imports the file
- * view — `main.js` owns both. The context is the row: its file, its device or
- * device family, and the scope group whose card it was drawn in.
- *
- * @type {(ctx: Object) => void}
- */
-let onDrillIn = () => {};
-
-/**
- * Wire the shared controls. Call once, at startup.
- *
- * They live in the static template, so unlike the sortable headers they are
- * never replaced and must only be bound a single time.
- *
- * @param {{onOpenFile?: (file: string) => void}} [opts] What to do when a file
- *   name is clicked. This module does not know there is a file view.
- */
-export function initSummaryView({ onOpenFile: open = () => {},
-                                  onDrillIn: drill = () => {} } = {}) {
-    onOpenFile = open;
-    onDrillIn = drill;
-
-    // One listener for every table: the cards are regenerated per scope group
-    // on each render, and a file cell — or a status figure — is the same link in
-    // all of them. A status figure is checked first because a row's File cell is
-    // a link too, and only one of the two can be meant by a click.
-    $("#summaryTables").addEventListener("click", (e) => {
-        const figure = e.target.closest("button[data-status]");
-        if (figure) {
-            // The attribute names the *bucket* — one of this module's own three
-            // literals — and the scope keys are resolved here, from the pressed
-            // cards. Configured text never goes through a `data-` attribute:
-            // that is the rule the NUL-separated group paths are kept out of the
-            // DOM for, and a scope key is configured text.
-            const { bucket: key, ...rest } = figure.dataset;
-            onDrillIn({ ...rest, scopes: pressedScopes(key) });
-            return;
-        }
-        const cell = e.target.closest("button[data-file]");
-        if (cell) onOpenFile(cell.dataset.file);
-    });
-
-    // The scope tabs never fetch: every row is already here, and pressing one
-    // is a filter over them. Delegated like the file cells, because the tabs
-    // are regenerated on every render.
-    $("#summaryTables").addEventListener("click", (e) => {
-        // `All` is a shortcut, not a fourth state: it presses every group in
-        // its bucket and has no way back, because unpressing them all shows
-        // nothing. The attribute carries a bucket key — one of this module's
-        // own three literals — never a configured scope key.
-        const all = e.target.closest("button[data-scope-all]");
-        if (all) {
-            const bucket = BUCKETS.find((b) => b.key === all.dataset.scopeAll);
-            if (bucket) groupsOf(bucket).forEach((g) => chosenScopes.add(g.key));
-            paging.clear();
-            render();
-            return;
-        }
-        const tab = e.target.closest("button[data-scope-tab]");
-        if (!tab) return;
-        const key = tab.dataset.scopeTab;
-        if (chosenScopes.has(key)) chosenScopes.delete(key);
-        else chosenScopes.add(key);
-        paging.clear();
-        render();
-    });
-
-    FILTERS.forEach((sel) => $(sel).addEventListener("change", () => {
-        paging.clear();
-        render();
-    }));
-
-    $("#btnSummaryGrouping").addEventListener("click", () => {
-        const at = GROUPINGS.findIndex((g) => g.key === grouping);
-        grouping = GROUPINGS[(at + 1) % GROUPINGS.length].key;
-        paging.clear();
-        render();
-    });
-
-    // The columns are fitted to the pane, so the pane changing size is a reason
-    // to fit them again — the measured widths themselves do not depend on the
-    // viewport, but how much room there is for them does. Debounced, because a
-    // drag fires this continuously and each pass is a forced layout.
-    let refit;
-    window.addEventListener("resize", () => {
-        clearTimeout(refit);
-        refit = setTimeout(alignColumns, 120);
-    });
-
-    $("#btnClearSummaryFilters").addEventListener("click", () => {
-        FILTERS.forEach((sel) => { $(sel).value = ""; });
-        paging.clear();
-        render();
-    });
-}
-
-/**
- * Adopt a fresh dataset and draw it.
- *
- * The overview is drawn once here rather than inside `render()`: it reports
- * over every row regardless of order, so re-sorting or paging a table must not
- * redraw it.
- *
- * @param {{groups: Object[], scopes: ScopeGroup[], missing_reason: Object[]}} data
- *   `/api/summary` body.
- * @param {Object[]} [dailyRows] `/api/daily` rows, for the activity line.
- */
-export function renderSummary(data, dailyRows) {
-    groups = data.groups || [];
-    scopes = data.scopes || [];
-    families = data.device_families || [];
-    // Every group pressed: a bucket exists to show what is in it, and a load
-    // arriving pre-filtered by the last one would hide rows without saying so.
-    chosenScopes.clear();
-    scopes.forEach((g) => chosenScopes.add(g.key));
-    paging.clear();
-
-    populateSelect("#summaryFilterDevice", uniqueOf(groups, "device"));
-    populateSelect("#summaryFilterFile", uniqueOf(groups, "file"));
-
-    renderOverview(data, dailyRows);
-    render();
-}
-
-/** The shared filters, applied. */
-function filtered() {
-    const device = $("#summaryFilterDevice").value;
-    const file = $("#summaryFilterFile").value;
-    return groups.filter((r) => (!device || r.device === device) && (!file || r.file === file));
-}
-
-/**
- * Collapse a scope group's rows to one per file.
- *
- * The Device cell then reports how many devices were summed rather than naming
- * one — a cell reading "iPad" on a row that also counts an iPhone would be a
- * lie, and an empty one would look like missing data.
- *
- * @param {Object[]} rows
- * @returns {Object[]}
- */
-function combine(rows) {
-    const byFile = new Map();
-    rows.forEach((r) => {
-        if (!byFile.has(r.file)) byFile.set(r.file, []);
-        byFile.get(r.file).push(r);
-    });
-    return [...byFile.entries()].map(([file, sub]) => {
-        const devices = new Set(sub.map((r) => r.device).filter(Boolean)).size;
-        return {
-            ...sumRows(sub),
-            file,
-            device: devices ? `${devices} device${devices === 1 ? "" : "s"}` : "—",
-        };
-    });
-}
-
-/**
- * Collapse a scope group's rows to one per (file, device family).
- *
- * The rows arrive already carrying `device_family` — the backend classifies a
- * device name once, so the merged rows here and the published report cannot
- * disagree about which block is which handset. A device no family claims is its
- * own family, keyed by its own name, so this hides nothing: the rows still add
- * up to exactly what Split shows.
- *
- * The Device cell reads the family's configured label and says how many devices
- * it merged when it merged more than one — unlike `combine`, naming the family
- * is not a lie, but "iPhone" standing for two blocks is worth knowing.
- *
- * @param {Object[]} rows
- * @returns {Object[]}
- */
-function combineByFamily(rows) {
-    const byKey = new Map();
-    rows.forEach((r) => {
-        const key = groupPath(r.file, r.device_family ?? r.device);
-        if (!byKey.has(key)) byKey.set(key, []);
-        byKey.get(key).push(r);
-    });
-    return [...byKey.values()].map((sub) => {
-        const family = sub[0].device_family ?? sub[0].device;
-        const label = families.find((f) => f.key === family)?.label || family;
-        const devices = new Set(sub.map((r) => r.device).filter(Boolean)).size;
-        return {
-            ...sumRows(sub),
-            file: sub[0].file,
-            device_family: family,
-            device: devices > 1 ? `${label} (${devices} devices)` : label,
-        };
-    });
-}
+} from "../../taxonomy.js";
+import { executedPct, progressBar, scopeProgress } from "../summaryOverview.js";
+import { bucketRows, filtered, groupsOf, pressedScopes } from "./buckets.js";
+import {
+    BUCKETS, GROUPINGS, PAGE_SIZE, chosenScopes, getGrouping, paging, sort,
+    noExpansion,
+} from "./state.js";
 
 /**
  * What a card's dropped columns hold, when they hold anything.
@@ -376,76 +67,6 @@ function asideChip(rows, bucketKey) {
         + `${esc(s.label)}: ${totals[s.key]}</button>`).join(" · ");
     return `<span class="chip chip--aside" title="Outside the total, and not given a column here">`
         + `${breakdown} · ${n} not counted</span>`;
-}
-
-/**
- * The scope keys a bucket is currently showing.
- *
- * What a figure drawn on that card was counted over, which is what a drill-in
- * from it has to narrow to. An unknown key answers with every pressed group, so
- * a stale attribute widens the destination rather than emptying it.
- *
- * @param {string} bucketKey
- * @returns {string[]}
- */
-function pressedScopes(bucketKey) {
-    const bucket = BUCKETS.find((b) => b.key === bucketKey);
-    const groups = bucket ? groupsOf(bucket) : scopes;
-    return groups.filter((g) => chosenScopes.has(g.key)).map((g) => g.key);
-}
-
-/** The configured groups belonging to one bucket, in config order. */
-function groupsOf(bucket) {
-    return scopes.filter(bucket.pick);
-}
-
-/**
- * Sum a bucket's rows to one row per (file, device).
- *
- * `/api/summary` serves one row per (file, device, scope), which is what let
- * each scope group have its own table. A bucket may hold several groups — two
- * counted commitments, say — and this table has no Scope column to tell them
- * apart, so leaving them unmerged would show two rows that look like duplicates
- * of each other. Summing is the only reading that keeps a row identifiable by
- * what it displays.
- *
- * It is the same collapse the report publisher performs by calling
- * `summary_rows(by_scope=False)`, which is why the screen and the published
- * sheet still agree on what one row means.
- *
- * `device_family` rides across untouched: every row being merged shares a
- * (file, device), so they all carry the same family, and the Rows toggle needs
- * it afterwards.
- *
- * @param {Object[]} rows
- * @returns {Object[]}
- */
-function mergeByDevice(rows) {
-    const byKey = new Map();
-    rows.forEach((r) => {
-        const key = groupPath(r.file, r.device);
-        if (!byKey.has(key)) byKey.set(key, []);
-        byKey.get(key).push(r);
-    });
-    return [...byKey.values()].map((sub) => ({
-        ...sumRows(sub),
-        file: sub[0].file,
-        device: sub[0].device,
-        device_family: sub[0].device_family,
-    }));
-}
-
-/**
- * One bucket's rows: its pressed groups, merged, then grouped as Rows says.
- *
- * @param {Object} bucket
- * @param {Object[]} rows Every row under the shared Device/File filters.
- * @returns {Object[]}
- */
-function bucketRows(bucket, rows) {
-    const keys = new Set(groupsOf(bucket).filter((g) => chosenScopes.has(g.key))
-        .map((g) => g.key));
-    return regroup(mergeByDevice(rows.filter((r) => keys.has(r.scope))));
 }
 
 /**
@@ -532,12 +153,12 @@ function chips() {
  * `makeSortable` bind here without stacking a second listener on a header that
  * outlived the last draw — the old headers are gone with their listeners.
  */
-function render() {
+export function render() {
     const container = $("#summaryTables");
     const rows = filtered();
 
     $("#btnSummaryGrouping").textContent =
-        GROUPINGS.find((g) => g.key === grouping).label;
+        GROUPINGS.find((g) => g.key === getGrouping()).label;
 
     // An empty bucket is not drawn: a team with no work outside the plan should
     // not have to scroll past an empty Out Scope table to reach its figures. A
@@ -647,7 +268,7 @@ function render() {
  * `main.js` calls `alignSummaryColumns` when the view is shown. That is the
  * same arrangement `resizeCharts` needs and for the same reason.
  */
-function alignColumns() {
+export function alignColumns() {
     const tables = [...$$("#summaryTables table.ledger")];
     if (!tables.length) return;
     if (!tables[0].offsetParent) return;   // hidden: nothing has a width yet
@@ -807,23 +428,6 @@ function fitToPane(widths, available) {
 }
 
 /**
- * Align the tables now that they can be measured.
- *
- * `main.js` calls this when Summary is shown: the load path renders while the
- * view is still hidden, where every column measures zero.
- */
-export function alignSummaryColumns() {
-    alignColumns();
-}
-
-/** One scope group's rows at the granularity the Rows button is set to. */
-function regroup(rows) {
-    if (grouping === "combined") return combine(rows);
-    if (grouping === "family") return combineByFamily(rows);
-    return rows;
-}
-
-/**
  * Fill one scope group's header, body, totals row and footer.
  *
  * @param {number} i The card's position among the drawn tables.
@@ -923,8 +527,8 @@ function linkFor(r, bucketKey) {
     // bucket key is one of this module's own literals, which a `data-`
     // attribute can carry safely. The click handler turns it back into the
     // pressed scope keys.
-    if (grouping === "combined") return { file: r.file, bucket: bucketKey };
-    if (grouping === "family") {
+    if (getGrouping() === "combined") return { file: r.file, bucket: bucketKey };
+    if (getGrouping() === "family") {
         return { file: r.file, device_family: r.device_family, bucket: bucketKey };
     }
     return { file: r.file, device: r.device, bucket: bucketKey };

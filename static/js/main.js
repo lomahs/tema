@@ -17,7 +17,7 @@ import { initPreparePanel, refreshPrepare, runFileAction } from "./preparePanel.
 import { initFilesTable } from "./filesTable.js";
 import { initConfigView } from "./views/config.js";
 import { getReviewStatuses, setTaxonomy } from "./taxonomy.js";
-import { alignSummaryColumns, initSummaryView, renderSummary } from "./views/summary.js";
+import { alignSummaryColumns, initSummaryView, renderSummary } from "./views/summary/index.js";
 import {
     currentFile, initFileView, renderFileHeads, showFile,
 } from "./views/file.js";
@@ -253,8 +253,8 @@ initTheme();
 initTarget();
 onThemeChange(refreshChartTheme);
 initShell({ onNavigate: showView });
-// Summary's KPI cards navigate, but `views/summary.js` must not import
-// `views/detail.js` to do it — this module owns the views, so the jump comes
+// Summary's KPI cards navigate, but `views/summary/**` must not import
+// `views/detail/**` to do it — this module owns the views, so the jump comes
 // back through here instead, and it is also what translates a card's filter
 // name into the call on whichever module owns that view's state.
 setJumpHandler((view, filter, ctx = {}) => {
@@ -280,7 +280,7 @@ function openStatusCases(ctx) {
     showView("detail");
 }
 // Clicking a file name is navigation, so it comes back through here rather than
-// either module importing the file view: `views/summary.js` and `filesTable.js`
+// either module importing the file view: `views/summary/**` and `filesTable.js`
 // report the name, this decides what to do with it and what Back should say.
 initFileView({ onBack: () => showView(fileOrigin), onDrillIn: openStatusCases });
 initSourcePanel({ onLoaded: refreshViews });

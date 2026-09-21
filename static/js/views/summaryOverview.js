@@ -33,7 +33,7 @@ import {
 /**
  * Where a KPI card's "View →" goes. Set by `main.js`, which owns the views.
  *
- * A callback rather than an import: Summary reaching into `views/detail.js`
+ * A callback rather than an import: Summary reaching into `views/detail/index.js`
  * directly is the coupling that was deliberately removed from this screen, and
  * a card that navigates is not a reason to put it back.
  *
