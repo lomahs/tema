@@ -53,7 +53,12 @@ The spec names six CSS files — `base`, `layout`, `controls`, `tables`, `cards`
 | `templates/views/tools.html` | 409–521 | `#toolsView` |
 | `templates/views/config.html` | 522–605 | `#configView` |
 
-The six ranges tile 1–1760 exactly: no gap, no overlap.
+The six CSS ranges tile 1–1760 exactly: no gap, no overlap.
+
+**The `index.html` ranges in this table are measured against the file as it is today,
+before Task 1 runs.** Task 1 replaces one `<link>` with six, shifting every later line
+by five. Task 2 therefore derives its boundaries from the file rather than reading them
+here; the numbers above are for orientation only.
 
 **Deleted:** `static/css/app.css`
 
@@ -257,17 +262,38 @@ Note the byte count. This is the artifact Step 5 diffs against, and it is the on
 
 - [ ] **Step 2: Cut the seven partials**
 
+**Derive the line ranges from the file as it now stands. Do not type the numbers below.**
+Task 1 replaced one `<link>` with six, so every line after 12 has shifted by five, and the
+ranges quoted in this plan's File Structure table were measured before that. They are
+illustrative; the derivation is the authority.
+
+The boundaries are unambiguous — each view starts at its own `<section class="view"`
+and ends on the line before the next one, with the last ending at the line before
+`</main>`:
+
 ```bash
-cd /Users/lomahs/lomahs/Coding/test-management
 mkdir -p templates/views
-sed -n '91,123p'  templates/index.html > templates/views/summary.html
-sed -n '124,183p' templates/index.html > templates/views/daily.html
-sed -n '184,209p' templates/index.html > templates/views/productivity.html
-sed -n '210,342p' templates/index.html > templates/views/detail.html
-sed -n '343,408p' templates/index.html > templates/views/file.html
-sed -n '409,521p' templates/index.html > templates/views/tools.html
-sed -n '522,605p' templates/index.html > templates/views/config.html
+python3 - <<'PY'
+import pathlib, re
+p = pathlib.Path("templates/index.html")
+lines = p.read_text().splitlines(keepends=True)
+
+starts = [(i, re.search(r'id="(\w+)View"', l).group(1))
+          for i, l in enumerate(lines) if '<section class="view' in l]
+end = next(i for i, l in enumerate(lines) if "</main>" in l)
+assert len(starts) == 7, f"expected 7 views, found {len(starts)}: {[n for _, n in starts]}"
+
+bounds = [(s, (starts[k + 1][0] if k + 1 < len(starts) else end), name)
+          for k, (s, name) in enumerate(starts)]
+for s, e, name in bounds:
+    pathlib.Path(f"templates/views/{name}.html").write_text("".join(lines[s:e]))
+    print(f"{name}.html  lines {s+1}-{e}  ({e-s} lines)")
+PY
 ```
+
+Expected: seven lines naming `summary`, `daily`, `productivity`, `detail`, `file`,
+`tools`, `config` in that order. If the count assertion fires, a view was added or
+renamed since this plan was written — reconcile before cutting.
 
 Check each partial opens and closes its own `<section class="view">`:
 
@@ -290,7 +316,7 @@ Expected: seven `OK` lines. An unbalanced partial means a range boundary landed 
 
 - [ ] **Step 3: Replace the views in the shell with includes**
 
-Edit `templates/index.html`: delete lines 91–605 and put seven include tags in their place, in the same order.
+Edit `templates/index.html`: delete everything from the first `<section class="view"` through the line before `</main>` — the exact span Step 2 just printed — and put seven include tags in its place, in the same order.
 
 ```html
         {% include "views/summary.html" %}
