@@ -46,10 +46,12 @@ export const expanded = new Set();
 /** @type {import("../../sorting.js").SortState} */
 export const detailSort = { col: null, asc: true };
 
+/** Whether paging is off and every matching row is rendered into the pane. */
 let showAll = false;
 export const getShowAll = () => showAll;
 export const setShowAll = (v) => { showAll = v; };
 
+/** Whether the list is narrowed to cases that owe a reason and carry none. */
 let missingOnly = false;
 export const getMissingOnly = () => missingOnly;
 export const setMissingOnly = (v) => { missingOnly = v; };
