@@ -5,6 +5,7 @@ Every other test in this suite asks for JSON. If `template_folder` or
 serve nothing a browser could use -- so this is the only thing standing
 between a factory refactor and a blank page.
 """
+import pathlib
 import posixpath
 import re
 
@@ -67,14 +68,17 @@ def test_the_stylesheets_are_linked_in_cascade_order():
     )
 
 
-#: Matches `import ... from "spec"` and `export ... from "spec"`, including the
-#: multi-line braced form `main.js` uses. The newline tolerance is the point: a
-#: single-line pattern silently skips those and reports a clean graph.
+#: An `import`/`export ... from "spec"` specifier. Applied to source with its
+#: comments stripped, because a comment holding an apostrophe or a semicolon
+#: would otherwise end the match early and drop that module from the walk.
 _IMPORT = re.compile(r'\b(?:import|export)\b(?:[^"\';]|\n)*?\bfrom\s+["\']([^"\']+)["\']')
+
+#: Line and block comments. JS has no nested block comments, so this is exact.
+_COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
 
 def test_every_es_module_import_resolves():
-    """Walk the module graph from main.js and assert nothing 404s.
+    """Walk the module graph from the shell's entry point and assert it is whole.
 
     There is no bundler and no JS test framework, so a mistyped or stale import
     specifier fails nowhere except a browser console -- the page loads, the
@@ -83,12 +87,24 @@ def test_every_es_module_import_resolves():
     introduced: a browser resolves no directory index, so `views/detail/` is a
     404 where `views/detail/index.js` is not.
 
+    Three things are asserted, and the third is what makes this more than a
+    404 check. The entry point is read out of the rendered page rather than
+    named here, so breaking the `<script type="module">` fails this test
+    instead of leaving it green. Every reachable specifier must resolve. And
+    the reachable set must equal every `.js` file on disk -- which catches the
+    opposite failure, a module orphaned by an import that was dropped rather
+    than mistyped, and would otherwise sit unreferenced and untested.
+
     Bare specifiers are skipped: the only one is the Chart.js CDN tag, which is
     a <script> in the shell rather than an import, and the suite reaches no
     network.
     """
     c = client()
-    seen, queue = {}, ["/static/js/main.js"]
+    html = c.get("/").data.decode()
+    entry = re.search(r'<script type="module" src="([^"]+)"', html)
+    assert entry, "the shell has no <script type=\"module\"> entry point"
+
+    seen, queue = {}, [entry.group(1)]
     while queue:
         path = queue.pop()
         if path in seen:
@@ -97,12 +113,18 @@ def test_every_es_module_import_resolves():
         seen[path] = response.status_code
         if response.status_code != 200:
             continue
-        for spec in _IMPORT.findall(response.data.decode()):
+        source = _COMMENT.sub("", response.data.decode())
+        for spec in _IMPORT.findall(source):
             if not spec.startswith("."):
                 continue
             queue.append(posixpath.normpath(posixpath.join(posixpath.dirname(path), spec)))
 
     broken = {p: code for p, code in seen.items() if code != 200}
     assert not broken, f"unresolvable module imports: {broken}"
-    # A regex that quietly matched nothing would make the assert above vacuous.
-    assert len(seen) > 25, f"only walked {len(seen)} modules; the import pattern is not matching"
+
+    root = pathlib.Path(__file__).resolve().parents[2] / "static" / "js"
+    on_disk = {f"/static/js/{p.relative_to(root).as_posix()}" for p in root.rglob("*.js")}
+    assert set(seen) == on_disk, (
+        f"unreachable from the entry point: {sorted(on_disk - set(seen))}; "
+        f"walked but absent from disk: {sorted(set(seen) - on_disk)}"
+    )

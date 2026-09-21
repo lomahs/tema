@@ -318,15 +318,22 @@ Expected: seven `OK` lines. An unbalanced partial means a range boundary landed 
 
 Edit `templates/index.html`: delete everything from the first `<section class="view"` through the line before `</main>` — the exact span Step 2 just printed — and put seven include tags in its place, in the same order.
 
+**At column 0, not indented.** Jinja keeps whatever precedes a tag on its line, so an
+indented `{% include %}` prepends that indent to the partial's first line:
+
 ```html
-        {% include "views/summary.html" %}
-        {% include "views/daily.html" %}
-        {% include "views/productivity.html" %}
-        {% include "views/detail.html" %}
-        {% include "views/file.html" %}
-        {% include "views/tools.html" %}
-        {% include "views/config.html" %}
+{% include "views/summary.html" %}
+{% include "views/daily.html" %}
+{% include "views/productivity.html" %}
+{% include "views/detail.html" %}
+{% include "views/file.html" %}
+{% include "views/tools.html" %}
+{% include "views/config.html" %}
 ```
+
+The boundary also has to walk back over the banner comment above each
+`<section class="view">`, or every partial ends with the *next* view's banner and the first
+view's is orphaned in the shell.
 
 Jinja's `include` inserts the partial's rendered text at the tag's position without adding or trimming anything, so the output is unchanged as long as each partial ends with the newline its source range ended with. `sed -n 'A,Bp'` preserves that.
 
@@ -419,9 +426,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Rewrite `CLAUDE.md`'s "No CSS framework" paragraph**
 
-It currently says the UI is "hand-written CSS in two files" and names `app.css`. It is now eight files. Replace the first sentence and add the ordering rule:
+It currently says the UI is "hand-written CSS in two files" and names `app.css`. It is now seven files (tokens plus six). Replace the first sentence and add the ordering rule:
 
-> **No CSS framework.** The UI is hand-written CSS in eight files.
+> **No CSS framework.** The UI is hand-written CSS in seven files.
 > [static/css/tokens.css](static/css/tokens.css) holds every colour, type and
 > spacing token (light palette on bare `:root`, dark redefined under both
 > `prefers-color-scheme` and `[data-theme="dark"]`), and the components are split

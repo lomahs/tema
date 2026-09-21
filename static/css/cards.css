@@ -1,6 +1,13 @@
 /*
- * Cards: the stat strip, the scope cards and tabs, the KPI row, the panel grid
- * and today's progress.
+ * Cards: the stat strip, Review's scope cards and Summary's scope tabs, the KPI
+ * row, the panel grid and today's progress.
+ *
+ * **`.card` itself is not here — it is in `views.css`**, with `.card-head`,
+ * `.card--table` and `.card-foot`, because that is where it sits in the
+ * cascade. This file holds what goes *on* a card; that one holds the card. A
+ * `.card` rule added here would land two stylesheets before the definition it
+ * means to override, and an equal-specificity override would silently stop
+ * working.
  *
  * Fourth of six. Loads after `tables.css` and before `charts.css`; see the
  * header of `base.css` for why that order is not negotiable.

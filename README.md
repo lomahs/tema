@@ -146,13 +146,13 @@ test-case-management/
             │   └── index.js    # bind listener, vòng refresh, fetch, export ra ngoài
             ├── file.js     # báo cáo cho một workbook (vào bằng cách bấm tên file)
             └── config.js   # sửa 4 file JSON cấu hình ngay trong app
+```
 
 Hai view lớn nhất được tách thành 4 module, import chỉ chạy một chiều:
 `index -> render -> {filters|buckets} -> state`. Một binding ES đã import thì
 không gán lại được, nên mỗi `let` có đúng một module sở hữu và được đọc/ghi qua
 hàm; chỗ nào tầng dưới cần gọi ngược lên thì nhận callback do `index.js` cài
 (`setOnChanged`), chứ không import ngược — import ngược là vòng lặp.
-```
 
 ## Chạy
 

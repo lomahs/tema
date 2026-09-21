@@ -101,9 +101,9 @@ tcm/
     blueprints/settings.py     /api/config, PUT /api/config/<name>
     blueprints/sharepoint.py   /api/sharepoint/*, /api/report/publish
     blueprints/pages.py        "/"
-static/css/                tokens.css unchanged; app.css split six ways
+static/css/                tokens.css unchanged; app.css cut six ways, order load-bearing
 static/js/views/detail/    state.js filters.js render.js index.js
-static/js/views/summary/   buckets.js render.js index.js
+static/js/views/summary/   state.js buckets.js render.js index.js
 templates/views/           one file per view section, included by index.html
 tests/                     mirrors tcm/: domain/ services/ infrastructure/ web/
 ```

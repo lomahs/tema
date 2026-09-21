@@ -378,7 +378,7 @@ sheet keeps one row per (file, device) and the SharePoint workbook needs no new 
 cannot drift: the scope rows of a file add up to its unscoped row, which `tests/services/test_aggregate.py`
 asserts directly.
 
-**No CSS framework.** The UI is hand-written CSS in eight files.
+**No CSS framework.** The UI is hand-written CSS in seven files.
 [static/css/tokens.css](static/css/tokens.css) holds every colour, type and spacing token
 (light palette on bare `:root`, dark redefined under both `prefers-color-scheme` and
 `[data-theme="dark"]`), and the components are split across
@@ -388,14 +388,19 @@ asserts directly.
 `index.html` in exactly that order, which is load-bearing.**
 
 They were cut from one 1760-line `app.css` at *contiguous* section boundaries rather than
-sorted into semantic buckets, and the difference matters. Its 35 sections do not sit in
+sorted into semantic buckets, and the difference matters. Its 36 sections do not sit in
 semantic runs — the panel grid sits between two card sections, the folded filter panel
 between two chart ones, the narrow-screen media query in the middle rather than at the end —
 so bucketing them by subject would have moved rules past others of equal specificity.
 Concatenating the six as linked reproduces the original byte for byte, which is what makes
-the cascade *provably* unchanged rather than argued to be. The cost is that two files hold a
-section their name does not cover, and each says so in its own header; `layout` folded into
-`base` and `views` holds the tail. `test_the_stylesheets_are_linked_in_cascade_order` in
+the cascade *provably* unchanged rather than argued to be. `layout` folded into `base`, and
+`views` holds the tail.
+
+**The cost is real: several files hold a section their name does not cover, and each says so
+in its own header.** The one that catches people is `.card` — it is in `views.css`, not
+`cards.css`, which holds what goes *on* a card and not the card itself. Read the header before
+adding a rule; putting one in the file whose *name* fits rather than the file whose *position*
+fits is how an equal-specificity override lands too early and silently stops working. `test_the_stylesheets_are_linked_in_cascade_order` in
 [tests/web/test_app.py](tests/web/test_app.py) pins the order, because a reordered link
 renders a page that still looks nearly right.
 
@@ -468,11 +473,14 @@ declares the mutable state and nothing else, a derivation layer that writes no D
 and `index.js`, which binds the listeners, owns the refresh cycle and is the only module
 `main.js` imports. **Imports run `index → render → {filters|buckets} → state` and never
 back**, and where a lower module has to reach a higher one it takes a hook `index.js`
-installed, the same shape as `setJumpHandler` and `onOpenFile`. Detail has three:
-`render.js`'s `setOnChanged` and `setOnReload` — the sort header and the filter chips re-run
-the cycle, and the chip that drops a status must re-*fetch* rather than merely re-filter — and
-`filters.js`'s `setOnCleared`, which is how `clearNarrowing` repaints two controls that belong
-to `render.js`. That is also why `applyFilters` no longer ends by calling the four render
+installed, the same shape as `setJumpHandler` and `onOpenFile`. Detail has three. `render.js`'s
+`setOnChanged` is the ordinary one — the sort header and four of the filter chips re-run
+`refresh()`, which narrows and redraws. `setOnReload` is `rebuild()`, which is a step wider and
+still not a fetch: dropping a status from the chip row changes *which cached cases are in
+hand*, so `allData` is reassembled from the cache and the selects and scope toggles rebuilt
+from it, but nothing is asked of the server — the other statuses are already here. Only
+choosing a status nobody has opened yet reaches `loadChosen`. `filters.js`'s `setOnCleared` is
+the third: it is how `clearNarrowing` repaints two controls that belong to `render.js`. That is also why `applyFilters` no longer ends by calling the four render
 functions: its tail moved to `refresh()` in `index.js`, the one place that legitimately knows
 about both halves.
 
@@ -509,8 +517,10 @@ Productivity, Detail, File, Tools and Config. Adding a view means adding an entr
 and `{% include %}`s one partial per view from [templates/views/](templates/views/), in that
 same order. So a new view is an entry in `VIEWS`, a `templates/views/<name>.html` holding its
 section, and an include beside the others. **The include tags sit at column 0 deliberately:**
-Jinja keeps whatever precedes a tag on its line, so an indented `{% include %}` would add that
-indent to every line of the partial, which already carries its own.
+Jinja keeps whatever precedes a tag on its line, so an indented `{% include %}` prepends that
+indent to the partial's *first* line — which already carries its own, so the banner comment
+opening each partial lands eight spaces too deep while every line under it stays put. The
+rendered-output diff that proves the split changed nothing is what surfaced it.
 
 **File is the one view with no nav item.** It is a drill-in: it reports on a workbook you
 picked, so it is entered by clicking a file name and left through the Back button it draws

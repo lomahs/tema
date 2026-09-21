@@ -1,7 +1,12 @@
 /*
- * View- and panel-specific rules: the card variants, empty states, the
- * reduced-motion and narrow-screen queries, the prepare panel, the config
- * editor, the merged source card and the file view.
+ * `.card` and its parts — head, table variant, foot — then the view- and
+ * panel-specific rules: empty states, the reduced-motion and narrow-screen
+ * queries, the prepare panel, the config editor, the merged source card and
+ * the file view.
+ *
+ * The card surface living here rather than in `cards.css` is the clearest case
+ * of this split's rule: files are cut by position in the cascade, not by
+ * subject. See `cards.css`'s header.
  *
  * Last of six — everything here overrides something above it. Loads after
  * `charts.css`; see the header of `base.css` for why that order is not

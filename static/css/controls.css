@@ -1,7 +1,11 @@
 /*
- * Controls: buttons, fields, the toolbar and toggle groups — and the summary
- * overview strip with its progress bar, which sit in this run because they sit
- * here in the cascade, not because they are controls.
+ * Controls: buttons, fields, the toolbar and toggle groups.
+ *
+ * Three sections here are not controls and are in this file only because they
+ * are in this run of the cascade: the summary overview strip, the progress bar,
+ * and Summary's scope cards — the last of which shares its subject with
+ * `cards.css`, which holds Review's. `.empty-note` is here too, beside
+ * `views.css`'s `.empty-row`.
  *
  * Second of six. Loads after `base.css` and before `tables.css`; see the
  * header of `base.css` for why that order is not negotiable.

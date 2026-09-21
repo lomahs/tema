@@ -2,6 +2,10 @@
  * Tables: the ledger, and everything drawn inside one — the status band,
  * grouped rows, sortable headers, badges, flags and the pager.
  *
+ * It opens with `.view`, `.view--grid` and `.section-title`, which are layout
+ * rather than table: they belong to `base.css` by subject and are here by
+ * position, because `base.css` ends before them in the cascade.
+ *
  * Third of six. Loads after `controls.css` and before `cards.css`; see the
  * header of `base.css` for why that order is not negotiable.
  */

@@ -102,8 +102,9 @@
    rail: it is a drill-in, entered by clicking a file name.
 
    These tags sit at column 0 deliberately. Jinja keeps whatever precedes the tag
-   on its line, so an indented `{% include %}` would add that indent to every
-   line of the partial -- the partials carry their own. -#}
+   on its line, so an indented `{% include %}` prepends that indent to the
+   partial's FIRST line only -- pushing the banner comment that opens each one
+   eight spaces too deep while everything under it stays put. -#}
 {% include "views/summary.html" %}
 {% include "views/daily.html" %}
 {% include "views/productivity.html" %}
