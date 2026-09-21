@@ -1,0 +1,130 @@
+        <!-- ==================== Detail ====================
+             Where a status figure leads: the cases behind any number in any
+             status band, fetched one status at a time and kept. -->
+        <section class="view" id="detailView" hidden>
+            <!-- One card per scope group, multi-select, the counted ones pressed
+                 to begin with. Adding a group the plan excludes is a choice
+                 somebody makes here rather than something a total does quietly,
+                 which is why the card for one is drawn set apart. -->
+            <div class="scope-row">
+                <div class="scope-cards" id="detailScopes" role="group"
+                     aria-label="Scope groups"></div>
+                <span class="count" id="detailScopeSummary"></span>
+            </div>
+
+            <!-- Controls, not readouts: each card filters the table to its own
+                 status and the first fetches every status. Built from the whole
+                 taxonomy in `renderDetailCards`, bound in `views/detail/index.js`.
+                 Their figures count over the chosen scopes, which is how many
+                 cases pressing one would list. -->
+            <div class="stats" id="statsRow"></div>
+
+            <!-- Search, and the way to everything else. Nine controls above the
+                 table pushed the first row of data off a laptop screen, so the
+                 rest fold away and the button carries how many are active. -->
+            <div class="filter-bar">
+                <input type="search" id="filterSearch" class="input input-mono"
+                       placeholder="Search case no, ticket, note, PIC…">
+                <button class="btn" id="btnToggleFilters" aria-expanded="false"
+                        aria-controls="detailFilters">
+                    Filters <span class="pill" id="filterCount"></span>
+                </button>
+                <span class="count" id="filteredCount"></span>
+            </div>
+
+            <div class="filter-well" id="detailFilters" hidden>
+                <div class="filter-grid">
+                    <div class="field">
+                        <label for="filterFile">File</label>
+                        <select id="filterFile" class="select"><option value="">All files</option></select>
+                    </div>
+                    <div class="field">
+                        <label for="filterDevice">Device</label>
+                        <select id="filterDevice" class="select"><option value="">All devices</option></select>
+                    </div>
+                    <div class="field">
+                        <span class="label" id="filterScopeLabel">Scope</span>
+                        <!-- Toggles, not a select, for the reason Result is:
+                             "FPT and FPT (JM Support)" is a normal question here
+                             and a single-pick control cannot ask it. These are
+                             the raw spellings in the cells — the cards at the
+                             top of the screen pick the *groups* those spellings
+                             belong to, which is the coarser question. -->
+                        <div class="toggles" id="filterScope" role="group"
+                             aria-labelledby="filterScopeLabel"></div>
+                    </div>
+                    <div class="field">
+                        <label for="filterPIC">PIC</label>
+                        <select id="filterPIC" class="select"><option value="">All PICs</option></select>
+                    </div>
+                    <div class="field">
+                        <label for="filterDateFrom">From</label>
+                        <input type="date" id="filterDateFrom" class="input">
+                    </div>
+                    <div class="field">
+                        <label for="filterDateTo">To</label>
+                        <input type="date" id="filterDateTo" class="input">
+                    </div>
+                    <div class="field">
+                        <label for="detailGroupBy">Group by</label>
+                        <select id="detailGroupBy" class="select">
+                            <option value="">No grouping</option>
+                            <option value="file_name">File</option>
+                            <option value="file_name,device">File, device</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filter-row">
+                    <div class="field">
+                        <span class="label" id="filterResultLabel">Result</span>
+                        <!-- Several results at once is the normal question here
+                             ("NG and Pending"), which the single-pick cards
+                             above cannot express and a select hides. -->
+                        <div class="toggles" id="filterResult" role="group"
+                             aria-labelledby="filterResultLabel"></div>
+                    </div>
+                    <div class="field">
+                        <span class="label">Condition</span>
+                        <!-- A condition rather than a result: it narrows within
+                             whatever statuses are chosen. The predicate is the
+                             one that paints the Ticket ID and Note cells red. -->
+                        <button type="button" class="toggle" id="btnMissingReason"
+                                aria-pressed="false" data-tone="danger"
+                                title="Only cases that owe a ticket id or a note and carry neither">
+                            Missing reason
+                        </button>
+                    </div>
+                    <!-- Filters, not the selection: the statuses and the scope
+                         cards decide what this screen holds at all, and a Clear
+                         that emptied the table would be offering to show
+                         nothing. The chips above drop those one at a time. -->
+                    <button class="btn" id="btnClearFilters">Clear filters</button>
+                </div>
+            </div>
+
+            <div class="chips" id="detailChips"></div>
+
+            <div class="charts-toggle">
+                <button class="btn btn-quiet" id="btnToggleCharts" aria-expanded="false"
+                        aria-controls="chartsRow">Show charts</button>
+            </div>
+            <div class="charts" id="chartsRow" hidden>
+                <div class="chart"><canvas id="chartResult"></canvas></div>
+                <div class="chart"><canvas id="chartDevice"></canvas></div>
+                <div class="chart"><canvas id="chartPIC"></canvas></div>
+            </div>
+
+            <!-- Framed and full width, like Summary's tables: the pane is
+                 capped at about ten rows and scrolls, so Show all does not make
+                 the page itself grow. -->
+            <section class="card card--table">
+                <div class="scroll-x scroll-x--flush scroll-x--rows">
+                    <table class="ledger">
+                        <thead><tr id="detailHead"></tr></thead>
+                        <tbody id="dataBody"></tbody>
+                    </table>
+                </div>
+                <div class="card-foot" id="detailFooter"></div>
+            </section>
+        </section>
+

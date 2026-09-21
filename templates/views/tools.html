@@ -1,0 +1,111 @@
+        <!-- ==================== Tools ====================
+             Where the data comes from, what gets written back to the workbooks,
+             and where the report goes. This was a drawer; it is a view now, and
+             the three panels below still know nothing about each other or about
+             which view they happen to be drawn in. -->
+        <section class="view view--grid" id="toolsView" hidden>
+
+            <!-- One card, because there is one list of files.
+                 Loading is read-only; the buttons on each row write to the
+                 workbook itself. Two cards meant the same workbooks were listed
+                 twice, in two tables, a screen apart. -->
+            <section class="card" id="sourceSection">
+                <div class="card-head">
+                    <h2>Where the test cases come from</h2>
+                    <p>Loading is read-only. The actions on each row change the workbook
+                       itself — every one shows what it would do first, and nothing is
+                       written until you press Apply.</p>
+                </div>
+                <div class="stack">
+                    <div class="row">
+                        <div class="field">
+                            <label for="sourceType">Source</label>
+                            <select id="sourceType" class="select">
+                                <option value="folder">Folder</option>
+                                <option value="files">Files</option>
+                            </select>
+                        </div>
+                        <div class="field" style="flex:1" id="folderInputGroup">
+                            <label for="folderPath">Folder path</label>
+                            <div class="input-row">
+                                <input type="text" id="folderPath" class="input input-mono"
+                                       placeholder="D:\TestCases\project1">
+                                <button id="btnBrowseFolder" type="button" class="btn">Browse</button>
+                            </div>
+                        </div>
+                        <div class="field" style="flex:1" id="filesInputGroup" hidden>
+                            <label for="filePaths">File paths, one per line</label>
+                            <div class="input-row">
+                                <textarea id="filePaths" class="input" rows="3"
+                                          placeholder="D:\TestCases\file1.xlsx&#10;D:\TestCases\file2.xlsx"></textarea>
+                                <button id="btnBrowseFiles" type="button" class="btn">Browse</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <button id="btnLoad" class="btn btn-primary">Load test cases</button>
+                    </div>
+                    <div class="status-line" id="loadStatus"></div>
+
+                    <!-- The controls that act on every workbook at once. Hidden
+                         until a load succeeds, because the file list they work
+                         from is the loaded source's. -->
+                    <div class="stack" id="prepareControls" hidden>
+                        <div class="field">
+                            <span class="label">Keep these results when clearing</span>
+                            <div class="checks" id="keepStatuses"></div>
+                        </div>
+                        <div class="row">
+                            <button id="btnDetectAll" type="button" class="btn">Check TOOL_DATA in all</button>
+                            <button id="btnClearAll" type="button" class="btn">Clear results in all</button>
+                        </div>
+                    </div>
+
+                    <!-- What each workbook contributed, what state it is in, and
+                         what may be done to it. `filesTable.js` owns it; both
+                         panels feed it and neither knows the other exists. -->
+                    <div class="scroll-x scroll-x--wide" id="sourceFilesWrapper" hidden>
+                        <table class="ledger">
+                            <thead><tr>
+                                <th class="num">#</th><th>File</th><th>Status</th>
+                                <th class="num">Cases</th><th>TOOL_DATA</th>
+                                <th>Actions</th><th>Error</th>
+                            </tr></thead>
+                            <tbody id="sourceFilesBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="status-line" id="prepareStatus"></div>
+                    <div class="preview" id="preparePreview" hidden></div>
+                    <div class="row" id="prepareApplyRow" hidden>
+                        <button id="btnPrepareApply" type="button" class="btn btn-danger">Apply</button>
+                        <button id="btnPrepareCancel" type="button" class="btn btn-quiet">Discard</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-head">
+                    <h2>Where the report goes</h2>
+                    <p>Publishing rewrites today's rows in the SharePoint workbook and appends
+                       the current ones. Safe to run twice.</p>
+                </div>
+                <div class="stack">
+                    <div class="field">
+                        <label for="reportUrl">SharePoint report file</label>
+                        <input type="text" id="reportUrl" class="input input-mono"
+                               placeholder="https://contoso.sharepoint.com/:x:/r/sites/qa/Shared%20Documents/QA%20Report.xlsx">
+                    </div>
+                    <div class="row">
+                        <button id="btnSignIn" class="btn">Sign in</button>
+                        <button id="btnSignOut" class="btn" hidden>Sign out</button>
+                        <button id="btnPublish" class="btn btn-primary" disabled
+                                title="Load test cases first">Publish</button>
+                    </div>
+                    <div class="status-line" id="sharepointStatus"></div>
+                    <div class="status-line" id="publishStatus"></div>
+                </div>
+            </section>
+
+        </section>
+

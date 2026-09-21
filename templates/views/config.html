@@ -1,0 +1,91 @@
+        <!-- ==================== Config ====================
+             The three JSON files the rest of the app is driven by. A view
+             rather than a fourth Tools card: all three are editable whether or
+             not anything is loaded, and three forms is more than a card's worth
+             of screen. `views/config.js` names none of the vocabularies it
+             draws — tones, derive conditions and field names all arrive from
+             /api/config. -->
+        <section class="view view--grid" id="configView" hidden>
+
+            <section class="card" id="configCard-statuses">
+                <div class="card-head card-head--row">
+                    <h2>Result statuses</h2>
+                    <span class="pill" id="configDirty-statuses" hidden>unsaved</span>
+                </div>
+                <div class="card-head">
+                    <p>What a Result cell means. Every status column, badge, chart slice and
+                       report column is built from this — order included.
+                       <span class="mono" id="configPath-statuses"></span></p>
+                </div>
+                <div class="stack">
+                    <div id="configStatuses"></div>
+                    <div class="status-line" id="configStatus-statuses"></div>
+                    <div class="row">
+                        <button id="configSave-statuses" type="button" class="btn btn-primary" disabled>Save</button>
+                        <button id="configRevert-statuses" type="button" class="btn btn-quiet" disabled>Revert</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="configCard-scopes">
+                <div class="card-head card-head--row">
+                    <h2>Scope groups</h2>
+                    <span class="pill" id="configDirty-scopes" hidden>unsaved</span>
+                </div>
+                <div class="card-head">
+                    <p>Which Scope values belong to which Summary table. Separate commitments get
+                       separate tables rather than one that adds them together.
+                       <span class="mono" id="configPath-scopes"></span></p>
+                </div>
+                <div class="stack">
+                    <div id="configScopes"></div>
+                    <div class="status-line" id="configStatus-scopes"></div>
+                    <div class="row">
+                        <button id="configSave-scopes" type="button" class="btn btn-primary" disabled>Save</button>
+                        <button id="configRevert-scopes" type="button" class="btn btn-quiet" disabled>Revert</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="configCard-devices">
+                <div class="card-head card-head--row">
+                    <h2>Device families</h2>
+                    <span class="pill" id="configDirty-devices" hidden>unsaved</span>
+                </div>
+                <div class="card-head">
+                    <p>Which device names Summary's "By device type" rows add together. Two screen
+                       sizes of one handset are two blocks in the workbook but one device to
+                       anyone reading the totals.
+                       <span class="mono" id="configPath-devices"></span></p>
+                </div>
+                <div class="stack">
+                    <div id="configDevices"></div>
+                    <div class="status-line" id="configStatus-devices"></div>
+                    <div class="row">
+                        <button id="configSave-devices" type="button" class="btn btn-primary" disabled>Save</button>
+                        <button id="configRevert-devices" type="button" class="btn btn-quiet" disabled>Revert</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="configCard-sheet_labels">
+                <div class="card-head card-head--row">
+                    <h2>Sheet labels</h2>
+                    <span class="pill" id="configDirty-sheet_labels" hidden>unsaved</span>
+                </div>
+                <div class="card-head">
+                    <p>The words TOOL_DATA detection looks for when working out a sheet's layout.
+                       Changing these changes what "Create TOOL_DATA" finds, not what is already
+                       loaded. <span class="mono" id="configPath-sheet_labels"></span></p>
+                </div>
+                <div class="stack">
+                    <div id="configSheetLabels"></div>
+                    <div class="status-line" id="configStatus-sheet_labels"></div>
+                    <div class="row">
+                        <button id="configSave-sheet_labels" type="button" class="btn btn-primary" disabled>Save</button>
+                        <button id="configRevert-sheet_labels" type="button" class="btn btn-quiet" disabled>Revert</button>
+                    </div>
+                </div>
+            </section>
+
+        </section>

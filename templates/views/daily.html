@@ -1,0 +1,57 @@
+        <!-- ==================== Daily ==================== -->
+        <section class="view" id="dailyView" hidden>
+
+            <!-- Executed per day against the plan. Drawn in CSS rather than
+                 Chart.js: it is a bar per day with one marker, and it has to
+                 repaint on every filter change and every theme change. -->
+            <section class="card">
+                <div class="card-head card-head--row">
+                    <h2>Cases executed per day, against plan</h2>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="swatch swatch--bar"></span>Executed</span>
+                        <span class="legend-item"><span class="swatch swatch--plan"></span>Plan</span>
+                    </div>
+                </div>
+                <div class="bars" id="dailyChart"></div>
+                <p class="chart-note" id="dailyChartNote"></p>
+            </section>
+
+            <div class="toolbar">
+                <div class="field">
+                    <label for="dailyFilterFile">File</label>
+                    <select id="dailyFilterFile" class="select"><option value="">All files</option></select>
+                </div>
+                <div class="field">
+                    <label for="dailyFilterDevice">Device</label>
+                    <select id="dailyFilterDevice" class="select"><option value="">All devices</option></select>
+                </div>
+                <div class="field">
+                    <label for="dailyFilterPIC">PIC</label>
+                    <select id="dailyFilterPIC" class="select"><option value="">All PICs</option></select>
+                </div>
+                <div class="field">
+                    <label for="dailyFilterDateFrom">From</label>
+                    <input type="date" id="dailyFilterDateFrom" class="input">
+                </div>
+                <div class="field">
+                    <label for="dailyFilterDateTo">To</label>
+                    <input type="date" id="dailyFilterDateTo" class="input">
+                </div>
+                <button class="btn" id="btnClearDailyFilters">Clear</button>
+                <div class="toolbar-end">
+                    <span class="count" id="dailyCount"></span>
+                    <button class="btn btn-quiet" data-expand="daily" data-all="1">Expand all</button>
+                    <button class="btn btn-quiet" data-expand="daily" data-all="0">Collapse all</button>
+                </div>
+            </div>
+
+            <div class="scroll-x">
+                <table class="ledger">
+                    <thead><tr id="dailyHead"></tr></thead>
+                    <tbody id="dailyBody"></tbody>
+                    <tfoot id="dailyFoot"></tfoot>
+                </table>
+            </div>
+            <nav class="pager" id="dailyPagination" aria-label="Daily pages"></nav>
+        </section>
+

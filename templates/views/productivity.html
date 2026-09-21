@@ -1,0 +1,27 @@
+        <!-- ==================== Productivity ====================
+             Its own view rather than a second table under Daily: it reports over
+             everything loaded, and sitting beneath Daily's filters implied it
+             answered to them. It never did. -->
+        <section class="view" id="productivityView" hidden>
+            <section class="card card--table">
+                <div class="card-head card-head--row">
+                    <h2>Productivity by member</h2>
+                    <!-- The one number in the app nobody reads out of a workbook.
+                         It is a yardstick the team sets, and the Daily chart's
+                         plan line is derived from the same value. -->
+                    <label class="inline-field" for="productivityTarget">
+                        Target / person / day
+                        <input type="number" id="productivityTarget" class="input input-mono"
+                               min="1" step="1" inputmode="numeric">
+                    </label>
+                </div>
+                <div class="scroll-x scroll-x--flush">
+                    <table class="ledger">
+                        <thead><tr id="productivityHead"></tr></thead>
+                        <tbody id="productivityBody"></tbody>
+                        <tfoot id="productivityFoot"></tfoot>
+                    </table>
+                </div>
+            </section>
+        </section>
+

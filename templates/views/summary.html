@@ -1,0 +1,33 @@
+        <!-- ==================== Summary ==================== -->
+        <section class="view" id="summaryView" hidden>
+            <!-- The state of things, above the detail of it: total, executed, what
+                 is left to review, and what owes an explanation. Everything here is
+                 derived from the same rows the tables below draw. -->
+            <div id="summaryOverview" hidden></div>
+
+            <!-- The design puts these in the table card's header. There are
+                 several cards here — one per scope group — so they sit above
+                 all of them and narrow all of them, the way the sort does. -->
+            <div class="toolbar">
+                <div class="field">
+                    <label for="summaryFilterDevice">Device</label>
+                    <select id="summaryFilterDevice" class="select"><option value="">All devices</option></select>
+                </div>
+                <div class="field">
+                    <label for="summaryFilterFile">File</label>
+                    <select id="summaryFilterFile" class="select"><option value="">All files</option></select>
+                </div>
+                <div class="field">
+                    <span class="label">Rows</span>
+                    <button class="btn" id="btnSummaryGrouping"
+                            title="One row per file and device, one per device type, or one per file">Split</button>
+                </div>
+                <button class="btn" id="btnClearSummaryFilters">Clear</button>
+            </div>
+
+            <!-- One card per scope group, generated from /api/summary: FPT work and
+                 JP work are separate commitments, and a single table adding them
+                 together answers no question anyone asks. -->
+            <div id="summaryTables"></div>
+        </section>
+
