@@ -30,7 +30,7 @@ import { initTarget } from "./target.js";
 import {
     enterDetail, initDetail, initDetailView, renderDetailCards, renderDetailHead,
     renderResultToggles, reviewCount, showMissingReason, showReview, showStatusCases,
-} from "./views/detail.js";
+} from "./views/detail/index.js";
 
 /**
  * Every view, and the heading each carries.
