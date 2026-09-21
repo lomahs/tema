@@ -1,0 +1,219 @@
+/*
+ * Components.
+ *
+ * The organising idea is still the ledger: this tool sits between two
+ * spreadsheets, its users already think in rows and columns, so the grid is the
+ * structure. Rows are ruled and cells are square, because a curve inside a grid
+ * of figures is noise.
+ *
+ * Around the grid, the Test Result Manager design canvas: a dark rail carrying
+ * navigation, and white cards on a warm grey desk carrying everything else.
+ * Each table sits in its own rounded pane and the controls take the curvature
+ * scale in `tokens.css`. The rule is distance from the data: the closer a
+ * surface is to a figure, the squarer it is. Cells are square, their pane is
+ * 10px, and a control whose entire job is to be pressed is a full pill.
+ *
+ * Selection is still an inverted ink block and never a hue, because on this
+ * screen a hue always means a status. The design's green primary was dropped
+ * for precisely that reason — see rule 1 in `tokens.css`.
+ *
+ * **The stylesheet is six files, and their link order is load-bearing.**
+ * base, controls, tables, cards, charts, views — linked in that order from
+ * `index.html`, immediately after `tokens.css`. They were cut from one
+ * 1760-line `app.css` at contiguous section boundaries precisely so that
+ * concatenating them reproduces it byte for byte: several rules here are
+ * overridden later by a selector of equal specificity, so moving a section
+ * between files would change what wins. That is also why two of the six hold a
+ * section their name does not cover, and say so in their own header.
+ *
+ * Add a rule to the file whose subject it shares, at the end of the section it
+ * belongs to — never at the top of a file to keep it near a related one.
+ *
+ * This file is first of six: the reset, the document defaults, and the
+ * two-column shell with its rail.
+ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--fs-base);
+    line-height: var(--lh-base);
+}
+
+[hidden] { display: none !important; }
+
+/* Anything that can carry Japanese needs the extra leading. */
+.cjk, .badge, .tab, th, td { line-height: var(--lh-cjk); }
+
+:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+    /* Modern engines follow `border-radius`, so a ring around a pill is a pill
+       and not the rectangle the old 1px offset used to draw around one. */
+    border-radius: inherit;
+}
+
+/* --- the shell -----------------------------------------------------------
+ * Two columns: a rail that does not scroll and a main column that does. The
+ * rail is `position: sticky` rather than `fixed` so it participates in the
+ * grid and the main column needs no matching margin to avoid sliding under it.
+ */
+
+.shell {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    min-height: 100vh;
+}
+
+.rail {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    width: var(--rail-w);
+    height: 100vh;
+    padding: var(--sp-5) var(--sp-4);
+    overflow: hidden;
+    background: var(--rail-bg);
+    color: var(--rail-ink);
+}
+
+/* Collapsed and open are two blocks, one hidden — rather than one block whose
+   every child has to know how to be narrow. */
+.rail-closed { display: none; }
+.rail.is-closed { width: var(--rail-w-closed); align-items: center; }
+.rail.is-closed .rail-open { display: none; }
+.rail.is-closed .rail-closed {
+    display: flex; flex-direction: column; align-items: center; gap: var(--sp-3);
+}
+
+.rail-open { display: flex; flex-direction: column; gap: var(--sp-5); flex: 1; min-height: 0; }
+
+.rail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-2); }
+
+.brand {
+    font-size: var(--fs-md);
+    font-weight: 700;
+    letter-spacing: var(--ls-tight);
+    line-height: var(--lh-tight);
+}
+
+/* The one typographic mannerism taken wholesale from the design: a tracked,
+   uppercase micro-label. It is only ever a label — never a heading, and never
+   anything a reader has to parse as a sentence. */
+.rail-eyebrow, .eyebrow {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: var(--ls-eyebrow);
+    text-transform: uppercase;
+    color: var(--rail-ink-soft);
+}
+.eyebrow { color: var(--ink-soft); }
+
+.rail-mark {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.08em;
+    color: var(--rail-ink-soft);
+    writing-mode: vertical-rl;
+}
+
+.rail-icon {
+    appearance: none;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--rail-hover);
+    color: var(--rail-ink);
+    font: inherit;
+    font-size: var(--fs-md);
+    line-height: 1;
+    cursor: pointer;
+}
+.rail-icon--quiet { background: transparent; color: var(--rail-ink-soft); }
+.rail-icon:hover { background: var(--rail-hover); color: var(--rail-ink); }
+
+/* What is loaded: a figure and its unit, not a sentence. */
+.rail-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-md);
+    background: var(--rail-sunk);
+}
+.rail-figure {
+    font-family: var(--font-mono);
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: var(--ls-tight);
+}
+.rail-sub { font-size: var(--fs-sm); color: var(--rail-ink-soft); }
+
+/* --- rail navigation ------------------------------------------------------
+ * The selected item is a filled block, as every other selected thing in this
+ * app is. Inside the rail the fill is `--rail-hover` rather than ink: the
+ * ground is already ink, so an ink block would be invisible.
+ */
+
+.rail-nav { display: flex; flex-direction: column; gap: 2px; }
+
+.rail-nav-item {
+    appearance: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--rail-ink);
+    font: inherit;
+    font-size: var(--fs-base);
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background 90ms ease-out, color 90ms ease-out;
+}
+.rail-nav-item:hover:not(:disabled) { background: var(--rail-hover); }
+.rail-nav-item[aria-current="true"] { background: var(--rail-hover); }
+.rail-nav-item:disabled { color: var(--rail-ink-soft); cursor: not-allowed; }
+
+/* The two figures the rail carries. Muted by default; the review count takes
+   its tone, because a number of things needing attention is a status. */
+.rail-count {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--rail-ink-soft);
+}
+.rail-count--warn:not(:empty) { color: var(--tone-warn); }
+
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); }
+
+/* --- the main column ------------------------------------------------------ */
+
+.main { min-width: 0; padding: var(--sp-6) var(--sp-5) 60px; }
+
+.page-head { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-5); }
+.page-head h1 {
+    margin: 0;
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    letter-spacing: var(--ls-tight);
+}
+.page-head p { margin: 0; max-width: 80ch; color: var(--ink-soft); font-size: var(--fs-base); }
+

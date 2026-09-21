@@ -9,7 +9,16 @@
     <link rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+    <!-- The components, in six files. This order is load-bearing: they were cut
+         from one stylesheet at contiguous boundaries so that concatenating them
+         reproduces it byte for byte, and several rules below are overridden
+         later by a selector of equal specificity. See base.css's header. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/controls.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tables.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cards.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/charts.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/views.css') }}">
 </head>
 <body>
 

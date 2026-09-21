@@ -1,0 +1,301 @@
+/*
+ * Controls: buttons, fields, the toolbar and toggle groups — and the summary
+ * overview strip with its progress bar, which sit in this run because they sit
+ * here in the cascade, not because they are controls.
+ *
+ * Second of six. Loads after `base.css` and before `tables.css`; see the
+ * header of `base.css` for why that order is not negotiable.
+ */
+/* --- buttons -------------------------------------------------------------- */
+
+.btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    min-height: var(--ctl-h);
+    padding: 0 var(--sp-3);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--r-md);
+    background: var(--paper-raised);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 90ms ease-out, border-color 90ms ease-out;
+}
+
+.btn:hover:not(:disabled) { background: var(--paper-hover); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* The primary action is a stamped ink block. No accent colour exists. */
+.btn-primary {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--ink-invert);
+}
+.btn-primary:hover:not(:disabled) { background: var(--ink-soft); border-color: var(--ink-soft); }
+
+/* Apply, in the prepare panel. The only button in the app that destroys
+   something a file cannot give back, and the one place a status colour is
+   allowed on a control rather than on a figure. */
+.btn-danger {
+    background: var(--tone-danger);
+    border-color: var(--tone-danger);
+    color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+    background: var(--tone-danger-fg);
+    border-color: var(--tone-danger-fg);
+}
+
+.btn-quiet { border-color: transparent; background: transparent; }
+.btn-quiet:hover:not(:disabled) { background: var(--paper-hover); }
+
+/* A button on the rail's dark ground. Defined after `.btn` on purpose: it
+   overrides the base paper background, and at equal specificity that is
+   decided by source order. */
+.btn-rail {
+    justify-content: flex-start;
+    border-color: var(--rail-rule);
+    background: transparent;
+    color: var(--rail-ink);
+}
+.btn-rail:hover:not(:disabled) { background: var(--rail-hover); border-color: var(--rail-ink-soft); }
+.btn-rail--quiet { border-color: transparent; color: var(--rail-ink-soft); }
+
+.btn-icon {
+    width: var(--ctl-h);
+    padding: 0;
+    border-radius: var(--r-full);
+    line-height: 1;
+}
+
+/* --- fields --------------------------------------------------------------- */
+
+.field { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+
+/* A group of toggles has no single control to point at, so it is captioned by a
+   `<span class="label">` wired up with aria-labelledby rather than a `<label>`.
+   Both get the same treatment: the caption above a field looks the same
+   whichever element carries it. */
+.field > label, .field > .label {
+    color: var(--ink-soft);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+}
+
+.input, .select, textarea.input {
+    min-height: var(--ctl-h);
+    padding: var(--sp-1) var(--sp-3);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--r-md);
+    background: var(--paper-raised);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--fs-sm);
+    min-width: 0;
+}
+
+textarea.input {
+    min-height: 0;
+    font-family: var(--font-mono);
+    resize: vertical;
+}
+.input-mono { font-family: var(--font-mono); }
+
+.input-row { display: flex; }
+.input-row .input { flex: 1; border-radius: var(--r-md) 0 0 var(--r-md); }
+.input-row .btn { border-radius: 0 var(--r-md) var(--r-md) 0; border-left: 0; }
+
+/* --- toolbar -------------------------------------------------------------- */
+
+/* A filter well: framed and set into the page rather than pinned to the top of
+   it. Nothing is sticky here any more — the rail took over as the fixed
+   element, and a second sticky bar under it ate a third of a laptop screen. */
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+
+.toolbar-end { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
+
+/* A row that opens a case elsewhere. */
+.ledger tbody tr[data-i] { cursor: pointer; }
+
+.count {
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Centred, not stretched: the eyebrow is a block, so the default `stretch`
+   makes it as tall as a chip and paints "FILTERED" against the top edge of
+   that box — reading as a line above the chips rather than beside them. */
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-1) var(--sp-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-full);
+    background: var(--paper-sunk);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+}
+
+/* A chip that marks something deliberately left out of a sum. The dashed rule
+   is `band--aside`'s, so a scope group outside the plan and a status column
+   outside the total are marked the same way rather than two ways. */
+.chip--aside {
+    border-style: dashed;
+    border-color: var(--rule-strong);
+    background: none;
+    color: var(--ink-soft);
+    font-weight: 400;
+}
+
+.chip button {
+    appearance: none; border: 0; background: none; padding: 0;
+    color: var(--ink-soft); cursor: pointer; font: inherit; line-height: 1;
+}
+.chip button:hover { color: var(--ink); }
+
+/* --- toggle group --------------------------------------------------------- */
+/* Several results at once is the normal question on the Detail tab, so Result
+   is a row of toggles rather than a select. Built like the rail nav: hairline-ruled
+   cells, and the chosen one is an inverted ink block — selection is never a
+   hue here, because on this screen a hue always means a status. */
+
+.toggles { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+
+.toggle {
+    appearance: none;
+    min-height: var(--ctl-h);
+    padding: var(--sp-1) var(--sp-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-full);
+    background: var(--paper-raised);
+    color: var(--tone-neutral);
+    font: inherit;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 90ms ease-out, color 90ms ease-out,
+                border-color 90ms ease-out;
+}
+
+/* Unpressed, a toggle carries its status' tone: the reader is picking results,
+   so the words should look like the badges they will filter to — and so they
+   take the badge's DEEP variant, not the raw tone. The raw tone is calibrated
+   to be legible as a 20px figure or a 10px bar segment; as 12.5px body text on
+   paper, `--tone-muted` is about 2:1 and "Cancel (対象外)" simply disappears. */
+.toggle[data-tone="success"] { color: var(--tone-success-fg); }
+.toggle[data-tone="danger"]  { color: var(--tone-danger-fg); }
+.toggle[data-tone="warn"]    { color: var(--tone-warn-fg); }
+.toggle[data-tone="neutral"] { color: var(--tone-neutral-fg); }
+.toggle[data-tone="muted"]   { color: var(--tone-muted-fg); }
+
+.toggle:hover { background: var(--paper-hover); }
+
+.toggle[aria-pressed="true"] {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--ink-invert);
+}
+
+/* --- the summary overview -------------------------------------------------
+ *
+ * The KPI cards and panels are above; what remains here is the progress bar
+ * they share with the Summary table's Executed column and the scope headings.
+ *
+ * The distinction the curvature scale draws still holds: a summary *of* the
+ * data may have a frame and the rows themselves may not.
+ */
+
+/* --- the progress bar -----------------------------------------------------
+ * One stacked bar over the counted statuses, in taxonomy order, painted from
+ * `colourFor` — the same stepped-tone function the charts use, so the bar and
+ * the doughnut cannot drift apart. Excluded statuses are absent: `total` does
+ * not include them, and a bar that failed to fill its own track would read as
+ * a rendering bug rather than as the deliberate gap the table's dashed rule
+ * makes explicit.
+ */
+
+.progress {
+    display: flex;
+    height: 10px;
+    overflow: hidden;
+    border-radius: var(--r-full);
+    background: var(--paper-sunk);
+}
+
+.progress-seg { display: block; height: 100%; }
+
+/* Per scope group, in the heading strip above its table. */
+.progress--sm { height: 6px; width: 140px; flex: 0 0 auto; }
+
+.scope-pct {
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* A list, not a flowed line: label, share and count each get a column, so the
+   three read down the panel instead of wrapping into an unalignable ribbon. */
+.progress-legend {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin: var(--sp-4) 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--fs-base);
+}
+
+.progress-legend .legend-item {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto auto;
+    gap: var(--sp-3);
+    align-items: center;
+}
+.legend-label { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-pct { color: var(--ink-soft); font-size: var(--fs-sm); }
+.legend-count { font-weight: 600; min-width: 58px; }
+
+/* The chart strip's legend still flows inline — two items, no columns to align. */
+.legend-item { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.legend-item b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: var(--r-full);
+    flex: 0 0 auto;
+}
+
+
+/* --- summary scope cards -------------------------------------------------- */
+/* One table per scope group, each in its own card. The heading carries that
+   group's own progress bar: FPT work and JP work are separate commitments, so
+   one of them running behind is exactly the fact the combined figure above
+   would hide. */
+
+#summaryTables .card + .card { margin-top: var(--sp-4); }
+
+.empty-note { color: var(--ink-soft); font-size: var(--fs-sm); padding: var(--sp-5) 0; }
+

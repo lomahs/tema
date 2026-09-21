@@ -1,0 +1,454 @@
+/*
+ * View- and panel-specific rules: the card variants, empty states, the
+ * reduced-motion and narrow-screen queries, the prepare panel, the config
+ * editor, the merged source card and the file view.
+ *
+ * Last of six — everything here overrides something above it. Loads after
+ * `charts.css`; see the header of `base.css` for why that order is not
+ * negotiable.
+ */
+/* --- cards ---------------------------------------------------------------
+ * The Tools panels, and the general framed surface. This replaces the setup
+ * drawer: the same three panels, no longer floating over the data, so nothing
+ * needs a scrim, an escape key, or a focus trap to get out of.
+ */
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding: var(--sp-5);
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+
+.card-head { display: flex; flex-direction: column; gap: var(--sp-1); }
+.card-head h2 {
+    margin: 0;
+    font-size: var(--fs-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.card-head p {
+    margin: 0;
+    max-width: 60ch;
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-base);
+}
+
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.row { display: flex; gap: var(--sp-3); align-items: flex-end; flex-wrap: wrap; }
+
+.status-line { font-size: var(--fs-sm); color: var(--ink-soft); min-height: 18px; }
+.status-line b { color: var(--ink); font-family: var(--font-mono); }
+.is-error { color: var(--tone-danger); }
+.is-ok { color: var(--tone-success); }
+
+/* --- card variants -------------------------------------------------------
+ * Defined after the base `.card` and `.card-head` on purpose: these override
+ * them, and at equal specificity that is decided by source order.
+ */
+
+/* A card whose whole body is a table: the pane goes edge to edge inside it, so
+   there is one frame around the rows rather than a frame inside a frame. */
+.card--table { padding: 0; gap: 0; }
+/* The ledger hugs its columns everywhere else; inside a card it also has to
+   reach the card's edge, or the header band stops short of its own frame. */
+.card--table .ledger { min-width: 100%; }
+.card--table > .card-head { padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--rule); }
+/* Unless a scope tab strip follows it: the strip carries the rule, and the tabs
+   overhang it, so a head that kept its own would draw a second line a few
+   pixels above and the pressed tab's marker would cover neither. */
+.card--table > .card-head--tabbed { border-bottom: 0; padding-bottom: var(--sp-2); }
+
+.scroll-x--flush {
+    width: auto;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+
+/* A pane that fills its container instead of hugging its columns.
+ *
+ * The rule above is written for a table read on its own, where a frame out
+ * past the last column reads as a floating border. The Tools file list is read
+ * against the panel controls stacked above it, so a frame stopping short of
+ * theirs is the thing that looks unfinished instead. The ledger is stretched
+ * with the pane, or the header band would end before the pane's right edge and
+ * bring the mismatch back one level down.
+ */
+.scroll-x--wide { width: 100%; }
+.scroll-x--wide .ledger { min-width: 100%; }
+
+/* A pane the height of about ten rows, whatever is inside it.
+ *
+ * This is what makes "Show all" a reasonable offer: every row is rendered, but
+ * the pane scrolls rather than the page growing to three thousand rows. It is
+ * also why the tables keep a fixed footprint as you page — a card that changed
+ * height on every Next would move everything under it.
+ *
+ * `--rows` is the body; the two extra steps and the slack cover the header and
+ * the totals row, and the bilingual status heads that wrap onto two lines.
+ */
+.scroll-x--rows {
+    --rows: 10;
+    max-height: calc(var(--row-h) * (var(--rows) + 2) + 26px);
+}
+
+/* A heading that puts its figures beside the title rather than under it. */
+.card-head--row {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+}
+/* Not `margin-right: auto` on the title: in a wrapping row that swallows the
+   whole line and pushes everything after it onto the next one. */
+.card-head--row h2 { flex: 1 1 auto; }
+
+.card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-5);
+    border-top: 1px solid var(--rule);
+}
+.card-foot-end { display: flex; align-items: center; gap: var(--sp-2); }
+
+.inline-field {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+}
+.inline-field .input { width: 72px; text-align: right; }
+
+/* --- empty states --------------------------------------------------------
+ * There is no "nothing loaded" panel any more — the app opens on Tools, which
+ * is where you would go from such a panel anyway. What remains is the two
+ * in-place notes: a table with no rows, and a scope group with no cases.
+ */
+
+.empty-row td {
+    padding: var(--sp-6);
+    text-align: center;
+    color: var(--ink-soft);
+}
+
+/* --- motion --------------------------------------------------------------- *
+ * One moment only: the row reveal on expand, which answers a click and shows
+ * what changed. Nothing animates on load.
+ */
+@keyframes reveal {
+    from { opacity: 0; transform: translateY(-2px); }
+    to   { opacity: 1; transform: none; }
+}
+.ledger tr[data-revealed] { animation: reveal 120ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* --- narrow --------------------------------------------------------------- */
+
+/* Below this the two columns stop being two columns: the rail goes back to the
+   top of the page, full width and no longer sticky, because 232px of a 400px
+   screen is not a margin, it is the screen. */
+@media (max-width: 860px) {
+    .shell { grid-template-columns: minmax(0, 1fr); }
+    .rail, .rail.is-closed {
+        position: static;
+        width: auto;
+        height: auto;
+        padding: var(--sp-3) var(--sp-4);
+    }
+    .rail-closed { display: none !important; }
+    .rail.is-closed .rail-open { display: flex; }
+    .rail-icon { display: none; }
+    .rail-open { gap: var(--sp-3); }
+    .rail-nav { flex-direction: row; flex-wrap: wrap; }
+    .rail-foot { margin-top: 0; flex-direction: row; }
+    .main { padding: var(--sp-5) var(--sp-4) var(--sp-6); }
+}
+
+/* --- Preparing the workbooks ---------------------------------------------
+ *
+ * The two operations in the Tools view that write to the source files. They
+ * borrow the ledger for the file list and add three things it has no vocabulary
+ * for: a row of status checkboxes, buttons small enough to sit inside a cell,
+ * and a preview block — the one place in the app that reports on something that
+ * has not happened yet.
+ */
+
+.checks { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+
+.check { display: inline-flex; align-items: center; gap: var(--sp-1); cursor: pointer; }
+.check input { accent-color: var(--ink); margin: 0; }
+
+/* Ticked reads as chosen; unticked steps back rather than disappearing, so the
+ * whole taxonomy stays legible as a set. */
+/* .4 was calibrated against solid-tone badges; a tint badge at .4 is gone. */
+.check .badge { opacity: .6; transition: opacity 90ms ease-out; }
+.check input:checked + .badge { opacity: 1; }
+.check:hover .badge { opacity: .85; }
+.check input:checked:hover + .badge { opacity: 1; }
+
+.btn-sm {
+    min-height: 26px;
+    padding: 0 var(--sp-2);
+    border-radius: var(--r-sm);
+    font-size: var(--fs-xs);
+}
+
+.ledger td.actions { white-space: nowrap; }
+.ledger td.actions .btn + .btn { margin-left: var(--sp-1); }
+
+/*
+ * The preview: what Apply would do, per workbook.
+ *
+ * Capped and scrollable for the same reason the tables are — a folder of forty
+ * workbooks must not push the Apply button off the bottom of the card.
+ */
+.preview {
+    max-height: 320px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 0 var(--sp-3);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+    font-size: var(--fs-sm);
+}
+
+.preview-block { padding: var(--sp-3) 0; border-bottom: 1px solid var(--rule); }
+.preview-block:last-child { border-bottom: 0; }
+
+.preview-file {
+    font-weight: 600;
+    margin-bottom: var(--sp-1);
+}
+
+.preview-line {
+    color: var(--ink-soft);
+    line-height: var(--lh-cjk);
+    padding-left: var(--sp-3);
+}
+.preview-line b { color: var(--ink); font-weight: 600; }
+.preview-line s { color: var(--ink-faint); }
+
+/* --- the config editor ---------------------------------------------------- */
+/*
+ * Three forms over the JSON the rest of the app is driven by. The ledger is
+ * still the structure — the taxonomy and the scope groups *are* tables, and a
+ * row of stacked fields would hide that a status is one line among several that
+ * have to agree. So the controls sit in ledger cells and the grid does the
+ * explaining, which is also why the inputs here lose their own frame: twelve
+ * boxed controls in a row would draw twelve boxes and no table.
+ */
+
+/* A status is the widest row in the app — ten columns, five of them controls —
+ * so its card takes the whole grid rather than half of it. The other two are
+ * narrow enough to sit side by side, which is what the grid is for. */
+#configCard-statuses { grid-column: 1 / -1; }
+
+/* No height cap on a config pane. Every other table in the app is a view of
+   data long enough to page through; these are the whole taxonomy and the whole
+   list of scope groups, and a status hidden below a scroll line inside a card
+   is a status nobody edits. They are short by nature — if one is not, that is
+   worth seeing too. */
+.config-pane { max-height: none; }
+
+/* These rows are taller than a ledger row: a cell holds controls, and one of
+   them holds five checkboxes. The fixed row height and `nowrap` that keep a
+   table of figures on one rhythm are exactly what made them overlap. */
+.config-grid td {
+    height: auto;
+    padding: var(--sp-2);
+    vertical-align: middle;
+    white-space: normal;
+}
+.config-grid th { white-space: nowrap; }
+
+.config-grid .input, .config-grid .select { width: 100%; }
+
+/* Inside a ruled cell the cell is already the frame. The control declares
+   itself on hover and focus instead, which is where it matters. */
+.config-grid .input, .config-grid .select {
+    border-color: transparent;
+    background: transparent;
+    border-radius: var(--r-sm);
+}
+.config-grid .input:hover, .config-grid .select:hover,
+.config-grid .input:focus, .config-grid .select:focus {
+    border-color: var(--rule-strong);
+    background: var(--paper-raised);
+}
+
+/* Each control gets the room its content actually needs. Without this the
+   table divides the width evenly and a status key reads as one letter. */
+.config-grid .input[data-field="key"]   { min-width: 7rem; font-weight: 600; }
+.config-grid .input[data-field="label"] { min-width: 9.5rem; }
+.config-grid .input[data-field="match"] { min-width: 11rem; }
+
+/* The five flags a status carries, as a block rather than a column each: they
+   are a set, and a reader checking whether NG counts as executed reads them
+   together. Two lines, not one — the min-width that fitted all five across cost
+   the Derives-from column its place on screen, and a set of five is as legible
+   in two rows as in one.
+   It is a div inside the cell, never the cell itself: `display: flex` on a `td`
+   takes it out of table layout, so it sizes to its own content instead of the
+   row and draws its bottom rule short of the others. */
+.config-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-1) var(--sp-3);
+    min-width: 11rem;
+    max-width: 13rem;
+    font-size: var(--fs-xs);
+    color: var(--ink-soft);
+}
+.config-flags .check { white-space: nowrap; }
+
+/* `empty` and `fallback`: one pick each for the whole taxonomy, so they sit
+   under the table as two selects rather than as two columns of radios. Framed
+   the way the scope fallback is — both are "and everything else goes here". */
+.config-catchalls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-4);
+    margin-top: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+.config-catchalls .field { flex: 1 1 20rem; }
+.config-catchalls .select { max-width: 14rem; }
+.config-catchalls .muted { font-size: var(--fs-xs); line-height: var(--lh-cjk); }
+
+/* The tone, shown as the thing it produces. A select reading "warn" says less
+   than the badge the reader will meet on every other screen. */
+.config-tone { display: flex; align-items: center; gap: var(--sp-2); min-width: 13rem; }
+.config-tone .badge { flex: none; }
+.config-tone .select { width: auto; min-width: 6rem; margin-left: auto; }
+
+.config-derive { display: flex; gap: var(--sp-1); }
+.config-derive .select { width: auto; min-width: 5rem; }
+
+/* Move up / move down. Order is load-bearing in both tables — it sets the
+   report's column order and the step of the charts' shading — so it is edited
+   rather than inferred from a sort. */
+.config-move { white-space: nowrap; }
+.config-move .btn { padding: 0 var(--sp-1); min-width: 22px; }
+
+.config-add {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+    padding-top: var(--sp-3);
+    font-size: var(--fs-xs);
+}
+
+/* The catch-all scope group, and the sheet-label groups: framed blocks under
+   their table, because each is a caption plus its own fields rather than one
+   more row of the thing above it. */
+.config-fallback, .config-group {
+    margin-top: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    background: var(--paper-sunk);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+.config-group:first-child { margin-top: 0; }
+
+.config-fallback p, .config-group p {
+    margin: var(--sp-1) 0 var(--sp-3);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-cjk);
+}
+
+.config-group .field { margin-top: var(--sp-2); }
+.config-group .field .muted { font-size: var(--fs-xs); }
+.config-fallback .row, .config-group .row { gap: var(--sp-3); }
+
+/* The path of the file being edited. It is a location, not prose — and long
+   enough to need breaking rather than widening the card. */
+.card-head .mono { word-break: break-all; }
+
+/* "unsaved": the one thing about this screen that is genuinely a state, so it
+   is marked in the card head where the Save button is not. */
+#configView .pill { background: var(--paper-sunk); border: 1px solid var(--rule); }
+
+/* --- the merged source card ----------------------------------------------- */
+/* Seven columns and two buttons a row: wider than half the Tools grid, and a
+   clipped "Clear results" reads as broken rather than as scrollable. */
+#sourceSection { grid-column: 1 / -1; }
+
+/* --- the file view -------------------------------------------------------- */
+/* A drill-in, so it carries its own way out: nothing in the rail is lit while
+   it is showing, and the Back button names the view the reader came from. */
+.file-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+}
+
+/* A file name that opens that workbook's page. Text, not a button: it sits in a
+   ledger cell, and a control drawn inside a run of figures reads as noise. The
+   underline is what says it is a way somewhere — there is no accent colour to
+   say it with, and colour on screen means status. */
+.cell-link {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--rule-strong);
+    text-underline-offset: 3px;
+}
+.cell-link:hover { text-decoration-color: var(--ink); }
+.cell-link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* The same link, on a figure in the status band — every one of which opens the
+   cases it counts. Here the underline is withheld until the pointer or the
+   keyboard reaches it: a file name is one link in a row of text, but a band is
+   nothing *but* figures, and ruling all of them would turn the ledger into a
+   page of links. The figure keeps its own mono face and its column's alignment,
+   so the table reads exactly as it did. */
+.band .cell-link {
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+}
+.band .cell-link:hover,
+.band .cell-link:focus-visible {
+    text-decoration: underline;
+    text-decoration-color: var(--ink);
+    text-underline-offset: 3px;
+}
+
+/* The breakdown list on Summary: a label and a count, which is the same thing a
+   band figure is, so it opens the same list and says so the same way. */
+.legend-item--link { cursor: pointer; }
+.legend-item--link:hover .legend-label { text-decoration: underline; text-underline-offset: 3px; }
+.legend-item--link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* A status left out of the total keeps its card, marked the way its column and
+   its scope chip are — one dashed rule saying "counted, but not in the sum". */
+.stat--aside {
+    border-style: dashed;
+    border-color: var(--rule-strong);
+    background: none;
+}

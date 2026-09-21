@@ -1,0 +1,321 @@
+/*
+ * Tables: the ledger, and everything drawn inside one — the status band,
+ * grouped rows, sortable headers, badges, flags and the pager.
+ *
+ * Third of six. Loads after `controls.css` and before `cards.css`; see the
+ * header of `base.css` for why that order is not negotiable.
+ */
+/* --- the ledger ----------------------------------------------------------- */
+
+/* `.main` carries the page padding now, so a view is just a stack. */
+.view { min-width: 0; }
+
+/* Tools: independent panels, each as wide as it needs and none of them the
+   width of the screen. The design's card grid, with a wider floor — two of
+   these cards hold a table, and at the design's 340px the file list and the
+   prepare actions were permanently mid-scroll. */
+.view--grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+    gap: var(--sp-4);
+    align-items: start;
+}
+
+.section-title {
+    margin: var(--sp-6) 0 var(--sp-2);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.section-note { margin: 0 0 var(--sp-3); color: var(--ink-soft); font-size: var(--fs-sm); max-width: 68ch; }
+
+/*
+ * The table's own scroll pane.
+ *
+ * `overflow` here makes this — not the viewport — the scrollport for anything
+ * sticky inside it, which is exactly what a data table wants: the column
+ * headers and the totals row pin to the pane while the rows scroll under them,
+ * and a wide table scrolls sideways without the page ever doing so.
+ *
+ * The height cap is what gives the pane something to scroll. Without it the
+ * pane grows to fit its content, nothing ever scrolls inside it, and a sticky
+ * header with a non-zero offset gets pushed *down into* the rows instead.
+ *
+ * `width: max-content` capped at 100% is what lets the frame hug the table.
+ * The ledger still sizes to its columns (see `.ledger`), so a full-width pane
+ * would leave the border floating out to the right of the last column on a
+ * narrow table; sizing the pane to its content instead keeps the frame tight
+ * and still clamps — and therefore scrolls — once the band outgrows the screen.
+ *
+ * `overflow` also clips to the radius, which is what tucks the sticky header
+ * and footer inside the rounded corners rather than squaring them off.
+ */
+.scroll-x {
+    overflow: auto;
+    width: max-content;
+    max-width: 100%;
+    max-height: calc(100vh - 200px);
+    overscroll-behavior: contain;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+}
+
+.ledger {
+    width: auto;            /* hug the columns; the band sets the rhythm */
+    border-collapse: collapse;
+    font-size: var(--fs-base);
+}
+
+.ledger th, .ledger td {
+    padding: 0 var(--sp-3);
+    height: var(--row-h);
+    text-align: left;
+    border-bottom: 1px solid var(--rule-soft);
+    white-space: nowrap;
+}
+
+/* The last row's rule would otherwise sit a hairline inside the pane's own
+   bottom border and read as a double line. */
+.ledger tbody tr:last-child > td { border-bottom: 0; }
+
+/* Uppercase and tracked, at 11px. It is a label for a column of figures, not a
+   sentence — and set this small, the tracking is what keeps it legible. Status
+   column heads are the exception: they carry bilingual labels that must not be
+   uppercased, and `.band` below opts them back out. */
+.ledger thead th {
+    position: sticky;
+    top: 0;              /* pins to the .scroll-x pane, not the viewport */
+    z-index: 10;
+    background: var(--paper-sunk);
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink-soft);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: var(--ls-eyebrow);
+    text-transform: uppercase;
+}
+
+.ledger tbody tr:hover td { background: var(--paper-hover); }
+
+.ledger tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: var(--paper-sunk);
+    border-top: 1px solid var(--rule-strong);
+    border-bottom: 0;
+    font-weight: 600;
+}
+
+/* Numbers right-align on tabular figures so digits stack down the page.
+ *
+ * Set in the mono face. The design uses Plex Mono to mark what is a figure,
+ * throughout — counts, dates, percentages, case numbers — and at these row
+ * densities the distinction does real work: it tells you at a glance which
+ * columns you can compare down the page and which you can only read.
+ */
+.num {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--ink-soft); }
+
+/* Centred figures. Digits still stack on `tabular-nums`, they simply stack
+   about the middle of the column rather than its right edge. */
+.ledger .num.center, .ledger th.num.center > button { text-align: center; }
+.ledger th.num.center.sortable > button { justify-content: center; }
+
+/* A single outlier — a spreadsheet section header sitting in the Case no
+   column, or one long note — should not set the width for the whole column.
+   The full text stays available as the cell's tooltip. */
+.clip { max-width: var(--clip-w, 200px); overflow: hidden; text-overflow: ellipsis; }
+.clip-sm { --clip-w: 150px; }
+
+/* --- the status band ------------------------------------------------------
+ * The run of status columns recurs across Summary, Daily and Productivity: it
+ * is this app's signature structure, so it reads as one unit. The eye gets two
+ * zones — identity | measurement — instead of a dozen equal columns.
+ */
+
+.ledger .band {
+    background: var(--paper-sunk);
+    /* Every measurement column is the same width, so the band reads as a grid
+       of comparable figures rather than columns sized by how long their label
+       happens to be — "Pending（保留）" is three times the width of "OK". */
+    width: var(--band-w);
+    text-align: center;
+}
+.ledger tbody tr:hover .band { background: var(--paper-hover); }
+.ledger .band--first { border-left: 1px solid var(--rule-strong); }
+
+/* A column that is shown but sits outside the Total — Out Of Scope. The dashed
+   rule is the whole point: a reader adding the band up by eye has to be able to
+   see where the sum stops, or the row looks like it simply fails to add up. */
+.ledger .band--aside { border-left: 1px dashed var(--rule-strong); }
+
+/* A fixed width is only achievable if the long bilingual labels may wrap — and
+   these are the one set of headers that is NOT uppercased and tracked: "OK"
+   uppercases to nothing, and 保留 has no case to change, so the treatment would
+   only add tracking between two kanji. They are proper names, drawn as given. */
+.ledger th.band {
+    white-space: normal;
+    vertical-align: middle;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: var(--fs-sm);
+}
+.ledger th.band > button {
+    white-space: normal;
+    word-break: keep-all;   /* wrap at the space, never inside 対象外 */
+    line-height: 1.25;
+    padding-top: var(--sp-1);
+    padding-bottom: var(--sp-1);
+}
+
+/* --- grouped rows --------------------------------------------------------- */
+
+.ledger .cell-label { padding-left: calc(var(--sp-3) + var(--depth, 0) * 14px); }
+
+/* Each level gets its own ground, applied across the whole row — the status
+   band included — so a group row reads as one bar rather than as two halves.
+   Depth, indent and weight then all say the same thing. */
+.ledger tr[data-depth] > td { background: var(--level-bg); }
+.ledger tr[data-depth="0"] { --level-bg: var(--level-0); }
+.ledger tr[data-depth="1"] { --level-bg: var(--level-1); }
+.ledger tr[data-depth="0"] > td { font-weight: 600; }
+.ledger tr[data-depth="1"] > td { font-weight: 500; color: var(--ink); }
+
+/* A rule above every outermost group turns the table into blocks per date. */
+.ledger tbody tr[data-depth="0"] > td { border-top: 1px solid var(--rule-strong); }
+.ledger tbody tr[data-depth="0"]:first-child > td { border-top: 0; }
+
+.ledger tbody tr[data-depth]:hover > td { background: var(--paper-hover); }
+
+.twisty {
+    appearance: none;
+    border: 0;
+    background: none;
+    padding: 0;
+    margin-right: var(--sp-2);
+    width: 12px;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    line-height: 1;
+}
+.twisty:hover { color: var(--ink); }
+.twisty--leaf { visibility: hidden; cursor: default; }
+
+/* --- sortable headers ----------------------------------------------------- */
+
+.ledger th.sortable { padding: 0; }
+
+.ledger th.sortable > button {
+    appearance: none;
+    position: relative;
+    width: 100%;
+    min-height: var(--row-h);   /* grows when a bilingual label wraps */
+    height: 100%;
+    /* The right strip belongs to the sort glyph, which is positioned out of
+       flow — without reserving it, the glyph lands on top of a short label. */
+    padding: 0 18px 0 var(--sp-3);
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+}
+
+.ledger th.num.sortable > button { justify-content: flex-end; }
+.ledger th.band.sortable > button { justify-content: center; padding: 0 12px; }
+.ledger th.sortable > button:hover { color: var(--ink); }
+
+/* A persistent, low-contrast affordance — not a hover-only underline.
+   Positioned out of flow: inline, it pushes the label off centre and the
+   header stops lining up with the figure below it. */
+.ledger th.sortable > button::after {
+    content: "\2195";
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ink-faint);
+    font-size: 9px;
+}
+.ledger th[aria-sort="ascending"] > button::after  { content: "\25B2"; color: var(--ink); }
+.ledger th[aria-sort="descending"] > button::after { content: "\25BC"; color: var(--ink); }
+
+/* --- badges --------------------------------------------------------------- */
+
+/* A tint carrying deep text, rather than a solid tone carrying knocked-out
+   white. Badges sit inside rows of figures here, and a run of saturated blocks
+   down a column competes with the numbers it is meant to be labelling. */
+.badge {
+    display: inline-block;
+    padding: 2px var(--sp-2);
+    border-radius: var(--r-full);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    background: var(--tone-neutral-bg);
+    color: var(--tone-neutral-fg);
+}
+
+[data-tone="success"] .badge, .badge[data-tone="success"] { background: var(--tone-success-bg); color: var(--tone-success-fg); }
+[data-tone="danger"]  .badge, .badge[data-tone="danger"]  { background: var(--tone-danger-bg);  color: var(--tone-danger-fg); }
+[data-tone="warn"]    .badge, .badge[data-tone="warn"]    { background: var(--tone-warn-bg);    color: var(--tone-warn-fg); }
+[data-tone="neutral"] .badge, .badge[data-tone="neutral"] { background: var(--tone-neutral-bg); color: var(--tone-neutral-fg); }
+[data-tone="muted"]   .badge, .badge[data-tone="muted"]   { background: var(--tone-muted-bg);   color: var(--tone-muted-fg); }
+
+/* Numeric cells and stat figures take the tone as text colour. */
+[data-tone="success"].num, [data-tone="success"].stat-value, [data-tone="success"].kpi-value, th[data-tone="success"] { color: var(--tone-success); }
+[data-tone="danger"].num,  [data-tone="danger"].stat-value, [data-tone="danger"].kpi-value,  th[data-tone="danger"]  { color: var(--tone-danger); }
+[data-tone="warn"].num,    [data-tone="warn"].stat-value, [data-tone="warn"].kpi-value,    th[data-tone="warn"]    { color: var(--tone-warn); }
+[data-tone="neutral"].num, [data-tone="neutral"].stat-value, [data-tone="neutral"].kpi-value, th[data-tone="neutral"] { color: var(--tone-neutral); }
+[data-tone="muted"].num,   [data-tone="muted"].stat-value, [data-tone="muted"].kpi-value,   th[data-tone="muted"]   { color: var(--tone-muted); }
+
+/* A zero is noise; keep it present for alignment but recede it. */
+.zero { color: var(--ink-faint) !important; }
+
+/* --- flags ---------------------------------------------------------------
+ * A field that should have been filled in. A left rule plus a wash, rather
+ * than a full red cell — across twelve columns the old treatment shouted.
+ */
+.flag {
+    background: var(--tone-danger-bg);
+    box-shadow: inset 2px 0 0 var(--tone-danger);
+}
+
+/* --- pager ---------------------------------------------------------------- */
+
+.pager { display: flex; justify-content: center; gap: var(--sp-1); padding: var(--sp-4) 0; }
+
+.pager button {
+    appearance: none;
+    min-width: 30px;
+    height: 30px;
+    padding: 0 var(--sp-2);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-md);
+    background: var(--paper-raised);
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: background 90ms ease-out, color 90ms ease-out;
+}
+.pager button:hover:not(:disabled) { background: var(--paper-hover); color: var(--ink); }
+.pager button[aria-current="page"] {
+    background: var(--ink); border-color: var(--ink); color: var(--ink-invert);
+}
+.pager .gap { border-color: transparent; background: none; cursor: default; color: var(--ink-faint); }
+
