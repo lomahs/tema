@@ -180,7 +180,13 @@ services → web, because each layer imports only inward from layers already mov
 ### Phase 3 — the two oversized JS views (independent of 1–2)
 
 `views/detail.js` → `views/detail/{state,filters,render,index}.js`.
-`views/summary.js` → `views/summary/{buckets,render,index}.js`.
+`views/summary.js` → `views/summary/{state,buckets,render,index}.js`.
+
+Summary gained a `state.js` the original three did not name, for the reason Detail has one:
+`groups`, `scopes`, `chosenScopes`, `sort`, `grouping`, `families`, `paging` and the two
+callbacks are written by `index.js` and read by both the others, and a `let` cannot be written
+through an imported binding. Leaving them in `index.js` would have made `buckets.js` and
+`render.js` import it — the cycle the split exists to avoid.
 
 The constraint from `CLAUDE.md` survives exactly: **each piece of mutable state
 keeps one owning module and is reached through functions.** `state.js` owns
@@ -190,10 +196,21 @@ own copy. No view imports another view; the widgets (`pagination.js`,
 
 ### Phase 4 — CSS and templates (independent of everything)
 
-`app.css`'s 35 sections become six files — `base`, `layout`, `controls`,
-`tables`, `cards`, `charts` — linked from `index.html` **in the exact order they
-are concatenated today**, because the cascade depends on it. `tokens.css` is
-untouched, and no rule text changes.
+`app.css`'s 35 sections become six files — `base`, `controls`, `tables`, `cards`,
+`charts`, `views` — linked from `index.html` **in the exact order they are concatenated
+today**, because the cascade depends on it. `tokens.css` is untouched, and no rule text
+changes.
+
+**The six are cut at contiguous section boundaries rather than sorted into semantic
+buckets, and two of the names changed because of it.** This paragraph originally named
+`base`, `layout`, `controls`, `tables`, `cards`, `charts`, which assumed the sections sat
+in semantic runs. They do not: the panel grid sits between two card sections, the folded
+filter panel between two chart ones, and the narrow-screen media query in the middle rather
+than at the end. Bucketing them by subject would therefore have moved rules past others of
+equal specificity — the reordering this phase's own constraint forbids. Cutting by line
+range instead makes the concatenation byte-exact and the cascade provably unchanged;
+`layout` folds into `base`, and `views` holds the tail, which is view- and panel-specific
+CSS that fits none of the original six names.
 
 `index.html` keeps the shell and `{% include %}`s one partial per
 `<section class="view">`: summary, daily, productivity, detail, file, tools,

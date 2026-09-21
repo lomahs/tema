@@ -201,7 +201,7 @@ published sheet adding up to its own total and its width unchanged. In the UI th
 with `band--aside`, a dashed rule marking where the sum stops.
 
 **`"review": true` is the selection Detail opens on, not a wall around it.** Detail
-(`#detailView` / `views/detail.js`) holds the *whole* taxonomy: every figure in every status band
+(`#detailView` / `views/detail/`) holds the *whole* taxonomy: every figure in every status band
 is a button, and pressing the 3 in NG's column, or the OKs, or the Not Yet Starteds, opens that
 list. What `review` names — NG / NG-OK / Pending / Cancel — is what the rail and Summary's "To
 review" card *arrive with*, which is why the rail's second count is still open work and the KPI
@@ -213,7 +213,7 @@ refuses it.
 
 **Cases are served one status at a time, and that is what makes Detail affordable.**
 `status_cases(cases, key)` in `tcm/services/aggregation.py` is the slice behind a figure, and `/api/cases?status=`
-its `jsonify` wrapper; `views/detail.js` keeps a `Map` of what it has fetched, so pressing NG twice
+its `jsonify` wrapper; `views/detail/state.js` keeps a `Map` of what it has fetched, so pressing NG twice
 costs one request and pressing OK costs only the OKs. It replaced `/api/data`, which shipped every
 in-plan case on every load — 10 MB of JSON before anyone had clicked anything, on the twelve sample
 workbooks — and `fetchAll` no longer carries cases at all. Three things hold it together:
@@ -270,7 +270,7 @@ every case loaded**.
 **Summary draws one table per _role_, not one per group.** It used to be one card per scope group,
 which stopped scaling the moment a team had six of them — six tables, and no way to read the one
 figure that matters. The three roles are the ones the config already encodes, and `BUCKETS` in
-`views/summary.js` is the list: **In Scope** (`counted`), **Out Scope** (excluded), and the
+`views/summary/state.js` is the list: **In Scope** (`counted`), **Out Scope** (excluded), and the
 fallback, which takes its heading from its own configured label. The first two are role names so
 they are written down; the third is a configured group, so naming it here would be this module
 naming a scope. A bucket holding several groups draws a strip of multi-select scope **tabs**,
@@ -282,7 +282,7 @@ the hairline rather than doubling it — and the pressed ones read as part of th
 than as a strip floating above the rows. Review has no such rule, which is why `#detailScopes`
 stays pills. Selection is ink: the design canvas marks it in a green a few degrees from OK's own,
 and here colour means status. The leading `All` presses every group in its bucket and reads
-pressed only when they all are, with no way back — Review's convention, for Review's reason. `views/summary.js` still names no scope itself: it buckets on the `counted` and
+pressed only when they all are, with no way back — Review's convention, for Review's reason. `views/summary/**` still names no scope itself: it buckets on the `counted` and
 `fallback` flags that ride on every group in the `scopes` list `/api/summary` serves.
 
 **A bucket's rows are summed per (file, device).** `/api/summary` serves one row per
@@ -378,10 +378,30 @@ sheet keeps one row per (file, device) and the SharePoint workbook needs no new 
 cannot drift: the scope rows of a file add up to its unscoped row, which `tests/services/test_aggregate.py`
 asserts directly.
 
-**No CSS framework.** The UI is hand-written CSS in two files:
+**No CSS framework.** The UI is hand-written CSS in eight files.
 [static/css/tokens.css](static/css/tokens.css) holds every colour, type and spacing token
 (light palette on bare `:root`, dark redefined under both `prefers-color-scheme` and
-`[data-theme="dark"]`), and [static/css/app.css](static/css/app.css) holds the components.
+`[data-theme="dark"]`), and the components are split across
+[base](static/css/base.css), [controls](static/css/controls.css),
+[tables](static/css/tables.css), [cards](static/css/cards.css),
+[charts](static/css/charts.css) and [views](static/css/views.css) — **linked from
+`index.html` in exactly that order, which is load-bearing.**
+
+They were cut from one 1760-line `app.css` at *contiguous* section boundaries rather than
+sorted into semantic buckets, and the difference matters. Its 35 sections do not sit in
+semantic runs — the panel grid sits between two card sections, the folded filter panel
+between two chart ones, the narrow-screen media query in the middle rather than at the end —
+so bucketing them by subject would have moved rules past others of equal specificity.
+Concatenating the six as linked reproduces the original byte for byte, which is what makes
+the cascade *provably* unchanged rather than argued to be. The cost is that two files hold a
+section their name does not cover, and each says so in its own header; `layout` folded into
+`base` and `views` holds the tail. `test_the_stylesheets_are_linked_in_cascade_order` in
+[tests/web/test_app.py](tests/web/test_app.py) pins the order, because a reordered link
+renders a page that still looks nearly right.
+
+Add a rule to the file whose subject it shares, at the end of the section it belongs to —
+never at the top of a file to keep it near a related one.
+
 The organising idea is still **the ledger** — this tool sits between two spreadsheets, so the
 grid is the structure. Rows are ruled and cells are square: a curve inside a run of figures is
 noise.
@@ -436,9 +456,38 @@ destroys something a file cannot give back, and the only one allowed to carry a 
 [static/js/main.js](static/js/main.js) as `<script type="module">`. An imported ES binding can't be
 reassigned by the importer, so each piece of mutable state lives in exactly one module and is
 reached through functions: taxonomy in `taxonomy.js`, the per-status case cache and the
-chosen statuses/scopes/filters/page/expansion in `views/detail.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
+chosen statuses/scopes/filters/page/expansion in `views/detail/state.js`, Summary's buckets,
+grouping, shared sort and per-table paging in `views/summary/state.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
 `views/productivity.js`, Chart.js instances in `charts.js`, theme in `theme.js`,
 the daily target in `target.js`, the working copy of each config file in `views/config.js`.
+
+**The two busiest views are four modules each, layered one way.** `views/detail/` and
+`views/summary/` were single files of 1128 and 969 lines; each is now `state.js`, which
+declares the mutable state and nothing else, a derivation layer that writes no DOM
+(`filters.js` for Detail, `buckets.js` for Summary), `render.js`, which does every DOM write,
+and `index.js`, which binds the listeners, owns the refresh cycle and is the only module
+`main.js` imports. **Imports run `index → render → {filters|buckets} → state` and never
+back**, and where a lower module has to reach a higher one it takes a hook `index.js`
+installed, the same shape as `setJumpHandler` and `onOpenFile`. Detail has three:
+`render.js`'s `setOnChanged` and `setOnReload` — the sort header and the filter chips re-run
+the cycle, and the chip that drops a status must re-*fetch* rather than merely re-filter — and
+`filters.js`'s `setOnCleared`, which is how `clearNarrowing` repaints two controls that belong
+to `render.js`. That is also why `applyFilters` no longer ends by calling the four render
+functions: its tail moved to `refresh()` in `index.js`, the one place that legitimately knows
+about both halves.
+
+**Summary needs no hook, and the asymmetry is not an oversight.** Its `render()` lives in
+`render.js` and every handler that re-runs it is calling its own module; `buckets.js` is pure
+transforms over rows and reaches nothing above it. A hook added there for symmetry would be
+indirection with no cycle to break.
+
+Two consequences worth knowing before editing either. **A browser resolves no directory
+index**, so `main.js` imports `./views/detail/index.js` in full — `./views/detail/` is a 404
+and there is no bundler to paper over it. And **a `let` in `state.js` is reached through a
+getter and a setter**, never imported directly, because an imported ES binding cannot be
+reassigned by the importer; a `Map`, `Set` or object *is* exported directly, since mutating
+one is not rebinding a name. Adding state means adding it to `state.js` — a second module
+declaring its own copy is the bug this shape exists to prevent.
 
 **`target.js` holds the one number nobody reads out of a workbook.** Cases per person per day —
 the yardstick the Daily chart's plan line, the daily log's Plan and Attain columns and
@@ -456,6 +505,13 @@ that. `main.js` owns `VIEWS`, which is the single list of what exists: Summary, 
 Productivity, Detail, File, Tools and Config. Adding a view means adding an entry there and a
 `<section class="view" id="<name>View">`, and nothing else.
 
+`templates/index.html` is the shell — the rail, the page heading and the two script tags —
+and `{% include %}`s one partial per view from [templates/views/](templates/views/), in that
+same order. So a new view is an entry in `VIEWS`, a `templates/views/<name>.html` holding its
+section, and an include beside the others. **The include tags sit at column 0 deliberately:**
+Jinja keeps whatever precedes a tag on its line, so an indented `{% include %}` would add that
+indent to every line of the partial, which already carries its own.
+
 **File is the one view with no nav item.** It is a drill-in: it reports on a workbook you
 picked, so it is entered by clicking a file name and left through the Back button it draws
 itself, and nothing in the rail is lit while it shows. That is also why its `title` is a
@@ -464,7 +520,7 @@ navigation, holds the open file name and the view to go back to rather than `vie
 holding them. Two places name a file: Summary's File cells and the Tools table. Neither
 imports the file view; each reports the name back through a callback (`onOpenFile`, and
 `filesTable`'s existing `onAction` with an `"open"` action), the same rule that keeps
-`views/detail.js` out of `views/summary.js`. `ALWAYS_ENABLED` in `shell.js` is the
+`views/detail/` out of `views/summary/`. `ALWAYS_ENABLED` in `shell.js` is the
 other half of that list: Tools and Config answer something with nothing loaded, so they are never
 disabled, and the four data views are.
 
@@ -601,7 +657,7 @@ Behavior worth preserving when touching the UI:
   it. Context travels as plain `data-` scalars, which is *not* a breach of the rule below about
   group paths: that rule is about a NUL separator the tokenizer rewrites, and a file name has none.
   What a row means depends on how it was drawn — a Split row names its device, a "By device type"
-  row its `device_family`, a Combined row neither — so `linkFor` in `views/summary.js` says which,
+  row its `device_family`, a Combined row neither — so `linkFor` in `views/summary/render.js` says which,
   and `device_family` rides on each case rather than the substring rules being re-implemented in JS.
   Summary draws its band `counted`, so Out Of Scope has no column there: its aside chip carries the
   figures instead, and they are links too, or the one status deliberately set aside would be the
@@ -646,7 +702,7 @@ Behavior worth preserving when touching the UI:
   deliberately leaves both the statuses and the scopes alone: they decide what exists on the screen
   rather than narrowing it, and a Clear that emptied the table would be offering to show nothing.
   With none pressed the table says which pick is missing rather than sitting empty.
-- `views/summary.js` must not import `views/detail.js`. The missing-reason list that used to
+- `views/summary/**` must not import `views/detail/**`. The missing-reason list that used to
   jump into Detail took `showCase` and the `onJumpToCase` callback with it when it went.
   **`missing_reason` reaches the screen as the "Missing reason" KPI figure**, which is a link:
   the list of those rows was drawn as an at-risk panel and has since been removed, because

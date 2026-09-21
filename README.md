@@ -95,11 +95,24 @@ test-case-management/
 │       ├── test_api_prepare.py
 │       └── test_app.py          # trang "/" và asset tĩnh render được
 ├── templates/
-│   └── index.html          # UI: rail + 7 view (Summary / Daily / Productivity / Detail / File / Tools / Config)
+│   ├── index.html          # shell: rail, tiêu đề trang, 2 thẻ <script>, và {% include %} 7 view
+│   └── views/              # mỗi view một partial, include theo đúng thứ tự VIEWS trong main.js
+│       ├── summary.html
+│       ├── daily.html
+│       ├── productivity.html
+│       ├── detail.html
+│       ├── file.html       # vào bằng cách bấm tên file, không có mục trên rail
+│       ├── tools.html
+│       └── config.html
 └── static/
-    ├── css/
+    ├── css/                # THỨ TỰ LINK TRONG index.html LÀ BẮT BUỘC (xem header base.css)
     │   ├── tokens.css      # design token: màu, chữ, khoảng cách, dark mode
-    │   └── app.css         # component: ledger, status band, panel, pager
+    │   ├── base.css        # reset, mặc định của document, shell 2 cột + rail
+    │   ├── controls.css    # nút, ô nhập, toolbar, toggle, dải overview + progress bar
+    │   ├── tables.css      # ledger, status band, dòng gộp nhóm, header sort, badge, pager
+    │   ├── cards.css       # thẻ stat, scope card/tab, KPI, lưới panel
+    │   ├── charts.css      # biểu đồ Daily (CSS), bar trong ô, tile Chart.js, panel filter gấp
+    │   └── views.css       # CSS riêng từng view/panel, @media reduced-motion và màn hẹp
     └── js/                 # ES modules, nạp qua <script type="module">
         ├── main.js         # entry point: wiring + chuyển view
         ├── shell.js        # rail tối: nav, thẻ nguồn đang load, tiêu đề trang
@@ -118,13 +131,27 @@ test-case-management/
         ├── pagination.js   # phân trang (theo dòng hoặc theo nhóm) + footer dùng chung
         ├── charts.js       # Chart.js, màu lấy từ tone của taxonomy
         └── views/
-            ├── summary.js  # gộp theo file, mở ra thành device
+            ├── summary/    # gộp theo file, mở ra thành device
+            │   ├── state.js    # nơi DUY NHẤT khai báo state của Summary
+            │   ├── buckets.js  # chia bucket, gộp dòng theo device/family — không đụng DOM
+            │   ├── render.js   # mọi thao tác ghi DOM của Summary
+            │   └── index.js    # bind listener, renderSummary, export ra ngoài
             ├── summaryOverview.js # dải KPI phía trên các bảng Summary
             ├── daily.js    # tiến độ theo ngày, gộp theo ngày
             ├── productivity.js # năng suất theo thành viên
-            ├── detail.js   # stat, filter, tìm kiếm, bảng, phân trang
+            ├── detail/     # stat, filter, tìm kiếm, bảng, phân trang
+            │   ├── state.js    # nơi DUY NHẤT khai báo state của Detail (cache case, status/scope đã chọn)
+            │   ├── filters.js  # lọc và sắp xếp: allData -> filtered, không đụng DOM
+            │   ├── render.js   # mọi thao tác ghi DOM của Detail
+            │   └── index.js    # bind listener, vòng refresh, fetch, export ra ngoài
             ├── file.js     # báo cáo cho một workbook (vào bằng cách bấm tên file)
             └── config.js   # sửa 4 file JSON cấu hình ngay trong app
+
+Hai view lớn nhất được tách thành 4 module, import chỉ chạy một chiều:
+`index -> render -> {filters|buckets} -> state`. Một binding ES đã import thì
+không gán lại được, nên mỗi `let` có đúng một module sở hữu và được đọc/ghi qua
+hàm; chỗ nào tầng dưới cần gọi ngược lên thì nhận callback do `index.js` cài
+(`setOnChanged`), chứ không import ngược — import ngược là vòng lặp.
 ```
 
 ## Chạy
