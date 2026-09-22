@@ -76,8 +76,9 @@ now lives in `tcm/infrastructure/report/` instead.
 
 ## Ports and the composition root
 
-There are six ports, all of them in [tcm/domain/ports.py](tcm/domain/ports.py): `CaseLoader`,
-`CaseStore`, `ReportWorkbook`, `ConfigRepository`, `TokenProvider` and `FilePicker`. Where one
+There are seven ports, all of them in [tcm/domain/ports.py](tcm/domain/ports.py): `CaseLoader`,
+`CaseStore`, `ReportWorkbook`, `ConfigRepository`, `TokenProvider`, `FilePicker` and
+`PlanRepository`. Where one
 exists, the service that needs it takes it as a constructor argument — `Workspace(loader, store)`,
 `IdentityService(auth)` — instead of importing an implementation and being stuck with it.
 **What bounds the set is that a port exists where a test already needs a stand-in, or where a
@@ -464,7 +465,8 @@ reached through functions: taxonomy in `taxonomy.js`, the per-status case cache 
 chosen statuses/scopes/filters/page/expansion in `views/detail/state.js`, Summary's buckets,
 grouping, shared sort and per-table paging in `views/summary/state.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
 `views/productivity.js`, Chart.js instances in `charts.js`, theme in `theme.js`,
-the daily target in `target.js`, the working copy of each config file in `views/config.js`.
+the plan calendar in `plan.js`, the open day / person / suggestion rows in
+`views/planning.js`, the working copy of each config file in `views/config.js`.
 
 **The two busiest views are four modules each, layered one way.** `views/detail/` and
 `views/summary/` were single files of 1128 and 969 lines; each is now `state.js`, which
@@ -497,21 +499,30 @@ reassigned by the importer; a `Map`, `Set` or object *is* exported directly, sin
 one is not rebinding a name. Adding state means adding it to `state.js` — a second module
 declaring its own copy is the bug this shape exists to prevent.
 
-**`target.js` holds the one number nobody reads out of a workbook.** Cases per person per day —
-the yardstick the Daily chart's plan line, the daily log's Plan and Attain columns and
-Productivity's attainment bar are all derived from. It has no endpoint, no aggregate and writes
-nothing: Productivity owns the *input*, `target.js` owns the *value*, and Daily redraws through
-`onTargetChange`. It is kept in `localStorage` (the design canvas keeps it in component state,
-which forgets it on reload — a standing figure retyped every morning is how it ends up wrong).
-`planFor(members)` returns 0 when nobody worked, so a day with no named PIC has no plan rather
-than a plan of zero it can never meet.
+**`plan.js` holds the plan as the rest of the app reads it, and it replaced a single number.**
+There used to be a `target.js`: cases per person per day, kept in `localStorage`, multiplied by
+the people who happened to work that day to produce Daily's plan line, the daily log's Plan and
+Attain columns and Productivity's attainment bar. It is gone. Those three figures now come from
+what somebody actually planned for a named day — see the Planning section below — and `plan.js`
+is where they read it, announcing changes through `onPlanChange` exactly as `theme.js` does.
+It holds the *calendar* (one line per day, plus a per-PIC total), because that is what Daily and
+Productivity need and it is small; a single day's rows and the suggestion table are fetched by
+`views/planning.js` when somebody is looking at them.
 
-**The shell is a rail and seven views, one of which is not in the rail.** `shell.js` owns the dark sidebar — nav, the loaded-source
+**A day nobody planned has no plan figure, not a plan of zero.** `plannedFor(date)` and
+`plannedForPic(pic)` answer `null`, and Daily draws no line and no Attain figure for such a day.
+Zero is a plan somebody set; the absence of one is not, and a chart drawing a flat zero across
+every day that predates this feature would be inventing a target nobody agreed to. **The cost is
+real and worth stating:** every day already in the workbooks reads that way until it is planned,
+so Daily's Plan column starts out empty. That is the price of dropping the standing target, and
+it was chosen deliberately over a figure derived from an average.
+
+**The shell is a rail and eight views, one of which is not in the rail.** `shell.js` owns the dark sidebar — nav, the loaded-source
 card, the two counts it carries, and the page heading — and nothing else; it does not know what a
 view contains, so `main.js` hands it an `onNavigate` callback and it reports clicks back through
 that. `main.js` owns `VIEWS`, which is the single list of what exists: Summary, Daily,
-Productivity, Detail, File, Tools and Config. Adding a view means adding an entry there and a
-`<section class="view" id="<name>View">`, and nothing else.
+Productivity, Planning, Detail, File, Tools and Config. Adding a view means adding an entry
+there and a `<section class="view" id="<name>View">`, and nothing else.
 
 `templates/index.html` is the shell — the rail, the page heading and the two script tags —
 and `{% include %}`s one partial per view from [templates/views/](templates/views/), in that
@@ -760,8 +771,79 @@ Behavior worth preserving when touching the UI:
   from it would not reconcile with Summary's total. Its label names the day being compared
   *against*, not the latest one.
 
+## Planning
+
+**The plan is the one thing in the app that is authored rather than read out of a workbook.**
+A row says who tests which file on which device, and how many cases that is meant to be —
+deliberately the tuple `daily_rows` already groups by, one level short of the date. Everything
+else follows from that choice.
+
+**Actual is never computed twice.** A planned row is *joined* to a `daily_rows` row on
+(date, pic, file, device) rather than counted afresh, so the figures on the Planning screen and
+the figures on Daily cannot drift — they are one function's output. `tcm/services/planning.py`
+does the joining and holds no counting of its own; the one genuinely new aggregate,
+`remaining_rows`, lives in `aggregation.py` with the rest, which is the same rule the report
+publisher follows.
+
+**`remaining_rows(cases)` is what is left to hand out.** Per (file, device): how many cases
+nobody has run. "Not run" is asked for as `STATUS.classify(None)` — what a blank Result cell
+means is the taxonomy's business, never the string `"NYS"` written into Python — and the whole
+row is classified, so a case derived into Out Of Scope is not offered as work. It runs through
+`in_plan`, because work the plan excludes is not work to give somebody, and it drops blocks with
+nothing left, because the list is an offer. Order is fewest-remaining first: finishing a file
+outright beats starting a fourth one.
+
+**The baseline is frozen lazily, and that is the whole answer to "a plan that changes".**
+Editing the plan for a day that has not arrived is *planning*; editing it on or after the day
+itself is *adjusting*. So the first save made when `today >= date` keeps the pre-edit state as
+the baseline, and a day nobody adjusted has none at all — which is correct rather than missing:
+nothing diverged, so the plan as it stands is also what was planned. No timer and no button are
+involved, because the app only runs when it is open. `rebaseline` exists for the morning the
+first edit was a typo. The alternative — overwriting the plan and comparing nothing — makes
+every day look exactly on target, which is what the rule is there to prevent.
+
+**A suggestion subtracts what the day already gave out, and names who has it.** `suggest` takes
+`remaining_rows`, narrows it to one `device_family` (the tester has one handset in their hand),
+and takes off the day's existing plan rows for that block, so two people are not sent to the same
+place by a screen that could see both. The takers are named rather than silently subtracted: a
+figure that shrank with no explanation is one nobody trusts, and adding a second person to a
+block is a decision somebody may still want to make. A block given away entirely keeps its row
+and sinks below the ones with work left.
+
+**Work nobody planned is shown, not hidden.** Every cut adds the rows that appear in the actuals
+but not in the plan, drawn `row--aside` — the same dashed rule `chip--aside` and `band--aside`
+use for "counted, but not part of this sum". A table of a day that listed only planned work would
+hide work that was done, which is the one thing a report of a day must not do.
+
+**Storage is a JSON file behind a port, and the port is the point.**
+`~/.test-management/plan.json` (`settings.PLAN_FILE`), written atomically through the same
+`ConfigRepository` the editable configs use, because a half-written plan is worse than a
+half-written config: a config can be restored from the shipped copy and a plan is the only copy
+there is. It is **not** in `config/` — those four files are vocabularies shipped with the app,
+and a plan is operational data. `tcm/domain/plan.py` therefore holds **no singleton and reads no
+file at import**: "nobody has planned tomorrow" must be an empty table, not the `ImportError` a
+malformed taxonomy rightly is. `PlanRepository` is three methods — `day`, `days`, `put_day` —
+chosen because they map onto a table as cleanly as onto a file, which is what makes a
+`SqlPlanRepository` a new class and one line in `create_app` rather than a rewrite. **When to
+actually make that swap:** a second person writing, or the file outgrowing a full load on every
+save. Neither is true of a few hundred rows a sprint.
+
+**A day is written whole.** `PUT /api/plan/<date>` replaces its rows, the way
+`PUT /api/config/<name>` replaces a config, and for the same reason — a plan is rearranged as a
+block, and a refused edit must leave the stored plan exactly as it was. Validation is
+`DayPlan.from_dict`, so the 400 carries the domain's own message. The one invariant worth naming:
+**(pic, file, device) is unique within a day**, because two such rows are one row with the counts
+added, and left as two the actual for that work joins onto both and is counted twice.
+
+**Planning is three cuts of one dataset, and only one of them edits.** Day (one date, everybody)
+is where rows are typed and the suggestion table sits beside it; Person (one name, every day) and
+Calendar (every day, one line) report. Date cells in the two reporting cuts are `cell-link`
+buttons into the Day cut, the same idea as every status figure being a door into its cases.
+`views/planning.js` imports no other view: saving announces itself through `plan.js`, which is
+how Daily and Productivity hear that their plan figures moved.
+
 **Aggregation is shared, not owned by the routes.** [tcm/services/aggregation.py](tcm/services/aggregation.py) holds
-`summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` as plain functions over
+`summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` / `remaining_rows` as plain functions over
 `TestCase` lists. The five GET endpoints are `jsonify` wrappers around them, and the report
 publisher calls the same functions — so the numbers on screen and the numbers in the
 SharePoint report cannot drift. Put new aggregation here, not in a route.

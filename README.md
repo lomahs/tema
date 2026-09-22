@@ -44,10 +44,13 @@ test-case-management/
 │   │   └── report/
 │   │       ├── layout.py        # ReportLayout: cột nào của file báo cáo giữ gì
 │   │       └── builder.py       # dòng tổng hợp -> lưới ô theo layout
+│   │   └── plan/
+│   │       └── json_store.py    # JsonPlanRepository: kế hoạch trong ~/.test-management/plan.json
 │   ├── services/              # nghiệp vụ điều phối domain + infrastructure
 │   │   ├── workspace.py        # nguồn đang load + các case của nó (CaseLoader + CaseStore)
 │   │   ├── identity.py         # ai đang đăng nhập Graph, tiến trình device login
-│   │   ├── aggregation.py      # tổng hợp summary / daily / productivity / issues
+│   │   ├── aggregation.py      # tổng hợp summary / daily / productivity / issues / remaining
+│   │   ├── planning.py         # kế hoạch theo ngày/người, ghép với thực tế, gợi ý việc còn lại
 │   │   ├── publishing.py       # ghi 3 bảng vào workbook trên SharePoint
 │   │   ├── preparation.py      # chạy 2 thao tác trên nhiều file, lỗi tính theo file (thao tác trên file nguồn)
 │   │   └── settings_store.py   # đọc/ghi các file JSON cấu hình, validate rồi áp dụng
@@ -56,6 +59,7 @@ test-case-management/
 │       └── blueprints/         # /api/* tách theo tài nguyên, lấy workspace/identity từ app.extensions
 │           ├── source.py        # /api/load, /api/reload, /api/browse, /api/prepare/files
 │           ├── analytics.py     # /api/summary, /api/daily, /api/productivity, /api/cases, /api/file, /api/statuses
+│           ├── plan.py          # /api/plan (+ /<date>, /<date>/baseline, /person/<pic>, /suggest)
 │           ├── prepare.py       # /api/prepare/tool-data, /api/prepare/clear
 │           ├── settings.py      # /api/config (+ PUT /api/config/<name>)
 │           ├── sharepoint.py    # /api/sharepoint/*, /api/report/publish
@@ -123,7 +127,7 @@ test-case-management/
         ├── reportPanel.js  # đăng nhập SharePoint + nút Publish
         ├── preparePanel.js # tạo/kiểm TOOL_DATA, xoá kết quả vòng cũ
         ├── filesTable.js   # một bảng file dùng chung cho 2 panel trên
-        ├── target.js       # số case/người/ngày (localStorage), plan của Daily
+        ├── plan.js         # lịch kế hoạch (ngày + theo người), nguồn của Plan/Attain
         ├── taxonomy.js     # status từ /api/statuses + scaffolding bảng
         ├── groupedTable.js # bảng gộp nhóm, đóng/mở, dòng cha cộng dồn
         ├── sorting.js      # sort theo cột (asc -> desc -> bỏ sort)
@@ -139,6 +143,7 @@ test-case-management/
             ├── summaryOverview.js # dải KPI phía trên các bảng Summary
             ├── daily.js    # tiến độ theo ngày, gộp theo ngày
             ├── productivity.js # năng suất theo thành viên
+            ├── planning.js # kế hoạch: 3 lát cắt Ngày / Người / Lịch + bảng gợi ý
             ├── detail/     # stat, filter, tìm kiếm, bảng, phân trang
             │   ├── state.js    # nơi DUY NHẤT khai báo state của Detail (cache case, status/scope đã chọn)
             │   ├── filters.js  # lọc và sắp xếp: allData -> filtered, không đụng DOM
@@ -262,6 +267,12 @@ của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không s�
 | POST   | `/api/sharepoint/login`  | Bắt đầu device code flow, trả `{user_code, verification_uri}` |
 | POST   | `/api/sharepoint/logout` | Quên tài khoản đã cache |
 | POST   | `/api/report/publish`    | Body `{"url": "<link SharePoint>", "run_date": "YYYY-MM-DD"?}` |
+| GET    | `/api/plan`    | Query `?from=&to=` — lịch tổng: mỗi ngày một dòng, kèm `by_pic` |
+| GET    | `/api/plan/<date>` | Kế hoạch một ngày, mỗi dòng đã ghép với thực tế |
+| PUT    | `/api/plan/<date>` | Body `{"entries": [{pic, file, device, planned}, ...]}` — ghi cả ngày |
+| POST   | `/api/plan/<date>/baseline` | Chốt lại: lấy kế hoạch hiện tại làm mốc so sánh |
+| GET    | `/api/plan/person/<pic>` | Một người, mọi ngày họ được giao hoặc đã test |
+| GET    | `/api/plan/suggest` | Query `?date=&device_family=` — việc còn lại, đã trừ phần đã giao |
 
 ## Phân loại kết quả
 
