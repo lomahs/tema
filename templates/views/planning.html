@@ -1,0 +1,128 @@
+        <!-- ==================== Planning ====================
+             What each person is meant to test, and how that went. Three cuts of
+             one dataset: Day edits, Person and Calendar report. The suggestion
+             table beside the Day cut is the point of the screen — a plan that
+             cannot be rearranged mid-morning is a plan nobody keeps. -->
+        <section class="view" id="planningView" hidden>
+            <div class="toggles" id="planCuts">
+                <button class="toggle is-on" data-cut="day" aria-pressed="true">Day</button>
+                <button class="toggle" data-cut="person" aria-pressed="false">Person</button>
+                <button class="toggle" data-cut="calendar" aria-pressed="false">Calendar</button>
+            </div>
+
+            <!-- ---------- Day: one date, everybody ---------- -->
+            <div id="planCut-day" class="plan-split">
+                <section class="card card--table">
+                    <div class="card-head card-head--row">
+                        <h2>Plan for the day</h2>
+                        <div class="filter-row">
+                            <button class="btn btn-sm" id="planPrevDay"
+                                    aria-label="Previous day">&lsaquo;</button>
+                            <input type="date" id="planDate" class="input input-mono">
+                            <button class="btn btn-sm" id="planNextDay"
+                                    aria-label="Next day">&rsaquo;</button>
+                            <button class="btn btn-sm btn-quiet" id="planToday">Today</button>
+                        </div>
+                    </div>
+
+                    <!-- The baseline is frozen on the first edit made on or after
+                         the day itself: editing tomorrow is planning, editing
+                         today is adjusting. This line says which has happened. -->
+                    <div class="plan-bar">
+                        <p class="status-line" id="planBaselineNote"></p>
+                        <p class="empty-note is-error" id="planDayNote" hidden></p>
+                    </div>
+
+                    <div class="plan-bar plan-bar--controls">
+                        <label class="inline-field" for="planNewPic">
+                            Assign to
+                            <input id="planNewPic" class="input" list="planPicList"
+                                   placeholder="Name" autocomplete="off">
+                        </label>
+                        <datalist id="planPicList"></datalist>
+                        <button class="btn btn-sm" id="planAddRow">Add row</button>
+                        <button class="btn btn-sm btn-quiet" id="planRebaseline"
+                                title="Judge this day against the plan as it stands now">
+                            Re-freeze baseline</button>
+                    </div>
+
+                    <div class="scroll-x scroll-x--rows scroll-x--flush">
+                        <table class="ledger">
+                            <thead><tr id="planDayHead"></tr></thead>
+                            <tbody id="planDayBody"></tbody>
+                            <tfoot id="planDayFoot"></tfoot>
+                        </table>
+                    </div>
+                    <div class="card-foot" id="planDayPager"></div>
+
+                    <div class="card-foot" id="planSaveBar" hidden>
+                        <span class="count">Unsaved changes</span>
+                        <div class="card-foot-end">
+                            <button class="btn btn-sm btn-quiet" id="planDiscard">Discard</button>
+                            <button class="btn btn-sm btn-primary" id="planSave">Save day</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Where a freed-up tester could go. What the day already gave
+                     out is subtracted *and named*: a figure that shrank with no
+                     explanation is one nobody trusts. -->
+                <section class="card card--table">
+                    <div class="card-head">
+                        <h2>Still to run</h2>
+                        <p>Fewest left first — finishing a file outright beats
+                            starting a fourth one.</p>
+                    </div>
+                    <div class="toggles plan-bar" id="planFamilyTabs"></div>
+                    <div class="scroll-x scroll-x--rows scroll-x--flush">
+                        <table class="ledger">
+                            <thead><tr>
+                                <th>File</th><th>Device</th>
+                                <th class="num">Free</th><th class="center">Take</th>
+                            </tr></thead>
+                            <tbody id="planSuggestBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ---------- Person: one name, every day ---------- -->
+            <div id="planCut-person" hidden>
+                <section class="card card--table">
+                    <div class="card-head card-head--row">
+                        <h2>One person, every day</h2>
+                        <label class="inline-field" for="planPerson">
+                            Person
+                            <select id="planPerson" class="input"></select>
+                        </label>
+                    </div>
+                    <div class="scroll-x scroll-x--rows scroll-x--flush">
+                        <table class="ledger">
+                            <thead><tr id="planPersonHead"></tr></thead>
+                            <tbody id="planPersonBody"></tbody>
+                            <tfoot id="planPersonFoot"></tfoot>
+                        </table>
+                    </div>
+                    <div class="card-foot" id="planPersonPager"></div>
+                </section>
+            </div>
+
+            <!-- ---------- Calendar: every day, one line ---------- -->
+            <div id="planCut-calendar" hidden>
+                <section class="card card--table">
+                    <div class="card-head">
+                        <h2>Every day</h2>
+                        <p>Days worked but never planned are included, and drawn
+                            set apart.</p>
+                    </div>
+                    <div class="scroll-x scroll-x--rows scroll-x--flush">
+                        <table class="ledger">
+                            <thead><tr id="planCalendarHead"></tr></thead>
+                            <tbody id="planCalendarBody"></tbody>
+                            <tfoot id="planCalendarFoot"></tfoot>
+                        </table>
+                    </div>
+                    <div class="card-foot" id="planCalendarPager"></div>
+                </section>
+            </div>
+        </section>

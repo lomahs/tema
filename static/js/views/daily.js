@@ -20,7 +20,7 @@ import { makeSortable, paintSortIndicators, sortableTh, sortGrouped } from "../s
 import {
     getExecutedStatuses, getStatuses, statusCells, statusHeadCells, sumRows,
 } from "../taxonomy.js";
-import { getTarget, onTargetChange, planFor } from "../target.js";
+import { hasPlan, onPlanChange, plannedFor } from "../plan.js";
 
 /** Dates per page. A date is a group, however many rows it holds. */
 const PAGE_SIZE = 10;
@@ -98,9 +98,10 @@ export function initDailyView({ onDrillIn: drill = () => {} } = {}) {
         renderDaily();
     });
 
-    // The plan line and the Plan/Attain columns are the target times the people
-    // who worked, so a target typed on Productivity has to reach this view.
-    onTargetChange(renderDaily);
+    // The plan line and the Plan/Attain columns are read off the plan for that
+    // date, so a day saved in Planning has to reach this view. It hears about
+    // it through `plan.js` rather than from Planning, which it never imports.
+    onPlanChange(renderDaily);
 
     document.querySelectorAll('[data-expand="daily"]').forEach((btn) =>
         btn.addEventListener("click", () => {
@@ -183,7 +184,10 @@ function dailyCells(row, depth) {
 
     if (depth !== 0) return executedCell + blank;
 
-    const plan = planFor(row.members || 0);
+    // `null` when that date was never planned, which is not a plan of zero:
+    // the day was not behind, it was never scheduled. Every day already in the
+    // workbooks reads this way until somebody plans it.
+    const plan = plannedFor(row.date);
     const attain = plan ? Math.round((executed / plan) * 100) : null;
     // Three bands, as the design has them: on plan, close, behind. The tone is
     // the same vocabulary the statuses use, so nothing new is being said here.
@@ -293,12 +297,6 @@ function renderDaily() {
     // a running total that reversed with the sort would not be one.
     const byDate = new Map();
     rows.forEach((r) => byDate.set(r.date, (byDate.get(r.date) || 0) + executedOf(r)));
-    const members = new Map();
-    rows.forEach((r) => {
-        if (!members.has(r.date)) members.set(r.date, new Set());
-        if (r.pic) members.get(r.date).add(r.pic);
-    });
-
     cumulative = new Map();
     let running = 0;
     [...byDate.keys()].sort().forEach((d) => {
@@ -309,10 +307,10 @@ function renderDaily() {
     chartMax = Math.max(
         1,
         ...[...byDate.values()],
-        ...[...members.values()].map((set) => planFor(set.size)),
+        ...[...byDate.keys()].map((d) => plannedFor(d) || 0),
     ) * 1.12;
 
-    renderChart(byDate, members);
+    renderChart(byDate);
 
     currentPage = 1;
     renderDailyBody();
@@ -331,9 +329,8 @@ function renderDaily() {
  * a chart with a narrower question.
  *
  * @param {Map<string, number>} byDate Executed cases per date.
- * @param {Map<string, Set<string>>} members Distinct PICs per date.
  */
-function renderChart(byDate, members) {
+function renderChart(byDate) {
     const dates = [...byDate.keys()].sort();
 
     if (!dates.length) {
@@ -342,12 +339,15 @@ function renderChart(byDate, members) {
         return;
     }
 
-    $("#dailyChartNote").textContent =
-        `Plan is ${getTarget()} cases per person per day, against the members who tested.`;
+    $("#dailyChartNote").textContent = hasPlan()
+        ? "The dashed line is what Planning says was meant to happen that day. "
+          + "Days with no plan have no line."
+        : "No day has been planned yet — set one up in Planning and the plan "
+          + "line appears here.";
 
     $("#dailyChart").innerHTML = dates.map((d) => {
         const n = byDate.get(d) || 0;
-        const plan = planFor(members.get(d) ? members.get(d).size : 0);
+        const plan = plannedFor(d);
         const attain = plan ? (n / plan) * 100 : null;
         const tone = attain === null ? "muted"
             : attain >= 100 ? "success" : attain >= 80 ? "warn" : "danger";

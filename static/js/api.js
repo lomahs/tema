@@ -274,3 +274,102 @@ export async function putConfig(name, data) {
     });
     return { ok: res.ok, json: await res.json() };
 }
+
+/**
+ * The plan calendar: one line per day, planned against what was done.
+ *
+ * Days worked but never planned are included, so the calendar reports what
+ * happened rather than only what was intended.
+ *
+ * @param {{from?: string, to?: string}} [range] Bounds, as "YYYY-MM-DD".
+ * @returns {Promise<ApiResponse>} On success `json` is
+ *   `{days, planned_total, actual_total}`; on failure `{error}`.
+ */
+export async function getPlanCalendar(range = {}) {
+    const q = new URLSearchParams();
+    if (range.from) q.set("from", range.from);
+    if (range.to) q.set("to", range.to);
+    const res = await fetch(`/api/plan${q.toString() ? `?${q}` : ""}`);
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * One day's plan, each row joined to what that person actually ran.
+ *
+ * Rows with an `actual` but no `planned` are work nobody scheduled; they are
+ * included deliberately, because a table of a day that hid work done would be
+ * wrong rather than tidy.
+ *
+ * @param {string} date "YYYY-MM-DD".
+ * @returns {Promise<ApiResponse>} On success `json` is `{date, rows,
+ *   planned_total, actual_total, baseline_total, has_baseline, baseline_at}`.
+ */
+export async function getPlanDay(date) {
+    const res = await fetch(`/api/plan/${encodeURIComponent(date)}`);
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * Replace one day's rows.
+ *
+ * The whole day goes at once, the way a config file does: a plan is rearranged
+ * as a block, and a refused edit leaves the stored plan exactly as it was.
+ *
+ * @param {string} date "YYYY-MM-DD".
+ * @param {Array<{pic: string, file: string, device: string, planned: number}>} entries
+ * @returns {Promise<ApiResponse>} On success `json` is the day view; on failure
+ *   `{error}` in the validator's own words.
+ */
+export async function putPlanDay(date, entries) {
+    const res = await fetch(`/api/plan/${encodeURIComponent(date)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries }),
+    });
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * Judge the day against the plan as it stands now.
+ *
+ * The baseline is otherwise frozen on the first edit made on or after the day
+ * itself; this is the way back from a first edit that was a typo.
+ *
+ * @param {string} date "YYYY-MM-DD".
+ * @returns {Promise<ApiResponse>}
+ */
+export async function postPlanBaseline(date) {
+    const res = await fetch(`/api/plan/${encodeURIComponent(date)}/baseline`,
+                            { method: "POST" });
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * One person across every day they were planned for or worked on.
+ * @param {string} pic
+ * @returns {Promise<ApiResponse>} On success `json` is
+ *   `{pic, rows, planned_total, actual_total}`.
+ */
+export async function getPlanPerson(pic) {
+    const res = await fetch(`/api/plan/person/${encodeURIComponent(pic)}`);
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * Where a freed-up tester could go: blocks with cases nobody has run.
+ *
+ * What the day's plan has already handed out is subtracted and named, so two
+ * people are not sent to the same block, and `date` is required for exactly
+ * that reason — without it the work would read as entirely free.
+ *
+ * @param {string} date "YYYY-MM-DD".
+ * @param {string} [deviceFamily] Narrow to one family, as the rows spell it.
+ * @returns {Promise<ApiResponse>} On success `json` is `{date, rows}`, each row
+ *   `{file, device, device_family, remaining, total, assigned, free, assigned_to}`.
+ */
+export async function getPlanSuggest(date, deviceFamily) {
+    const q = new URLSearchParams({ date });
+    if (deviceFamily) q.set("device_family", deviceFamily);
+    const res = await fetch(`/api/plan/suggest?${q}`);
+    return { ok: res.ok, json: await res.json() };
+}

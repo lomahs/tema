@@ -11,7 +11,7 @@
 import { $, esc } from "../dom.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortRows } from "../sorting.js";
 import { getExecutedStatuses, toneFor } from "../taxonomy.js";
-import { getTarget, onTargetChange, setTarget } from "../target.js";
+import { hasPlan, onPlanChange, plannedForPic, plannedTotal } from "../plan.js";
 
 /** @type {Object[]} rows from /api/productivity */
 let prodData = [];
@@ -26,34 +26,38 @@ const prodSort = { ...DEFAULT_SORT };
 const NUMERIC_BASE = ["executed", "days", "productivity"];
 
 /**
- * Wire the target input. Call once, at startup.
+ * Wire the view. Call once, at startup.
  *
- * This view owns the *control*; `target.js` owns the value, because the Daily
- * chart reads it too. Typing here redraws both.
+ * There is no control here any more. Attainment used to be measured against a
+ * standing target typed into this header — one number, multiplied out by the
+ * people who happened to work that day. It is measured against the plan now:
+ * what that member was actually asked to do, on the days somebody asked. So
+ * this view owns no input, and redraws when the plan changes.
  */
 export function initProductivityView() {
-    const input = $("#productivityTarget");
-    input.value = String(getTarget());
-    input.addEventListener("change", () => {
-        // `setTarget` returns what it actually adopted, so a refused value
-        // (blank, zero, negative) corrects itself in the box rather than
-        // leaving the reader looking at a number the table did not use.
-        input.value = String(setTarget(input.value));
-    });
-    onTargetChange(renderProductivity);
+    onPlanChange(renderProductivity);
 }
 
 /**
- * Attainment against the target, as a bar and a percentage.
+ * Attainment against what this member was planned for.
  *
- * @param {number} rate Cases per day.
+ * A member nobody planned work for has no attainment rather than 0% — they are
+ * not behind, they were never given a figure to meet. Every member reads that
+ * way until a day naming them is saved in Planning.
+ *
+ * @param {number} executed Cases this member carried out.
+ * @param {?number} planned Cases they were planned for, or null.
  * @returns {string} HTML.
  */
-function attainCell(rate) {
-    const pct = Math.round((rate / getTarget()) * 100);
+function attainCell(executed, planned) {
+    if (!planned) {
+        return `<td class="progress-col"><span class="zero"`
+             + ` title="No day in Planning names this member">—</span></td>`;
+    }
+    const pct = Math.round((executed / planned) * 100);
     const tone = pct >= 100 ? "success" : pct >= 80 ? "warn" : "danger";
     return `<td class="progress-col"><span class="progress-cell">
-        <span class="progress progress--sm" role="img" aria-label="${pct}% of target">
+        <span class="progress progress--sm" role="img" aria-label="${pct}% of plan">
             <span class="progress-seg" style="width:${Math.min(100, pct)}%;
                   background:var(--tone-${tone})"></span>
         </span>
@@ -107,6 +111,10 @@ export function initProductivity(data) {
 
 /** Sort the rows by the active column and redraw the table. */
 function renderProductivity() {
+    $("#productivityPlanNote").textContent = hasPlan()
+        ? "Attainment is each member against what Planning asked of them."
+        : "No plan yet — set days up in Planning and attainment appears here.";
+
     const statuses = getExecutedStatuses();
     const numeric = new Set([...NUMERIC_BASE, ...statuses.map((s) => s.key)]);
     const rows = sortRows(prodData, prodSort, numeric);
@@ -129,7 +137,7 @@ function renderProductivity() {
         <td class="num center">${r.executed}</td>
         <td class="num center">${r.days}</td>
         <td class="num center"><b>${r.productivity.toFixed(2)}</b></td>
-        ${attainCell(r.productivity)}
+        ${attainCell(r.executed, plannedForPic(r.pic))}
     </tr>`).join("");
 
     renderProductivityFoot(rows, statuses);
@@ -157,6 +165,6 @@ function renderProductivityFoot(rows, statuses) {
         <td class="num center">${executed}</td>
         <td class="num center">${days}</td>
         <td class="num center">${rate.toFixed(2)}</td>
-        ${attainCell(rate)}
+        ${attainCell(executed, plannedTotal())}
     </tr>`;
 }

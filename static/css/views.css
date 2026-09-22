@@ -457,3 +457,71 @@
     border-color: var(--rule-strong);
     background: none;
 }
+
+/* --- Planning ------------------------------------------------------------
+ * The day's plan and the work still to hand out, side by side: rearranging a
+ * day means reading one against the other, and a suggestion table you have to
+ * scroll to is one nobody uses. The plan column takes the extra width because
+ * it is the one with six columns and an editable cell in three of them.
+ *
+ * Nothing here introduces a colour. A row set apart is set apart by the same
+ * dashed rule `chip--aside` and `band--aside` already use, which is the app's
+ * one mark for "counted, but not part of this sum".
+ */
+
+.plan-split {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: var(--sp-4);
+    align-items: start;
+}
+
+/* A strip of controls inside a `.card--table`, which has no padding of its own
+   so that its ledger can reach the frame. */
+.plan-bar {
+    padding: var(--sp-3) var(--sp-5);
+    border-bottom: 1px solid var(--rule);
+}
+.plan-bar:empty { display: none; }
+.plan-bar--controls {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+}
+
+/* Work that happened without being planned, and a block already given away.
+   Both are real and both are outside the figure beside them, which is exactly
+   what the dashed rule means everywhere else in the app. */
+.ledger .row--aside > td:first-child { border-left: 1px dashed var(--rule-strong); }
+.ledger .row--aside { color: var(--ink-soft); }
+
+/* An input sized to sit inside a ledger cell without changing the row height:
+   the plan is edited in place, and a control at full `--ctl-h` in every row
+   would turn a table of figures into a form. Text fills its cell; a count is
+   narrow and right-aligned, so the Plan column still reads down the page as a
+   column of figures rather than as a column of boxes. */
+.input--cell {
+    width: 100%;
+    min-height: auto;
+    padding: 2px var(--sp-1);
+}
+.input--cell.num {
+    width: 6ch;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Who already holds a block, under the figure it was taken out of. */
+.cell-sub {
+    color: var(--ink-soft);
+    font-size: var(--fs-xs);
+    font-family: var(--font-mono);
+}
+
+/* One column under a narrow window: two ledgers side by side stop being
+   readable long before the viewport does. */
+@media (max-width: 1100px) {
+    .plan-split { grid-template-columns: minmax(0, 1fr); }
+}

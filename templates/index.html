@@ -65,6 +65,12 @@
                 <button class="rail-nav-item" data-view="productivity" disabled>
                     <span>Productivity</span>
                 </button>
+                <!-- Disabled with the other data views: a plan can be typed
+                     without a load, but every figure beside it — actual, diff,
+                     what is left to hand out — comes from the loaded cases. -->
+                <button class="rail-nav-item" data-view="planning" disabled>
+                    <span>Planning</span>
+                </button>
                 <!-- The count stays open work: it is the actionable number, and
                      the same one Summary's "To review" card reports. -->
                 <button class="rail-nav-item" data-view="detail" disabled>
@@ -108,6 +114,7 @@
 {% include "views/summary.html" %}
 {% include "views/daily.html" %}
 {% include "views/productivity.html" %}
+{% include "views/planning.html" %}
 {% include "views/detail.html" %}
 {% include "views/file.html" %}
 {% include "views/tools.html" %}

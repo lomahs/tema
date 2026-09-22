@@ -5,7 +5,7 @@
  * parsed and the Chart.js global is available before anything here executes.
  */
 import { $ } from "./dom.js";
-import { fetchAll, getFile, postReload } from "./api.js";
+import { fetchAll, getFile, getPlanCalendar, postReload } from "./api.js";
 import { refreshChartTheme, resizeCharts } from "./charts.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import {
@@ -26,7 +26,8 @@ import { initDaily, initDailyView, renderDailyHead } from "./views/daily.js";
 import {
     initProductivity, initProductivityView, renderProductivityHead,
 } from "./views/productivity.js";
-import { initTarget } from "./target.js";
+import { setPlanCalendar } from "./plan.js";
+import { initPlanning, initPlanningView } from "./views/planning.js";
 import {
     enterDetail, initDetail, initDetailView, renderDetailCards, renderDetailHead,
     renderResultToggles, reviewCount, showMissingReason, showReview, showStatusCases,
@@ -53,6 +54,12 @@ const VIEWS = {
         title: "Productivity",
         sub: () => "Executed cases divided by the days that member actually tested. "
                  + "Covers everything loaded — Daily's filters do not apply.",
+    },
+    planning: {
+        title: "Planning",
+        sub: () => "Who is meant to test what, and how that went. The day's rows are "
+                 + "edited here; Person and Calendar report on them. Work nobody "
+                 + "planned is shown too, set apart.",
     },
     detail: {
         title: "Detail",
@@ -193,6 +200,14 @@ async function refreshViews(loadResult, { show = true } = {}) {
     initDaily(daily);
     initProductivity(productivity);
 
+    // The plan is not part of `fetchAll`: it is not read out of the workbooks
+    // and it does not change when they are re-read. What Daily and Productivity
+    // need of it is the calendar — one line per day — which `plan.js` holds and
+    // both draw their plan figures from.
+    const plan = await getPlanCalendar();
+    if (plan.ok) setPlanCalendar(plan.json);
+    await initPlanning(productivity);
+
     // There is something to publish now.
     setReportEnabled(true);
 
@@ -250,7 +265,6 @@ async function refreshAfterConfigSave() {
 }
 
 initTheme();
-initTarget();
 onThemeChange(refreshChartTheme);
 initShell({ onNavigate: showView });
 // Summary's KPI cards navigate, but `views/summary/**` must not import
@@ -300,6 +314,11 @@ initSummaryView({
     onDrillIn: openStatusCases,
 });
 initProductivityView();
+// Saving a day's plan changes what Daily's Plan column and Productivity's
+// attainment bar mean, and both are usually off screen when it happens. Neither
+// view learns about Planning to hear it: `plan.js` announces the change, the
+// same arrangement `theme.js` uses and the one `target.js` used before it.
+initPlanningView();
 
 // Nothing is loaded yet, so the only view that can answer anything is Tools.
 // It is the empty state now: a separate "nothing loaded" panel in front of the
