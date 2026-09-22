@@ -48,6 +48,14 @@ SHEET_LABELS_CONFIG = os.environ.get(
     os.path.join(CONFIG_DIR, "sheet_labels.json"),
 )
 
+# Where the test plan is kept. Not in config/: the four files there are
+# vocabularies shipped with the app, while a plan is operational data the user
+# authors and the only copy of it there is. It sits beside the Graph token
+# cache for that reason — both are this machine's state, not the project's.
+PLAN_FILE = os.path.expanduser(
+    os.environ.get("PLAN_FILE", "~/.test-management/plan.json")
+)
+
 # --- Microsoft Graph -------------------------------------------------------
 # Publishing the report needs an Azure app registration with "Allow public
 # client flows" enabled; see README.md. Without a client id the SharePoint

@@ -40,3 +40,8 @@ def test_the_json_repository_is_a_config_repository():
 def test_the_native_dialog_is_a_file_picker():
     from tcm.infrastructure.dialog import NativeDialog
     assert issubclass(NativeDialog, ports.FilePicker)
+
+
+def test_the_json_plan_repository_is_a_plan_repository():
+    from tcm.infrastructure.plan.json_store import JsonPlanRepository
+    assert issubclass(JsonPlanRepository, ports.PlanRepository)

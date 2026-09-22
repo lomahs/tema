@@ -15,3 +15,8 @@ def workspace():
 def identity():
     """The IdentityService this app was built with."""
     return current_app.extensions["identity"]
+
+
+def planning():
+    """The PlanningService this app was built with."""
+    return current_app.extensions["planning"]

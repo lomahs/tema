@@ -623,3 +623,62 @@ def test_every_status_case_names_the_device_family_it_belongs_to():
         ("iPhone Min size", "iPhone"),
         ("Android 14", "Android 14"),
     ]
+
+
+# --- remaining_rows --------------------------------------------------------
+# What is left to do, per (file, device). This is the figure the planning view
+# offers when a day's plan has to be rearranged: the work that exists to move.
+
+def test_remaining_rows_count_the_cases_nobody_has_run():
+    rows = aggregate.remaining_rows([
+        case(result="OK"),
+        case(result=None, row_num=5),
+        case(result="", row_num=6),
+    ])
+
+    assert len(rows) == 1
+    assert rows[0]["file"] == "TC.xlsx"
+    assert rows[0]["device"] == "iPhone"
+    assert rows[0]["remaining"] == 2
+    assert rows[0]["total"] == 3
+
+
+def test_remaining_rows_split_by_device():
+    rows = aggregate.remaining_rows([
+        case(result=None),
+        case(device="iPad", result=None),
+        case(device="iPad", result=None, row_num=5),
+    ])
+
+    # Fewest remaining first, so iPhone's single case leads iPad's two.
+    assert [(r["device"], r["remaining"]) for r in rows] == [("iPhone", 1), ("iPad", 2)]
+
+
+def test_remaining_rows_name_the_device_family():
+    """So the view filters by family without re-implementing the substring rules."""
+    rows = aggregate.remaining_rows([case(device="iPhone Min size", result=None)])
+    assert rows[0]["device_family"] == "iPhone"
+
+
+def test_remaining_rows_drop_work_outside_the_plan():
+    """An excluded scope group is reported, not committed to — so it is not work to give."""
+    rows = aggregate.remaining_rows([
+        case(scope="JP", result=None),
+        case(scope="FPT", result=None, row_num=5),
+    ])
+    assert len(rows) == 1
+    assert rows[0]["remaining"] == 1
+
+
+def test_a_file_and_device_with_nothing_left_is_not_listed():
+    """The list is offered as work to hand out; a finished block is not work."""
+    assert aggregate.remaining_rows([case(result="OK")]) == []
+
+
+def test_remaining_rows_sort_the_nearly_finished_first():
+    """Fewest left first: finishing a file outright beats starting a fourth one."""
+    rows = aggregate.remaining_rows(
+        [case(file_name="Big.xlsx", result=None, row_num=i) for i in range(5)]
+        + [case(file_name="Small.xlsx", result=None, row_num=i) for i in range(2)]
+    )
+    assert [r["file"] for r in rows] == ["Small.xlsx", "Big.xlsx"]

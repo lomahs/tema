@@ -138,3 +138,28 @@ class FilePicker(Protocol):
 
     def pick_files(self, initial: Optional[str] = None) -> list[str]:
         ...
+
+
+@runtime_checkable
+class PlanRepository(Protocol):
+    """Where the test plan is kept. A JSON file today; the SQLite seam.
+
+    Three methods rather than a whole-document read and write, because those two
+    map cleanly onto a table as well as onto a file: a day is a row, and a
+    `SqlPlanRepository` fetching one is a `WHERE date = ?` rather than a full
+    load. That is the swap this port exists for — the plan is the one thing in
+    the app that is authored rather than read out of a workbook, so it is the
+    one thing a store has to keep.
+
+    `day` answers for a date nobody planned with an empty `DayPlan`, never None,
+    so no caller has to ask whether the store had heard of the date.
+    """
+
+    def day(self, date: str):
+        ...
+
+    def days(self) -> list:
+        ...
+
+    def put_day(self, day) -> None:
+        ...

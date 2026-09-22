@@ -338,3 +338,49 @@ def issue_rows(cases):
             "note": c.note,
         })
     return rows
+
+
+def remaining_rows(cases):
+    """Per file and device: how many cases nobody has run yet.
+
+    This is the work that exists to be handed out, which is what the planning
+    view needs when a day has to be rearranged — a tester freed up mid-morning
+    is looking for somewhere to go, and the answer is a block of this list.
+
+    "Not run" is whichever status the taxonomy marks `empty`, asked for as
+    `STATUS.classify(None)` rather than written here as "NYS": what a blank
+    Result cell means is the config's business, the same rule that keeps status
+    keys out of every other module. The whole row is classified, not the Result
+    cell alone, so a case derived into Out Of Scope is not offered as work.
+
+    Cases in a scope group outside the plan are left out -- see `in_plan`. Work
+    that is reported but not committed to is not work to give somebody.
+
+    Rows with nothing left are dropped: the list is an offer of work, and a
+    finished block is not one. The order is fewest-remaining first, because
+    finishing a file outright is worth more than starting a fourth one.
+
+    Returns:
+        `[{"file", "device", "device_family", "remaining", "total"}]`, where
+        `total` is every case of that block in the plan -- the denominator that
+        says whether 12 left means nearly done or barely started.
+    """
+    unstarted = STATUS.classify(None)
+    buckets = defaultdict(lambda: [0, 0])  # [remaining, total]
+    for c in in_plan(cases):
+        bucket = buckets[(c.file_name, c.device)]
+        bucket[1] += 1
+        if STATUS.classify_case(c) == unstarted:
+            bucket[0] += 1
+
+    rows = [
+        {"file": file_name, "device": device,
+         "device_family": DEVICES.classify(device),
+         "remaining": remaining, "total": total}
+        for (file_name, device), (remaining, total) in buckets.items()
+        if remaining
+    ]
+    # Fewest left first; then by name, so two blocks with the same count keep a
+    # stable order rather than one the dict happened to produce.
+    rows.sort(key=lambda r: (r["remaining"], r["file"], r["device"]))
+    return rows
