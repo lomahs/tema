@@ -459,69 +459,373 @@
 }
 
 /* --- Planning ------------------------------------------------------------
- * The day's plan and the work still to hand out, side by side: rearranging a
- * day means reading one against the other, and a suggestion table you have to
- * scroll to is one nobody uses. The plan column takes the extra width because
- * it is the one with six columns and an editable cell in three of them.
+ * The phase bar and KPIs, the Day plan (a matrix of file × device slots against
+ * members, or a list), the slot editor dialog, the burndown and the phase grid.
  *
- * Nothing here introduces a colour. A row set apart is set apart by the same
- * dashed rule `chip--aside` and `band--aside` already use, which is the app's
- * one mark for "counted, but not part of this sum".
+ * Nothing here introduces a colour of its own. What reads as good, late or
+ * over comes from the status tones, because on this screen those are exactly
+ * the questions being asked; everything else — selection, the actual line, a
+ * pressed toggle — is ink. The design canvas draws those in its green primary,
+ * and that is the collision the no-accent rule exists to prevent.
  */
 
-.plan-split {
-    display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    gap: var(--sp-4);
-    align-items: start;
+/* Buttons that sit inside a row or a head strip. */
+#planningView .btn-sm {
+    min-height: 28px;
+    padding: 2px var(--sp-2);
+    font-size: var(--fs-sm);
 }
 
-/* A strip of controls inside a `.card--table`, which has no padding of its own
-   so that its ledger can reach the frame. */
-.plan-bar {
-    padding: var(--sp-3) var(--sp-5);
-    border-bottom: 1px solid var(--rule);
-}
-.plan-bar:empty { display: none; }
-.plan-bar--controls {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--sp-3);
-    flex-wrap: wrap;
-}
-
-/* Work that happened without being planned, and a block already given away.
-   Both are real and both are outside the figure beside them, which is exactly
-   what the dashed rule means everywhere else in the app. */
+/* Work that happened without being planned. Real, and outside the figure
+   beside it — which is what the dashed rule means everywhere else in the app. */
 .ledger .row--aside > td:first-child { border-left: 1px dashed var(--rule-strong); }
 .ledger .row--aside { color: var(--ink-soft); }
 
-/* An input sized to sit inside a ledger cell without changing the row height:
-   the plan is edited in place, and a control at full `--ctl-h` in every row
-   would turn a table of figures into a form. Text fills its cell; a count is
-   narrow and right-aligned, so the Plan column still reads down the page as a
-   column of figures rather than as a column of boxes. */
-.input--cell {
-    width: 100%;
-    min-height: auto;
-    padding: 2px var(--sp-1);
-}
-.input--cell.num {
-    width: 6ch;
-    text-align: right;
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-}
+.plan-muted { color: var(--ink-soft); font-size: var(--fs-xs); }
 
-/* Who already holds a block, under the figure it was taken out of. */
-.cell-sub {
+/* --- phase bar ---------------------------------------------------------- */
+.plan-phase {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2) var(--sp-3);
+    margin-bottom: var(--sp-3);
+}
+.plan-phase .inline-field { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
+.plan-phase-arrow { color: var(--ink-faint); }
+.plan-phase-info { color: var(--ink-soft); font-size: var(--fs-sm); }
+.plan-phase-target { margin-left: auto; }
+
+/* --- day plan ----------------------------------------------------------- */
+.plan-day-head { align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.plan-day-title { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.plan-day-title-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.plan-day-headline { color: var(--ink-soft); font-size: var(--fs-sm); }
+.plan-day-controls { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.plan-stepper { display: inline-flex; align-items: center; gap: 2px; }
+.plan-badge--today { background: var(--ink); color: var(--ink-invert); }
+.plan-note { padding: var(--sp-2) var(--sp-5); border-bottom: 1px solid var(--rule-soft); }
+#day-plan > .empty-note { padding: var(--sp-2) var(--sp-5); }
+
+.plan-matrix th.plan-member { text-align: center; white-space: nowrap; }
+.plan-matrix td { padding: 3px; vertical-align: middle; }
+.plan-matrix td.plan-sticky { padding: var(--sp-1) var(--sp-3); }
+.plan-sticky {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--paper-raised);
+    min-width: 9rem;
+    font-weight: 600;
+}
+.plan-sticky--2 { left: 9rem; min-width: 8rem; font-weight: 400; }
+thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index: 2; }
+.plan-matrix tr.plan-file-start > td { border-top: 2px solid var(--rule); }
+.plan-matrix tr.is-focus > td { background: var(--tone-warn-bg); }
+.plan-matrix tr.is-focus > td:first-child { box-shadow: inset 3px 0 0 var(--tone-warn); }
+.plan-total { white-space: nowrap; padding-inline: var(--sp-3) !important; }
+
+.plan-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 2px var(--sp-1);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.plan-slot:hover { background: var(--paper-hover); }
+.plan-slot-sub { color: var(--ink-faint); font-size: var(--fs-xs); font-family: var(--font-mono); }
+.plan-slot-sub.is-over { color: var(--tone-danger); }
+
+/* A cell is a small button whose background fills left to right with the
+   share of the plan that was run — `--pct`, set inline per cell. */
+.plan-cell {
+    --fill: transparent;
+    --base: var(--paper-sunk);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    width: 100%;
+    min-width: 5.5rem;
+    min-height: 40px;
+    padding: 2px var(--sp-2);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: linear-gradient(90deg, var(--fill) var(--pct, 0%), var(--base) var(--pct, 0%));
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+.plan-cell:hover { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.plan-cell:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.plan-cell .num { font-weight: 600; }
+.plan-cell-of { color: var(--ink-faint); font-weight: 400; }
+.plan-cell-state { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; color: var(--ink-soft); }
+.plan-cell[data-state="empty"]     { --base: var(--level-0); color: var(--ink-faint); }
+.plan-cell[data-state="future"]    { --base: var(--tone-neutral-bg); }
+.plan-cell[data-state="nys"]       { --base: var(--tone-neutral-bg); }
+.plan-cell[data-state="wip"]       { --fill: var(--level-0); --base: var(--tone-neutral-bg); }
+.plan-cell[data-state="done"]      { --fill: var(--tone-success-bg); --base: var(--tone-success-bg); }
+.plan-cell[data-state="exceeded"]  { --fill: color-mix(in srgb, var(--tone-success) 35%, var(--tone-success-bg));
+                                     --base: var(--fill); }
+.plan-cell[data-state="unplanned"] { --fill: var(--tone-warn-bg); --base: var(--tone-warn-bg); }
+.plan-cell[data-state="done"] .plan-cell-state,
+.plan-cell[data-state="exceeded"] .plan-cell-state { color: var(--tone-success-fg); }
+.plan-cell[data-state="unplanned"] .plan-cell-state { color: var(--tone-warn-fg); }
+.plan-cell--over { --base: var(--tone-danger-bg); color: var(--tone-danger-fg); }
+.plan-cell--over[data-state="wip"],
+.plan-cell--over[data-state="done"],
+.plan-cell--over[data-state="exceeded"] { --fill: color-mix(in srgb, var(--tone-danger) 25%, var(--tone-danger-bg)); }
+.plan-cell--over .plan-cell-state { color: var(--tone-danger-fg); }
+
+.plan-behind { display: block; font-size: 10.5px; font-weight: 600; font-family: var(--font-sans, inherit); }
+.plan-behind[data-tone="success"] { color: var(--tone-success-fg); }
+.plan-behind[data-tone="warn"]    { color: var(--tone-warn-fg); }
+.plan-behind[data-tone="danger"]  { color: var(--tone-danger-fg); }
+.plan-matrix td.is-heavy { color: var(--tone-warn-fg); }
+
+.plan-list .plan-list-filters th { padding-block: var(--sp-1); background: var(--paper-sunk); }
+.plan-list .plan-list-filters .select { min-height: 28px; width: 100%; }
+.plan-list td.is-over, .plan-list tr.is-over td.is-over { color: var(--tone-danger); }
+.plan-count { width: 7ch; min-height: 26px; padding: 1px var(--sp-1); text-align: right; }
+
+/* --- the slot editor ------------------------------------------------------
+ * The one floating surface in the app. Framed like a card, lifted by the
+ * shadow scale that otherwise sits unused, over a backdrop of ink. */
+.plan-editor {
+    width: min(560px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+    padding: 0;
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
+    background: var(--paper-raised);
+    color: var(--ink);
+    box-shadow: var(--shadow-3);
+}
+.plan-editor::backdrop { background: rgba(20, 23, 28, .32); }
+.plan-editor-form { display: flex; flex-direction: column; max-height: inherit; }
+.plan-editor-head, .plan-editor-foot {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    padding: var(--sp-4) var(--sp-5);
+}
+.plan-editor-head { border-bottom: 1px solid var(--rule); }
+.plan-editor-head h3 { margin: 0 0 2px; font-size: var(--fs-md); }
+.plan-editor-foot { border-top: 1px solid var(--rule); align-items: center; }
+.plan-editor-actions { display: flex; gap: var(--sp-2); }
+.plan-editor-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-4) var(--sp-5);
+    overflow: auto;
+}
+.plan-editor-pick { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.plan-editor-pick .field { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-sm); }
+.plan-editor-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); }
+.plan-editor-stats > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-md);
+}
+.plan-editor-stats .num { font-size: var(--fs-md); font-weight: 600; }
+.plan-editor-stats .num[data-tone="danger"] { color: var(--tone-danger); }
+.plan-editor-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-md);
+    background: var(--paper-sunk);
+    color: var(--ink-soft);
+    font-size: var(--fs-sm);
+}
+.plan-editor-status[data-tone="success"] { background: var(--tone-success-bg); color: var(--tone-success-fg); }
+.plan-editor-status[data-tone="danger"]  { background: var(--tone-danger-bg);  color: var(--tone-danger-fg); }
+.plan-editor-aside {
+    display: flex;
+    justify-content: space-between;
+    margin: 0;
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-md);
+    background: var(--tone-warn-bg);
+    color: var(--tone-warn-fg);
+    font-size: var(--fs-sm);
+}
+.plan-editor-rows { display: flex; flex-direction: column; gap: 2px; }
+.plan-editor-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) 3.5rem minmax(0, 1.4fr) 5rem 2rem;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 3px var(--sp-2);
+    border-radius: var(--r-sm);
+    font-size: var(--fs-sm);
+}
+.plan-editor-row--head { color: var(--ink-soft); font-size: var(--fs-xs); font-weight: 600; }
+.plan-editor-row.is-focus { background: var(--paper-sunk); }
+.plan-editor-row .num[data-tone="warn"] { color: var(--tone-warn-fg); }
+.plan-editor-count { display: flex; align-items: center; gap: var(--sp-2); }
+.plan-editor-count .input { width: 9ch; min-height: 28px; text-align: right; }
+.plan-editor-count .input.is-changed { background: var(--tone-warn-bg); border-color: var(--tone-warn); font-weight: 700; }
+.plan-editor-rows > .select { margin-top: var(--sp-2); align-self: flex-start; }
+
+/* --- burndown ------------------------------------------------------------ */
+.plan-burn-controls { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.plan-burn-pace { color: var(--ink-soft); font-size: var(--fs-sm); }
+.plan-swatch { display: inline-block; width: 18px; height: 0; margin-right: var(--sp-1);
+               vertical-align: middle; border-top: 2px solid var(--ink); }
+.plan-swatch--plan     { border-top: 2px dashed var(--ink-faint); }
+.plan-swatch--forecast { border-top: 2px dotted var(--ink-soft); }
+.plan-burn {
+    position: relative;
+    display: grid;
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+    grid-template-rows: 240px 1.5rem;
+    margin-top: var(--sp-3);
+}
+.plan-burn-y { position: relative; }
+.plan-burn-y span {
+    position: absolute;
+    right: var(--sp-2);
+    transform: translateY(50%);
+    color: var(--ink-faint);
+    font: var(--fs-xs) var(--font-mono);
+}
+.plan-burn-plot { position: relative; border-left: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.plan-burn-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.plan-burn-grid { position: absolute; left: 0; right: 0; border-top: 1px solid var(--rule-soft); }
+.plan-burn-mark { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--ink-soft); }
+.plan-burn-mark--end { border-left-style: dashed; border-color: var(--tone-danger); }
+.plan-burn-mark span {
+    position: absolute;
+    top: 0;
+    left: 4px;
     color: var(--ink-soft);
     font-size: var(--fs-xs);
-    font-family: var(--font-mono);
+    white-space: nowrap;
 }
+.plan-burn-mark--end span { color: var(--tone-danger-fg); }
+.plan-burn-x { grid-column: 2; position: relative; }
+.plan-burn-x span {
+    position: absolute;
+    top: 4px;
+    transform: translateX(-50%);
+    color: var(--ink-faint);
+    font: var(--fs-xs) var(--font-mono);
+}
+.plan-line { fill: none; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.plan-line--plan     { stroke: var(--ink-faint); stroke-width: 2; stroke-dasharray: 6 5; }
+.plan-line--actual   { stroke: var(--ink); stroke-width: 2.5; }
+.plan-line--forecast { stroke: var(--ink-soft); stroke-width: 2.5; stroke-dasharray: 2 6; }
+#planBurnNote[data-tone="success"] { color: var(--tone-success-fg); }
+#planBurnNote[data-tone="danger"]  { color: var(--tone-danger-fg); }
 
-/* One column under a narrow window: two ledgers side by side stop being
-   readable long before the viewport does. */
-@media (max-width: 1100px) {
-    .plan-split { grid-template-columns: minmax(0, 1fr); }
+/* --- phase grid ------------------------------------------------------------ */
+#planGridHead { align-items: flex-start; }
+.plan-grid-controls { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.plan-grid td { padding: 2px; }
+.plan-grid td.plan-sticky { padding: var(--sp-1) var(--sp-3); }
+.plan-grid-day { padding: 0 !important; text-align: center; }
+.plan-grid-day button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: var(--sp-1) var(--sp-2);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: var(--fs-xs);
+    cursor: pointer;
 }
+.plan-grid-day.is-today button { background: var(--paper-hover); color: var(--ink); font-weight: 600; }
+.plan-grid-day.is-selected button { background: var(--ink); color: var(--ink-invert); }
+.plan-grid-name {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.plan-grid-name--device { padding-left: var(--sp-5); font-weight: 400; color: var(--ink-soft); cursor: default; }
+.plan-grid-device > td { background: var(--paper-sunk); }
+.plan-grid-cell {
+    width: 100%;
+    min-width: 3.25rem;
+    height: 30px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+.plan-grid-cell:disabled { cursor: default; }
+.plan-grid-cell:not(:disabled):hover { outline: 1.5px solid var(--ink); outline-offset: -1px; }
+.plan-grid-cell[data-kind="future"]    { background: var(--tone-neutral-bg); }
+.plan-grid-cell[data-kind="on"]        { background: var(--tone-success-bg); color: var(--tone-success-fg); }
+.plan-grid-cell[data-kind="over"]      { background: color-mix(in srgb, var(--tone-success) 35%, var(--tone-success-bg)); }
+.plan-grid-cell[data-kind="under"]     { background: var(--tone-danger-bg);  color: var(--tone-danger-fg); }
+.plan-grid-cell[data-kind="wip"]       { background: var(--level-0); }
+.plan-grid-cell[data-kind="unplanned"] { background: var(--tone-warn-bg);    color: var(--tone-warn-fg); }
+.plan-grid-cell.is-ring { box-shadow: inset 0 0 0 1.5px var(--tone-danger); }
+.plan-grid tfoot td[data-tone="danger"] { color: var(--tone-danger); }
+
+.plan-tip {
+    position: fixed;
+    z-index: 50;
+    width: 240px;
+    transform: translate(-50%, -100%);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    padding: var(--sp-3);
+    border-radius: var(--r-md);
+    background: var(--ink);
+    color: var(--ink-invert);
+    font-size: var(--fs-xs);
+    pointer-events: none;
+    box-shadow: var(--shadow-2);
+}
+.plan-tip.is-below { transform: translate(-50%, 0); }
+.plan-tip-head { display: flex; flex-direction: column; gap: 2px; }
+.plan-tip table { width: 100%; border-collapse: collapse; }
+.plan-tip th { text-align: left; font-weight: 500; opacity: .7; }
+.plan-tip th.num, .plan-tip td.num { text-align: right; font-family: var(--font-mono); }
+.plan-tip tr.is-current td { font-weight: 700; }
+.plan-tip tfoot td { border-top: 1px solid color-mix(in srgb, var(--ink-invert) 25%, transparent); font-weight: 600; }
+.plan-tip-status { align-self: flex-start; padding: 1px var(--sp-2); border-radius: var(--r-full);
+                   background: color-mix(in srgb, var(--ink-invert) 18%, transparent); }
+.plan-tip .plan-muted { color: color-mix(in srgb, var(--ink-invert) 65%, transparent); }
+
+/* Layout of the Planning page itself: the cards stack with the gap the other
+   views get from their grids, and the controls that need room get it. */
+#planningView > .card { margin-bottom: var(--sp-4); }
+.plan-phase .input[type="date"] { width: 10.5rem; }
+.plan-phase-target .input { width: 9ch; }
+.plan-burn-mark--end span { left: auto; right: 4px; }
+.plan-grid-controls { margin-left: auto; }

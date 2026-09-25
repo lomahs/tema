@@ -330,46 +330,49 @@ export async function putPlanDay(date, entries) {
 }
 
 /**
- * Judge the day against the plan as it stands now.
+ * The whole phase: KPIs, the burndown and the day-by-day grid.
  *
- * The baseline is otherwise frozen on the first edit made on or after the day
- * itself; this is the way back from a first edit that was a typo.
- *
- * @param {string} date "YYYY-MM-DD".
- * @returns {Promise<ApiResponse>}
+ * @param {string} [window] Past phase days the forecast pace is read over:
+ *   "3", "5", "10" or "all".
+ * @returns {Promise<ApiResponse>} On success `json` is `{today, settings, phase,
+ *   kpis, burndown, grid}`; on failure `{error}`.
  */
-export async function postPlanBaseline(date) {
-    const res = await fetch(`/api/plan/${encodeURIComponent(date)}/baseline`,
-                            { method: "POST" });
+export async function getPlanPhase(window = "5") {
+    const res = await fetch(`/api/plan/phase?window=${encodeURIComponent(window)}`);
     return { ok: res.ok, json: await res.json() };
 }
 
 /**
- * One person across every day they were planned for or worked on.
- * @param {string} pic
- * @returns {Promise<ApiResponse>} On success `json` is
- *   `{pic, rows, planned_total, actual_total}`.
+ * One day laid out as file x device slots against members.
+ *
+ * @param {string} date "YYYY-MM-DD".
+ * @returns {Promise<ApiResponse>} On success `json` is `{date, today,
+ *   daily_target, entries, slots, cells, load, members, available}`.
  */
-export async function getPlanPerson(pic) {
-    const res = await fetch(`/api/plan/person/${encodeURIComponent(pic)}`);
+export async function getPlanBoard(date) {
+    const res = await fetch(`/api/plan/board/${encodeURIComponent(date)}`);
     return { ok: res.ok, json: await res.json() };
 }
 
 /**
- * Where a freed-up tester could go: blocks with cases nobody has run.
- *
- * What the day's plan has already handed out is subtracted and named, so two
- * people are not sent to the same block, and `date` is required for exactly
- * that reason — without it the work would read as entirely free.
- *
- * @param {string} date "YYYY-MM-DD".
- * @param {string} [deviceFamily] Narrow to one family, as the rows spell it.
- * @returns {Promise<ApiResponse>} On success `json` is `{date, rows}`, each row
- *   `{file, device, device_family, remaining, total, assigned, free, assigned_to}`.
+ * The phase and the daily target, with defaults filled in for what was never set.
+ * @returns {Promise<ApiResponse>} `{phase_start, phase_end, daily_target, stored}`.
  */
-export async function getPlanSuggest(date, deviceFamily) {
-    const q = new URLSearchParams({ date });
-    if (deviceFamily) q.set("device_family", deviceFamily);
-    const res = await fetch(`/api/plan/suggest?${q}`);
+export async function getPlanSettings() {
+    const res = await fetch("/api/plan/settings");
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * Save the phase and the daily target. A refusal stores nothing.
+ * @param {{phase_start: string, phase_end: string, daily_target: number}} settings
+ * @returns {Promise<ApiResponse>} On failure `{error}` in the validator's words.
+ */
+export async function putPlanSettings(settings) {
+    const res = await fetch("/api/plan/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+    });
     return { ok: res.ok, json: await res.json() };
 }

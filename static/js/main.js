@@ -27,7 +27,7 @@ import {
     initProductivity, initProductivityView, renderProductivityHead,
 } from "./views/productivity.js";
 import { setPlanCalendar } from "./plan.js";
-import { initPlanning, initPlanningView } from "./views/planning.js";
+import { initPlanning, initPlanningView } from "./views/planning/index.js";
 import {
     enterDetail, initDetail, initDetailView, renderDetailCards, renderDetailHead,
     renderResultToggles, reviewCount, showMissingReason, showReview, showStatusCases,
@@ -57,9 +57,8 @@ const VIEWS = {
     },
     planning: {
         title: "Planning",
-        sub: () => "Who is meant to test what, and how that went. The day's rows are "
-                 + "edited here; Person and Calendar report on them. Work nobody "
-                 + "planned is shown too, set apart.",
+        sub: () => "The phase, what each day hands out and how it is going. "
+                 + "Click a cell to change a day's plan.",
     },
     detail: {
         title: "Detail",
@@ -206,7 +205,7 @@ async function refreshViews(loadResult, { show = true } = {}) {
     // both draw their plan figures from.
     const plan = await getPlanCalendar();
     if (plan.ok) setPlanCalendar(plan.json);
-    await initPlanning(productivity);
+    await initPlanning();
 
     // There is something to publish now.
     setReportEnabled(true);
