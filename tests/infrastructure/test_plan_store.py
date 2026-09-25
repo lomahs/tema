@@ -119,3 +119,30 @@ def test_a_corrupt_file_says_so_rather_than_reading_as_empty(store, tmp_path):
     (tmp_path / "plan.json").write_text("{not json", encoding="utf-8")
     with pytest.raises(ValueError, match="plan.json"):
         store.day("2026-09-22")
+
+
+# --- settings ------------------------------------------------------------------
+
+from tcm.domain.plan import PlanSettings  # noqa: E402
+
+
+def test_settings_default_when_the_file_has_none(store):
+    assert store.settings() == PlanSettings()
+
+
+def test_settings_round_trip_without_touching_days(store):
+    store.put_day(day("2026-09-25", (("An", "TC.xlsx", "iPhone", 3),)))
+    store.put_settings(PlanSettings("2026-09-01", "2026-09-30", 25))
+    assert store.settings() == PlanSettings("2026-09-01", "2026-09-30", 25)
+    assert store.day("2026-09-25").planned_total == 3
+
+
+def test_saving_a_day_keeps_the_settings(store):
+    store.put_settings(PlanSettings("2026-09-01", "2026-09-30", 25))
+    store.put_day(day("2026-09-25"))
+    assert store.settings().daily_target == 25
+
+
+def test_a_file_written_before_settings_existed_still_reads(store, tmp_path):
+    (tmp_path / "plan.json").write_text(json.dumps({"version": 1, "days": {}}))
+    assert store.settings() == PlanSettings()

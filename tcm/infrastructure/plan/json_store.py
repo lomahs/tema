@@ -14,14 +14,17 @@ copy, and a plan is the only copy there is.
 Shape on disk::
 
     {"version": 1,
-     "days": {"2026-09-22": {"entries": [...], "baseline": [...], "baseline_at": ...}}}
+     "days": {"2026-09-22": {"entries": [...], "baseline": [...], "baseline_at": ...}},
+     "settings": {"phase_start": ..., "phase_end": ..., "daily_target": 30}}
 
 `version` is there so a later schema change can still read today's files.
+`settings` is additive -- a file written before it existed reads as the
+defaults -- which is why adding it did not bump the version.
 """
 import json
 import os
 
-from tcm.domain.plan import DayPlan, parse_date
+from tcm.domain.plan import DayPlan, PlanSettings, parse_date
 
 #: Bumped when the shape above changes in a way a reader has to know about.
 SCHEMA_VERSION = 1
@@ -39,14 +42,14 @@ class JsonPlanRepository:
     def day(self, date: str) -> DayPlan:
         """One date's plan; an empty one for a date nobody planned."""
         date = parse_date(date)
-        raw = self._read().get(date)
+        raw = self._read()["days"].get(date)
         if raw is None:
             return DayPlan.empty(date)
         return DayPlan.from_dict(date, raw, source=f"{os.path.basename(self._path)}[{date}]")
 
     def days(self) -> list[DayPlan]:
         """Every planned day, in date order."""
-        days = self._read()
+        days = self._read()["days"]
         return [DayPlan.from_dict(date, days[date],
                                   source=f"{os.path.basename(self._path)}[{date}]")
                 for date in sorted(days)]
@@ -61,21 +64,39 @@ class JsonPlanRepository:
         record for every date ever opened. A day emptied *after* being frozen is
         kept — the baseline is the evidence that work was planned and dropped.
         """
-        days = self._read()
+        doc = self._read()
         if not day.entries and day.baseline is None:
-            days.pop(day.date, None)
+            doc["days"].pop(day.date, None)
         else:
-            days[day.date] = day.to_dict()
-        self._write(days)
+            doc["days"][day.date] = day.to_dict()
+        self._write(doc)
+
+    # --- settings ----------------------------------------------------------
+
+    def settings(self) -> PlanSettings:
+        """The phase and the daily target; the defaults when none were saved."""
+        return PlanSettings.from_dict(
+            self._read()["settings"] or {},
+            source=f"{os.path.basename(self._path)}[settings]")
+
+    def put_settings(self, settings: PlanSettings) -> None:
+        """Save the settings, leaving every day alone."""
+        doc = self._read()
+        doc["settings"] = settings.to_dict()
+        self._write(doc)
 
     # --- the file ----------------------------------------------------------
 
     def _read(self) -> dict:
+        """The whole document as `{"days": {...}, "settings": {...} | None}`.
+
+        Both halves always come back, so a save of one cannot drop the other.
+        """
         try:
             text = self._repo.read_text(self._path)
         except FileNotFoundError:
             # No plan yet is the normal state, not a failure.
-            return {}
+            return {"days": {}, "settings": None}
         try:
             raw = json.loads(text)
         except json.JSONDecodeError as e:
@@ -84,12 +105,17 @@ class JsonPlanRepository:
             raise ValueError(f"{self._path} is not valid JSON: {e}") from e
         if not isinstance(raw, dict) or not isinstance(raw.get("days", {}), dict):
             raise ValueError(f"{self._path} is not a plan file")
-        return raw.get("days", {})
+        settings = raw.get("settings")
+        if settings is not None and not isinstance(settings, dict):
+            raise ValueError(f"{self._path}: 'settings' must be an object")
+        return {"days": raw.get("days", {}), "settings": settings}
 
-    def _write(self, days: dict) -> None:
+    def _write(self, doc: dict) -> None:
         # ~/.test-management holds only the Graph token cache otherwise, so a
         # user who has never signed in has no such folder.
         os.makedirs(os.path.dirname(os.path.abspath(self._path)), exist_ok=True)
-        text = json.dumps({"version": SCHEMA_VERSION, "days": days},
-                          indent=2, ensure_ascii=False) + "\n"
+        out = {"version": SCHEMA_VERSION, "days": doc["days"]}
+        if doc.get("settings"):
+            out["settings"] = doc["settings"]
+        text = json.dumps(out, indent=2, ensure_ascii=False) + "\n"
         self._repo.write_text(self._path, text)

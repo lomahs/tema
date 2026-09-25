@@ -7,7 +7,7 @@ actuals being joined from the cases the workspace happens to hold.
 """
 import pytest
 
-from tcm.domain.plan import DayPlan
+from tcm.domain.plan import DayPlan, PlanSettings
 from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.store.memory import InMemoryCaseStore
 from tcm.services.planning import PlanningService
@@ -28,6 +28,14 @@ class FakePlanRepository:
 
     def put_day(self, day):
         self._days[day.date] = day
+
+    _settings = None
+
+    def settings(self):
+        return self._settings or PlanSettings()
+
+    def put_settings(self, settings):
+        self._settings = settings
 
 
 @pytest.fixture

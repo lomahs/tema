@@ -7,7 +7,7 @@ be exercised is reasoning in the wrong layer.
 import pytest
 
 from tcm.domain import case as models
-from tcm.domain.plan import DayPlan, PlanEntry
+from tcm.domain.plan import DayPlan, PlanSettings, PlanEntry
 from tcm.services.planning import PlanningService
 
 
@@ -25,6 +25,14 @@ class FakePlanRepository:
 
     def put_day(self, day):
         self._days[day.date] = day
+
+    _settings = None
+
+    def settings(self):
+        return self._settings or PlanSettings()
+
+    def put_settings(self, settings):
+        self._settings = settings
 
 
 def service(days=None, today="2026-09-22"):

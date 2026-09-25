@@ -153,6 +153,10 @@ class PlanRepository(Protocol):
 
     `day` answers for a date nobody planned with an empty `DayPlan`, never None,
     so no caller has to ask whether the store had heard of the date.
+
+    `settings` / `put_settings` hold the one record that is not per day -- the
+    phase and the daily target -- and `settings` answers with the defaults when
+    nothing was saved, for the same reason `day` never answers None.
     """
 
     def day(self, date: str):
@@ -162,4 +166,10 @@ class PlanRepository(Protocol):
         ...
 
     def put_day(self, day) -> None:
+        ...
+
+    def settings(self):
+        ...
+
+    def put_settings(self, settings) -> None:
         ...
