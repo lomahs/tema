@@ -103,15 +103,6 @@ def test_a_day_nobody_adjusted_has_no_baseline_and_that_is_correct():
     assert svc.get_day("2026-09-22").baseline is None
 
 
-def test_rebaseline_makes_the_current_plan_the_one_to_judge_against():
-    svc = service(today="2026-09-20")
-    svc.save_day("2026-09-22", [entry(planned=30)])
-    svc = PlanningService(svc.repository, today=lambda: "2026-09-22")
-    svc.save_day("2026-09-22", [entry(planned=10)])
-    svc.rebaseline("2026-09-22")
-    assert [e.planned for e in svc.get_day("2026-09-22").baseline] == [10]
-
-
 def test_the_freeze_is_stamped_with_when_it_happened():
     svc = service(today="2026-09-22")
     svc.save_day("2026-09-22", [entry()])
@@ -193,28 +184,6 @@ def test_the_day_view_carries_the_baseline_for_each_row():
     assert view["baseline_total"] == 30
 
 
-# --- the person view -------------------------------------------------------
-
-def test_the_person_view_lists_one_persons_days():
-    svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", planned=30), entry(pic="Binh", planned=20)])
-    svc.save_day("2026-09-23", [entry(pic="An", planned=15)])
-
-    view = svc.person_view("An", [])
-    assert [r["date"] for r in view["rows"]] == ["2026-09-22", "2026-09-23"]
-    assert view["planned_total"] == 45
-
-
-def test_the_person_view_counts_what_that_person_actually_ran():
-    svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", planned=30)])
-    view = svc.person_view("An", [
-        case(pic="An", test_date="2026-09-22", result="OK"),
-        case(pic="Binh", test_date="2026-09-22", result="OK", row_num=5),
-    ])
-    assert view["actual_total"] == 1
-
-
 # --- the calendar ----------------------------------------------------------
 
 def test_the_calendar_totals_each_day():
@@ -244,70 +213,6 @@ def test_a_day_worked_without_a_plan_still_appears_in_the_calendar():
     assert [(d["date"], d["planned"], d["actual"]) for d in days] == [("2026-09-22", 0, 1)]
 
 
-# --- the suggestion --------------------------------------------------------
-
-def test_suggestions_are_the_blocks_with_cases_left():
-    svc = service()
-    rows = svc.suggest([case(result=None), case(result="OK", row_num=5)], "2026-09-22")
-    assert [(r["file"], r["device"], r["remaining"]) for r in rows] == [
-        ("TC.xlsx", "iPhone", 1)]
-
-
-def test_suggestions_can_be_narrowed_to_one_device_family():
-    """The point of the control: the tester has one handset in their hand."""
-    svc = service()
-    rows = svc.suggest([
-        case(device="iPhone Min size", result=None),
-        case(device="iPad", result=None, row_num=5),
-    ], "2026-09-22", device_family="iPhone")
-    assert [r["device"] for r in rows] == ["iPhone Min size"]
-
-
-def test_work_already_given_to_someone_today_is_subtracted():
-    svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", file="TC.xlsx", device="iPhone", planned=3)])
-    rows = svc.suggest([case(result=None, row_num=i) for i in range(10)], "2026-09-22")
-
-    assert rows[0]["remaining"] == 10
-    assert rows[0]["assigned"] == 3
-    assert rows[0]["free"] == 7
-
-
-def test_the_suggestion_names_who_already_has_it():
-    """A number that shrank with no explanation is one nobody trusts."""
-    svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", planned=3)])
-    rows = svc.suggest([case(result=None, row_num=i) for i in range(10)], "2026-09-22")
-    assert rows[0]["assigned_to"] == [{"pic": "An", "planned": 3}]
-
-
-def test_a_block_given_out_entirely_has_nothing_free_but_is_still_listed():
-    """Adding a second person to it is a decision, not an error."""
-    svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", planned=50)])
-    rows = svc.suggest([case(result=None, row_num=i) for i in range(10)], "2026-09-22")
-    assert rows[0]["free"] == 0
-
-
-def test_blocks_with_nothing_free_sort_below_the_ones_with_work_left():
-    svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", file="Taken.xlsx", planned=50)])
-    rows = svc.suggest(
-        [case(file_name="Taken.xlsx", result=None, row_num=i) for i in range(2)]
-        + [case(file_name="Free.xlsx", result=None, row_num=i) for i in range(9)],
-        "2026-09-22")
-    assert [r["file"] for r in rows] == ["Free.xlsx", "Taken.xlsx"]
-
-
-def test_suggestions_put_the_nearly_finished_block_first():
-    svc = service()
-    rows = svc.suggest(
-        [case(file_name="Big.xlsx", result=None, row_num=i) for i in range(9)]
-        + [case(file_name="Small.xlsx", result=None, row_num=i) for i in range(2)],
-        "2026-09-22")
-    assert [r["file"] for r in rows] == ["Small.xlsx", "Big.xlsx"]
-
-
 def test_the_calendar_also_totals_each_persons_plan():
     """Productivity measures a member against what *they* were planned for.
 
@@ -328,3 +233,148 @@ def test_the_per_person_totals_respect_the_range():
     svc.save_day("2026-09-23", [entry(pic="An", planned=15)])
 
     assert svc.calendar_view("2026-09-23", None, [])["by_pic"] == {"An": 15}
+
+
+# --- the phase and the day board -------------------------------------------
+# 2026-09-22 is a Tuesday. The load: ten cases nobody has run, four An ran on
+# Monday and two An ran today.
+
+def _load():
+    return ([case(row_num=i) for i in range(10)]
+            + [case(row_num=20 + i, result="OK", pic="An", test_date="2026-09-21") for i in range(4)]
+            + [case(row_num=30 + i, result="OK", pic="An", test_date="2026-09-22") for i in range(2)])
+
+
+def test_board_joins_plan_to_worked_and_reports_remaining_at_start():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    svc.save_day("2026-09-22", [entry(pic="An", planned=5), entry(pic="Bo", planned=4)])
+    b = svc.board_view(_load(), "2026-09-22")
+    slot = b["slots"][0]
+    assert (slot["remaining"], slot["remaining_at_start"]) == (10, 12)
+    assert slot["need_through"] == 9 and slot["over_by"] == 0
+    cell = {c["pic"]: c for c in b["cells"]}
+    assert (cell["An"]["planned"], cell["An"]["worked"]) == (5, 2)
+    assert b["load"] == {"An": 5, "Bo": 4}
+    assert b["members"] == ["An", "Bo"]
+
+
+def test_board_flags_a_plan_bigger_than_what_is_left():
+    svc = service()
+    svc.save_day("2026-09-22", [entry(pic="An", planned=20)])
+    assert svc.board_view(_load(), "2026-09-22")["slots"][0]["over_by"] == 8
+
+
+def test_board_counts_other_days_from_today_on():
+    svc = service()
+    svc.save_day("2026-09-21", [entry(planned=7)])            # past: not a claim on what is left
+    svc.save_day("2026-09-22", [entry(planned=5)])
+    svc.save_day("2026-09-24", [entry(planned=3)])
+    slot = svc.board_view(_load(), "2026-09-22")["slots"][0]
+    assert slot["planned_other_days"] == 3
+
+
+def test_board_keeps_a_slot_whose_file_is_no_longer_loaded():
+    svc = service()
+    svc.save_day("2026-09-22", [entry(file="Gone.xlsx", planned=3)])
+    slots = svc.board_view(_load(), "2026-09-22")["slots"]
+    gone = [s for s in slots if s["file"] == "Gone.xlsx"][0]
+    assert gone["remaining"] == 0 and gone["over_by"] == 3
+    assert slots[-1]["file"] == "Gone.xlsx"
+
+
+def test_board_offers_slots_with_work_left_that_the_day_does_not_have():
+    svc = service()
+    cs = _load() + [case(device="iPad", row_num=50)]
+    svc.save_day("2026-09-22", [entry(device="iPhone", planned=2)])
+    avail = svc.board_view(cs, "2026-09-22")["available"]
+    assert [(a["file"], a["device"]) for a in avail] == [("TC.xlsx", "iPad")]
+
+
+def test_worked_without_a_pic_counts_but_is_not_a_member():
+    svc = service()
+    cs = _load() + [case(row_num=99, result="OK", test_date="2026-09-22")]
+    b = svc.board_view(cs, "2026-09-22")
+    assert "N/A" not in b["members"]
+    assert sum(c["worked"] for c in b["cells"]) == 3
+
+
+def test_phase_view_kpis():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    svc.save_day("2026-09-22", [entry(planned=5)])
+    svc.save_day("2026-09-23", [entry(planned=5)])
+    k = svc.phase_view(_load())["kpis"]
+    assert (k["remaining"], k["at_start"]) == (10, 16)
+    assert (k["planned_today"], k["done_today"], k["members_today"]) == (5, 2, 1)
+    assert k["needed_pace"] == 3                       # 10 left over Tue..Fri = 4 days
+    # Today contributes only what is still to run (5 planned - 2 done = 3), then
+    # Wednesday's 5: 8 of 10 covered, so the plan does not finish the phase.
+    assert k["plan_finish"] is None and k["unplanned"] == 2
+    # Monday is the only past phase day: 4 worked -> 4/day; 10 / 4 -> 3 workdays after Tue.
+    assert k["rate"] == 4.0 and k["forecast_finish"] == "2026-09-25"
+
+
+def test_a_plan_that_covers_what_is_left_names_its_finish_day():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    svc.save_day("2026-09-22", [entry(planned=5)])
+    svc.save_day("2026-09-23", [entry(planned=4)])
+    svc.save_day("2026-09-24", [entry(planned=9)])
+    k = svc.phase_view(_load())["kpis"]
+    assert k["plan_finish"] == "2026-09-24" and k["unplanned"] == 0
+
+
+def test_no_execution_means_no_forecast():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-22", "phase_end": "2026-09-25"})
+    k = svc.phase_view([case(row_num=i) for i in range(5)])["kpis"]
+    assert k["forecast_finish"] is None and k["plan_finish"] is None and k["unplanned"] == 5
+
+
+def test_burndown_series_start_at_r0_and_reconcile():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    b = svc.phase_view(_load())["burndown"]
+    assert b["actual"] == [16, 12, 10]
+    assert len(b["plan"]) == len(b["axis"]) + 1
+    assert b["axis"][b["today_index"]] == "2026-09-22"
+
+
+def test_the_grid_marks_a_future_plan_beyond_what_is_left():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    svc.save_day("2026-09-23", [entry(planned=8)])
+    svc.save_day("2026-09-24", [entry(planned=8)])
+    cells = svc.phase_view(_load())["grid"]["slots"][0]["cells"]
+    assert cells["2026-09-21"]["worked"] == 4
+    assert not cells["2026-09-23"]["over_remaining"]
+    assert cells["2026-09-24"]["over_remaining"]         # 16 planned > 12 left at start of today
+
+
+def test_the_forecast_window_changes_the_rate():
+    svc = service(today="2026-09-24")
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    cs = ([case(row_num=i) for i in range(10)]
+          + [case(row_num=20 + i, result="OK", pic="An", test_date="2026-09-21") for i in range(6)]
+          + [case(row_num=40 + i, result="OK", pic="An", test_date="2026-09-23") for i in range(2)])
+    assert svc.phase_view(cs, window="all")["kpis"]["rate"] == round(8 / 3, 2)
+    assert svc.phase_view(cs, window="3")["kpis"]["rate"] == round(8 / 3, 2)
+
+
+def test_empty_workspace_is_zeros_not_an_error():
+    v = service().phase_view([])
+    assert v["kpis"]["remaining"] == 0 and v["grid"]["slots"] == []
+    assert service().board_view([], "2026-09-22")["slots"] == []
+
+
+def test_settings_default_from_the_load():
+    s = service().get_settings(_load())
+    assert (s["phase_start"], s["phase_end"], s["stored"]) == ("2026-09-21", "2026-09-29", False)
+
+
+def test_saved_settings_win_over_the_defaults():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-01", "phase_end": "2026-09-30", "daily_target": 20})
+    s = svc.get_settings(_load())
+    assert (s["phase_start"], s["daily_target"], s["stored"]) == ("2026-09-01", 20, True)
