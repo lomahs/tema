@@ -403,6 +403,15 @@ class PlanningService:
         for d, e in facts.plans:
             planned[d] += e.planned
 
+        # Worked is summed over every *date*, not every axis day: a Saturday is
+        # not on the axis, but the cases run on it left the pile, and today's
+        # point also takes work dated after today (a typo'd date is still work
+        # done) -- so the line always ends on the Remaining figure.
+        worked = sorted((d, n) for d, n in facts.by_date.items() if d >= start)
+
+        def worked_through(day, everything=False):
+            return sum(n for d, n in worked if everything or d <= day)
+
         plan, actual, forecast = [at_start], [at_start], []
         cp = ce = 0
         fv = None
@@ -411,7 +420,7 @@ class PlanningService:
             cp += planned.get(d, 0)
             plan.append(max(0, at_start - cp))
             if d <= today:
-                ce += facts.by_date.get(d, 0)
+                ce = worked_through(d, everything=(d == today))
                 actual.append(max(0, at_start - ce))
             if d == today:
                 fv = max(0, at_start - ce)
@@ -493,16 +502,22 @@ class PlanningService:
         day_slots = {slot for _, slot in planned}
         slots = facts.order(day_slots | {slot for _, slot in worked})
 
+        ahead = defaultdict(list)     # slot -> [(date, planned)] from today on
+        for d, e in facts.plans:
+            if d >= today:
+                ahead[(e.file, e.device)].append((d, e.planned))
+
+        def other_days(slot):
+            return sum(n for d, n in ahead[slot] if d != date)
+
         slot_rows = []
         for slot in slots:
             rs = facts.remaining_at_start(slot)
-            ahead = [(d, e.planned) for d, e in facts.plans
-                     if (e.file, e.device) == slot and d >= today]
-            need = 0 if date < today else sum(n for d, n in ahead if d <= date)
+            need = 0 if date < today else sum(n for d, n in ahead[slot] if d <= date)
             slot_rows.append({
                 "file": slot[0], "device": slot[1],
                 "remaining": facts.remaining(slot), "remaining_at_start": rs,
-                "planned_other_days": sum(n for d, n in ahead if d != date),
+                "planned_other_days": other_days(slot),
                 "need_through": need, "over_by": max(0, need - rs),
             })
 
@@ -519,7 +534,8 @@ class PlanningService:
         members = (facts.pics | {e.pic for _, e in facts.plans}) - {_NO_PIC}
         every_slot = set(facts.rem) | {slot for (slot, _) in facts.by_slot_date}
         available = [{"file": s[0], "device": s[1],
-                      "remaining_at_start": facts.remaining_at_start(s)}
+                      "remaining_at_start": facts.remaining_at_start(s),
+                      "planned_other_days": other_days(s)}
                      for s in facts.order(every_slot - day_slots)
                      if facts.remaining_at_start(s) > 0]
 

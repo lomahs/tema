@@ -287,8 +287,11 @@ def test_board_offers_slots_with_work_left_that_the_day_does_not_have():
     svc = service()
     cs = _load() + [case(device="iPad", row_num=50)]
     svc.save_day("2026-09-22", [entry(device="iPhone", planned=2)])
+    svc.save_day("2026-09-23", [entry(device="iPad", planned=1)])
     avail = svc.board_view(cs, "2026-09-22")["available"]
     assert [(a["file"], a["device"]) for a in avail] == [("TC.xlsx", "iPad")]
+    # The editor's "Other days" figure for a slot the day does not have yet.
+    assert avail[0]["planned_other_days"] == 1
 
 
 def test_worked_without_a_pic_counts_but_is_not_a_member():
@@ -378,3 +381,13 @@ def test_saved_settings_win_over_the_defaults():
     svc.save_settings({"phase_start": "2026-09-01", "phase_end": "2026-09-30", "daily_target": 20})
     s = svc.get_settings(_load())
     assert (s["phase_start"], s["daily_target"], s["stored"]) == ("2026-09-01", 20, True)
+
+
+def test_weekend_work_inside_the_phase_still_burns_down():
+    """Saturday is not on the axis, but the cases run on it left the pile."""
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-18", "phase_end": "2026-09-25"})
+    cs = _load() + [case(row_num=60 + i, result="OK", pic="An", test_date="2026-09-19")
+                    for i in range(3)]
+    v = svc.phase_view(cs)
+    assert v["burndown"]["actual"][-1] == v["kpis"]["remaining"]
