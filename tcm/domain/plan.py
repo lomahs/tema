@@ -11,13 +11,17 @@ cannot classify a case without them, so a malformed one is worth refusing to
 boot over. A plan is operational data — most days there is none, and "nobody has
 planned tomorrow yet" must be an empty table rather than an ImportError.
 
+It also holds the plan's settings -- the phase the plan runs over and a fair
+day's load -- and the working-day arithmetic every phase figure is counted in,
+because "working day" is a rule about the plan, not about the web page.
+
 Validation lives here for the reason it lives in `scope.py`: the endpoint builds
 a `DayPlan` from the request body and hands the browser whatever message this
 raises, so the rules are written once and an edit made through the UI is checked
 by the same code as one made on disk.
 """
 from dataclasses import dataclass, field
-from datetime import date as _date
+from datetime import date as _date, timedelta
 from typing import Optional
 
 
@@ -167,3 +171,103 @@ class DayPlan:
             out["baseline"] = [e.to_dict() for e in self.baseline]
             out["baseline_at"] = self.baseline_at
         return out
+
+
+# --- working days ------------------------------------------------------------
+# Monday to Friday, with no holiday calendar: nobody has asked for one, and a
+# calendar the tool guessed at would be wrong in a way nobody could see.
+
+#: A guard, not a rule: no phase is two years long, and a loop over dates that
+#: a typo'd year sent to 9999 must end.
+_MAX_DAYS = 500
+
+
+def is_workday(iso: str) -> bool:
+    return _date.fromisoformat(iso).weekday() < 5
+
+
+def workdays(start: Optional[str], end: Optional[str]) -> list[str]:
+    """Every Mon-Fri from `start` to `end` inclusive."""
+    if not start or not end:
+        return []
+    d, stop, out = _date.fromisoformat(start), _date.fromisoformat(end), []
+    for _ in range(_MAX_DAYS):
+        if d > stop:
+            break
+        if d.weekday() < 5:
+            out.append(d.isoformat())
+        d += timedelta(days=1)
+    return out
+
+
+def phase_days(start: Optional[str], end: Optional[str], today: str) -> list[str]:
+    """The phase's working days, plus today when today falls inside the phase.
+
+    Somebody testing on a Saturday did work on a phase day as far as the
+    burndown is concerned; leaving the day off the axis would drop their cases.
+    """
+    days = workdays(start, end)
+    if start and end and start <= today <= end and today not in days:
+        days = sorted(days + [today])
+    return days
+
+
+def add_workdays(iso: str, n: int) -> str:
+    """The working day `n` working days after `iso` (`iso` itself when n <= 0)."""
+    d, k = _date.fromisoformat(iso), 0
+    for _ in range(_MAX_DAYS * 2):
+        if k >= n:
+            break
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            k += 1
+    return d.isoformat()
+
+
+def shift_workday(iso: str, direction: int) -> str:
+    """The nearest working day before (-1) or after (+1) `iso`."""
+    step = timedelta(days=1 if direction > 0 else -1)
+    d = _date.fromisoformat(iso) + step
+    while d.weekday() >= 5:
+        d += step
+    return d.isoformat()
+
+
+# --- settings ------------------------------------------------------------------
+
+DEFAULT_TARGET = 30
+
+
+@dataclass(frozen=True)
+class PlanSettings:
+    """What the plan is measured against: the phase, and a fair day's load.
+
+    `phase_start` / `phase_end` of None mean "not set yet"; the service fills in
+    a default rather than storing one, so opening the screen writes nothing.
+    `daily_target` is cases per person per day -- used only to flag a member
+    whose planned day is heavier than that, never to invent a plan.
+    """
+
+    phase_start: Optional[str] = None
+    phase_end: Optional[str] = None
+    daily_target: int = DEFAULT_TARGET
+
+    @classmethod
+    def from_dict(cls, raw, source: str = "settings") -> "PlanSettings":
+        if not isinstance(raw, dict):
+            raise ValueError(f"{source} must be an object")
+        start, end = raw.get("phase_start"), raw.get("phase_end")
+        start = parse_date(start, f"{source}.phase_start") if start else None
+        end = parse_date(end, f"{source}.phase_end") if end else None
+        if start and end and end < start:
+            raise ValueError(f"{source}: the phase ends ({end}) before it starts ({start})")
+        target = raw.get("daily_target", DEFAULT_TARGET)
+        # bool is an int in Python and `True` is not a case count.
+        if isinstance(target, bool) or not isinstance(target, int) or target <= 0:
+            raise ValueError(f"{source}: 'daily_target' must be a whole number of "
+                             f"cases above zero, got {target!r}")
+        return cls(start, end, target)
+
+    def to_dict(self) -> dict:
+        return {"phase_start": self.phase_start, "phase_end": self.phase_end,
+                "daily_target": self.daily_target}

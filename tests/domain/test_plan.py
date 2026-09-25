@@ -126,3 +126,41 @@ def test_an_empty_day_is_what_a_date_nobody_planned_looks_like():
     assert day.date == "2026-09-22"
     assert day.entries == []
     assert day.baseline is None
+
+
+# --- working days and settings ---------------------------------------------
+
+from tcm.domain.plan import (PlanSettings, add_workdays, phase_days,  # noqa: E402
+                             shift_workday, workdays)
+
+
+def test_workdays_skip_weekends():
+    # 2026-09-25 is a Friday
+    assert workdays("2026-09-25", "2026-09-29") == ["2026-09-25", "2026-09-28", "2026-09-29"]
+
+
+def test_phase_days_include_today_even_on_a_weekend():
+    assert "2026-09-26" in phase_days("2026-09-24", "2026-09-30", today="2026-09-26")
+
+
+def test_add_workdays_and_shift():
+    assert add_workdays("2026-09-25", 1) == "2026-09-28"
+    assert shift_workday("2026-09-28", -1) == "2026-09-25"
+
+
+def test_settings_defaults_and_round_trip():
+    s = PlanSettings.from_dict({})
+    assert (s.phase_start, s.phase_end, s.daily_target) == (None, None, 30)
+    raw = {"phase_start": "2026-09-01", "phase_end": "2026-09-30", "daily_target": 25}
+    assert PlanSettings.from_dict(raw).to_dict() == raw
+
+
+@pytest.mark.parametrize("raw", [
+    {"phase_start": "2026-09-30", "phase_end": "2026-09-01"},
+    {"daily_target": 0},
+    {"daily_target": True},
+    {"phase_start": "30/09/2026"},
+])
+def test_settings_refuse_nonsense(raw):
+    with pytest.raises(ValueError):
+        PlanSettings.from_dict(raw)
