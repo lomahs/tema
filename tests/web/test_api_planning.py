@@ -112,15 +112,6 @@ def test_the_plan_is_joined_to_what_was_actually_run(loaded):
     assert row["diff"] == -28
 
 
-def test_rebaseline_refreezes_the_day(client):
-    client.put("/api/plan/2026-08-05", json={"entries": [entry(planned=30)]})
-    client.put("/api/plan/2026-08-05", json={"entries": [entry(planned=10)]})
-    res = client.post("/api/plan/2026-08-05/baseline")
-
-    assert res.status_code == 200
-    assert client.get("/api/plan/2026-08-05").get_json()["baseline_total"] == 10
-
-
 # --- the other two cuts ----------------------------------------------------
 
 def test_the_calendar_lists_every_planned_day(client):
@@ -140,44 +131,47 @@ def test_the_calendar_takes_a_range(client):
     assert [d["date"] for d in days] == ["2026-08-06"]
 
 
-def test_the_person_cut_reports_one_persons_days(loaded):
-    loaded.put("/api/plan/2026-08-05", json={"entries": [entry(pic="lee", planned=30)]})
-    body = loaded.get("/api/plan/person/lee").get_json()
-
-    assert body["pic"] == "lee"
-    assert body["planned_total"] == 30
-    assert body["actual_total"] == 2
-
-
 # --- the suggestion --------------------------------------------------------
 
-def test_suggest_lists_the_blocks_with_cases_left(loaded):
-    rows = loaded.get("/api/plan/suggest?date=2026-08-05").get_json()["rows"]
 
-    assert len(rows) == 1
-    assert rows[0]["file"] == "TC.xlsx"
-    assert rows[0]["remaining"] == 1
+# --- the phase, the board and the settings ------------------------------------
 
-
-def test_suggest_subtracts_what_the_day_already_gave_out(loaded):
-    loaded.put("/api/plan/2026-08-05", json={"entries": [entry(planned=1)]})
-    rows = loaded.get("/api/plan/suggest?date=2026-08-05").get_json()["rows"]
-
-    assert rows[0]["assigned"] == 1
-    assert rows[0]["free"] == 0
+def test_phase_answers_with_nothing_loaded(client):
+    r = client.get("/api/plan/phase")
+    assert r.status_code == 200 and r.get_json()["kpis"]["remaining"] == 0
 
 
-def test_suggest_narrows_to_a_device_family(loaded):
-    rows = loaded.get(
-        "/api/plan/suggest?date=2026-08-05&device_family=iPad").get_json()["rows"]
-    assert rows == []
+def test_phase_refuses_an_unknown_window(client):
+    assert client.get("/api/plan/phase?window=7").status_code == 400
 
 
-def test_suggest_without_a_date_is_a_400(client):
-    assert client.get("/api/plan/suggest").status_code == 400
+def test_phase_reads_the_loaded_cases(loaded):
+    body = loaded.get("/api/plan/phase?window=all").get_json()
+    assert body["kpis"]["at_start"] > 0
 
 
-def test_suggest_with_nothing_loaded_is_an_empty_list_not_an_error(client):
-    res = client.get("/api/plan/suggest?date=2026-08-05")
-    assert res.status_code == 200
-    assert res.get_json()["rows"] == []
+def test_board_answers_with_nothing_loaded(client):
+    r = client.get("/api/plan/board/2026-08-05")
+    assert r.status_code == 200 and r.get_json()["slots"] == []
+
+
+def test_board_refuses_a_date_that_is_not_a_day(client):
+    assert client.get("/api/plan/board/tomorrow").status_code == 400
+
+
+def test_settings_round_trip_and_refusal(client):
+    ok = client.put("/api/plan/settings", json={"phase_start": "2026-08-03",
+                                                "phase_end": "2026-08-14", "daily_target": 25})
+    assert ok.status_code == 200
+    assert client.get("/api/plan/settings").get_json()["daily_target"] == 25
+    bad = client.put("/api/plan/settings",
+                     json={"phase_start": "2026-08-14", "phase_end": "2026-08-03"})
+    assert bad.status_code == 400 and "before it starts" in bad.get_json()["error"]
+    assert client.get("/api/plan/settings").get_json()["phase_start"] == "2026-08-03"
+
+
+def test_the_removed_cuts_are_gone(client):
+    assert client.get("/api/plan/person/An").status_code == 404
+    assert client.post("/api/plan/2026-08-05/baseline").status_code in (404, 405)
+    # "suggest" now reads as a date and is refused as one.
+    assert client.get("/api/plan/suggest?date=2026-08-05").status_code == 400

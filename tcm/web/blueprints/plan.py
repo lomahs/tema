@@ -2,9 +2,13 @@
 
 `jsonify` wrappers around `tcm.services.planning`, the same arrangement as the
 analytics and prepare blueprints. The reasoning — the baseline rule, the join
-against actuals, the subtraction behind a suggestion — is the service's; what
-stays here is the request: which date, which person, and turning the domain's
+against actuals, the phase and board figures — is the service's; what stays
+here is the request: which date, which window, and turning the domain's
 `ValueError` into the 400 that carries its message.
+
+The named routes (`phase`, `settings`, `board/<date>`) are registered before
+`/api/plan/<date>` on purpose: registered after it, "phase" would be read as a
+date and refused.
 
 Every read takes the loaded cases from the workspace rather than being given
 them, because "what actually happened" is only ever about the load in hand. With
@@ -35,30 +39,45 @@ def get_calendar():
         return jsonify({"error": str(e)}), 400
 
 
-@bp.route("/api/plan/suggest")
-def get_suggestions():
-    """GET /api/plan/suggest?date=&device_family= — where a freed-up tester could go.
+@bp.route("/api/plan/phase")
+def get_phase():
+    """GET /api/plan/phase?window=3|5|10|all — KPIs, burndown and the phase grid.
 
-    `date` is required rather than defaulted to today: the answer subtracts what
-    that day's plan already handed out, so a missing date would quietly report
-    the work as entirely free.
+    `window` is how many past phase days the forecast pace is read over.
     """
-    date = request.args.get("date")
-    if not date:
-        return jsonify({"error": "A 'date' is required: the free figure is what "
-                                 "that day's plan has not already given out"}), 400
     try:
-        rows = planning().suggest(_cases(), date,
-                                  device_family=request.args.get("device_family"))
+        return jsonify(planning().phase_view(_cases(), request.args.get("window", "5")))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
-    return jsonify({"date": date, "rows": rows})
 
 
-@bp.route("/api/plan/person/<pic>")
-def get_person(pic):
-    """GET /api/plan/person/<pic> — one person across every day they appear on."""
-    return jsonify(planning().person_view(pic, _cases()))
+@bp.route("/api/plan/settings")
+def get_settings():
+    """GET /api/plan/settings — the phase and daily target, defaults filled in."""
+    return jsonify(planning().get_settings(_cases()))
+
+
+@bp.route("/api/plan/settings", methods=["PUT"])
+def put_settings():
+    """PUT /api/plan/settings — `{phase_start, phase_end, daily_target}`.
+
+    A refusal stores nothing, and the message is the domain's own.
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        planning().save_settings(body)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(planning().get_settings(_cases()))
+
+
+@bp.route("/api/plan/board/<date>")
+def get_board(date):
+    """GET /api/plan/board/<date> — one day as slots x members, planned against worked."""
+    try:
+        return jsonify(planning().board_view(_cases(), date))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @bp.route("/api/plan/<date>")
@@ -81,20 +100,6 @@ def put_day(date):
     body = request.get_json(silent=True) or {}
     try:
         planning().save_day(date, body.get("entries") or [])
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    return jsonify(planning().day_view(date, _cases()))
-
-
-@bp.route("/api/plan/<date>/baseline", methods=["POST"])
-def post_baseline(date):
-    """POST /api/plan/<date>/baseline — judge the day against the plan as it stands.
-
-    The baseline is otherwise frozen on the first edit made on or after the day
-    itself. This is the way back from a first edit that was a typo.
-    """
-    try:
-        planning().rebaseline(date)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     return jsonify(planning().day_view(date, _cases()))
