@@ -11,8 +11,8 @@
  *
  * What is held here is the *calendar*: one line per day, planned against done.
  * That is what Daily and Productivity need, and it is small — a few hundred
- * numbers for a sprint. The rows of a single day, and the suggestion table, are
- * fetched by `views/planning.js` when somebody is actually looking at them.
+ * numbers for a sprint. The phase and a single day's board are fetched by
+ * `views/planning/` when somebody is actually looking at them.
  *
  * It lives in its own module for the reason `theme.js` and the old `target.js`
  * do: an imported ES binding cannot be reassigned by the importer, so the value
