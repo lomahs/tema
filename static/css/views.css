@@ -592,6 +592,16 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 .plan-behind[data-tone="danger"]  { color: var(--tone-danger-fg); }
 .plan-matrix td.is-heavy { color: var(--tone-warn-fg); }
 
+/* The matrix spans the card: unlike a ledger of figures it is a board you
+   click into, and members' columns share the width rather than bunching left.
+   A pane narrower than the table still scrolls, because the table's own
+   min-content width wins over 100%. */
+.plan-matrix-pane { width: 100%; }
+.plan-matrix { width: 100%; }
+/* The label columns keep their content width; the members' columns and Total
+   share what is left. */
+.plan-matrix .plan-sticky { width: 1%; white-space: nowrap; }
+
 .plan-list .plan-list-filters th { padding-block: var(--sp-1); background: var(--paper-sunk); }
 .plan-list .plan-list-filters .select { min-height: 28px; width: 100%; }
 .plan-list td.is-over, .plan-list tr.is-over td.is-over { color: var(--tone-danger); }
