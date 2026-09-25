@@ -40,7 +40,13 @@ async function loadPhase() {
 }
 
 async function loadBoard() {
-    const res = await getPlanBoard(getDay());
+    const date = getDay();
+    if (!date) return;
+    const res = await getPlanBoard(date);
+    // Pressing ‹ › faster than the server answers can land an older day's
+    // board last. Drawing it would be wrong, and saving over it would write
+    // that day's rows under this day's date.
+    if (date !== getDay()) return;
     if (!res.ok) { showError("#planDayError", res.json.error); return; }
     showError("#planDayError", "");
     data.board = res.json;

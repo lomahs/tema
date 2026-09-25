@@ -391,3 +391,19 @@ def test_weekend_work_inside_the_phase_still_burns_down():
                     for i in range(3)]
     v = svc.phase_view(cs)
     assert v["burndown"]["actual"][-1] == v["kpis"]["remaining"]
+
+
+def test_the_burndown_reconciles_with_excluded_and_undated_cases():
+    """at_start - worked since the start == remaining, whatever else the load holds.
+
+    An Out Of Scope case (対象外 with no PIC) is outside `counted`, so it is in
+    neither pile; an OK with no test date left the pile before the phase could
+    date it. Both used to inflate `at_start` by one each.
+    """
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    cs = _load() + [case(row_num=70, result="対象外"),          # OOS: excluded
+                    case(row_num=71, result="OK", pic="An")]     # worked, undated
+    v = svc.phase_view(cs)
+    assert v["kpis"]["at_start"] == 16
+    assert v["burndown"]["actual"][-1] == v["kpis"]["remaining"] == 10

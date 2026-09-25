@@ -697,3 +697,15 @@ def test_remaining_rows_can_keep_finished_blocks():
     cs = [case(result="OK")]
     assert aggregate.remaining_rows(cs) == []
     assert aggregate.remaining_rows(cs, keep_finished=True)[0]["remaining"] == 0
+
+
+def test_remaining_rows_report_counted_and_undated_worked():
+    """What the planner's burndown needs to reconcile: excluded cases are in
+    `total` but not `counted`, and a worked case with no date is named."""
+    rows = aggregate.remaining_rows([
+        case(result=None),
+        case(result="対象外", row_num=5),                 # derived Out Of Scope: excluded
+        case(result="OK", pic="An", row_num=6),           # worked, undated
+        case(result="OK", pic="An", row_num=7, test_date="2026-09-21"),
+    ])
+    assert (rows[0]["total"], rows[0]["counted"], rows[0]["worked_undated"]) == (4, 3, 1)

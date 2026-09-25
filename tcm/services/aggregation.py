@@ -364,23 +364,37 @@ def remaining_rows(cases, keep_finished=False):
     finishing a file outright is worth more than starting a fourth one.
 
     Returns:
-        `[{"file", "device", "device_family", "remaining", "total"}]`, where
-        `total` is every case of that block in the plan -- the denominator that
-        says whether 12 left means nearly done or barely started.
+        `[{"file", "device", "device_family", "remaining", "total", "counted",
+        "worked_undated"}]`, where `total` is every case of that block in the
+        plan -- the denominator that says whether 12 left means nearly done or
+        barely started. `counted` leaves out the excluded statuses, and
+        `worked_undated` counts cases off the pile that carry no test date:
+        the two figures the planner's burndown needs so that what it started
+        from, less what was worked since, is exactly `remaining`. They are
+        counted here rather than in the planner because counting is this
+        module's job.
     """
     remaining_keys = set(STATUS.remaining)
-    buckets = defaultdict(lambda: [0, 0])  # [remaining, total]
+    worked_keys = set(STATUS.worked)
+    # [remaining, total, counted, worked_undated]
+    buckets = defaultdict(lambda: [0, 0, 0, 0])
     for c in in_plan(cases):
         bucket = buckets[(c.file_name, c.device)]
+        key = STATUS.classify_case(c)
         bucket[1] += 1
-        if STATUS.classify_case(c) in remaining_keys:
+        if key in remaining_keys:
             bucket[0] += 1
+        if key not in STATUS.excluded:
+            bucket[2] += 1
+        if key in worked_keys and not c.test_date:
+            bucket[3] += 1
 
     rows = [
         {"file": file_name, "device": device,
          "device_family": DEVICES.classify(device),
-         "remaining": remaining, "total": total}
-        for (file_name, device), (remaining, total) in buckets.items()
+         "remaining": remaining, "total": total,
+         "counted": counted, "worked_undated": undated}
+        for (file_name, device), (remaining, total, counted, undated) in buckets.items()
         if remaining or keep_finished
     ]
     # Fewest left first; then by name, so two blocks with the same count keep a

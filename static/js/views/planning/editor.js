@@ -271,5 +271,11 @@ export function initEditor() {
         const again = dlg.querySelector(`[data-ed="count"][data-i="${i}"]`);
         if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch { /* number inputs */ } }
     });
+    // Enter in a count submits the form, and a `method="dialog"` form closes
+    // the dialog on submit: that would throw the edit away. It saves instead.
+    dlg.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        if (ed && ed.slot && ed.slot.device) save();
+    });
     dlg.addEventListener("close", () => { ed = null; });
 }

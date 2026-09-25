@@ -105,9 +105,11 @@ class _Facts:
         self.today = today
         self.rem = {}             # (file, device) -> remaining
         self.total = 0            # every counted case in the plan
+        self.undated = 0          # worked cases with no test date
         for r in remaining_rows(cases, keep_finished=True):
             self.rem[(r["file"], r["device"])] = r["remaining"]
-            self.total += r["total"]
+            self.total += r["counted"]
+            self.undated += r["worked_undated"]
         # Load order: the files as `remaining_rows` names them, alphabetised,
         # so a slot list reads like the workbook folder.
         self._file_rank = {f: i for i, f in enumerate(sorted({f for f, _ in self.rem}))}
@@ -115,15 +117,12 @@ class _Facts:
         self.by_slot_date = defaultdict(int)       # ((file, device), date) -> worked
         self.by_pic_slot_date = defaultdict(int)   # (pic, (file, device), date) -> worked
         self.by_date = defaultdict(int)            # date -> worked
-        self.undated = 0
+        # `daily_rows` drops undated cases, so every row here has a date.
         for row in daily_rows(cases):
             n = _worked(row)
             if not n:
                 continue
             slot, date = (row["file"], row["device"]), row["date"]
-            if not date:
-                self.undated += n
-                continue
             self.by_slot_date[(slot, date)] += n
             self.by_pic_slot_date[(row["pic"], slot, date)] += n
             self.by_date[date] += n
