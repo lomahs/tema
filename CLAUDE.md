@@ -432,8 +432,8 @@ each reverses an earlier rule:
   *of* the data may have a frame and the rows themselves may not.
 
 Framing is a hairline, not a shadow. `--shadow-1/2/3` survive as a scale but almost nothing uses
-them now: with no floating surface left in the app — the drawer became the Tools view — a border
-is what marks an edge. The shadow colour is a literal rather than a mix of `--ink`, because
+them now: the drawer became the Tools view, and the one floating surface left is Planning's slot
+editor `<dialog>`, which takes `--shadow-3` — everywhere else a border is what marks an edge. The shadow colour is a literal rather than a mix of `--ink`, because
 `--ink` inverts in dark mode and a light shadow is not a shadow.
 
 **The type stack is IBM Plex Sans + Noto Sans JP, and that pairing is the one compromise in it.**
@@ -465,8 +465,8 @@ reached through functions: taxonomy in `taxonomy.js`, the per-status case cache 
 chosen statuses/scopes/filters/page/expansion in `views/detail/state.js`, Summary's buckets,
 grouping, shared sort and per-table paging in `views/summary/state.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
 `views/productivity.js`, Chart.js instances in `charts.js`, theme in `theme.js`,
-the plan calendar in `plan.js`, the open day / person / suggestion rows in
-`views/planning.js`, the working copy of each config file in `views/config.js`.
+the plan calendar in `plan.js`, the open day, layout, forecast window and grid position in
+`views/planning/state.js`, the working copy of each config file in `views/config.js`.
 
 **The two busiest views are four modules each, layered one way.** `views/detail/` and
 `views/summary/` were single files of 1128 and 969 lines; each is now `state.js`, which
@@ -506,8 +506,8 @@ Attain columns and Productivity's attainment bar. It is gone. Those three figure
 what somebody actually planned for a named day — see the Planning section below — and `plan.js`
 is where they read it, announcing changes through `onPlanChange` exactly as `theme.js` does.
 It holds the *calendar* (one line per day, plus a per-PIC total), because that is what Daily and
-Productivity need and it is small; a single day's rows and the suggestion table are fetched by
-`views/planning.js` when somebody is looking at them.
+Productivity need and it is small; the phase and a single day's board are fetched by
+`views/planning/` when somebody is looking at them.
 
 **A day nobody planned has no plan figure, not a plan of zero.** `plannedFor(date)` and
 `plannedForPic(pic)` answer `null`, and Daily draws no line and no Attain figure for such a day.
@@ -786,32 +786,34 @@ does the joining and holds no counting of its own; the one genuinely new aggrega
 publisher follows.
 
 **`remaining_rows(cases)` is what is left to hand out.** Per (file, device): how many cases
-nobody has run. "Not run" is asked for as `STATUS.classify(None)` — what a blank Result cell
-means is the taxonomy's business, never the string `"NYS"` written into Python — and the whole
-row is classified, so a case derived into Out Of Scope is not offered as work. It runs through
-`in_plan`, because work the plan excludes is not work to give somebody, and it drops blocks with
-nothing left, because the list is an offer. Order is fewest-remaining first: finishing a file
-outright beats starting a fourth one.
+are still to run. Which statuses those are is the taxonomy's business: `"remaining": true` in
+`result_status.json` (NYS and Pending, as shipped), read as `STATUS.remaining` — never the string
+`"NYS"` written into Python. The empty status is always remaining whether flagged or not, and a
+status may be neither `excluded` nor `executed` as well — outside the plan is not work to hand
+out, and a case counted on both sides would break the burndown. The whole row is classified, so a
+case derived into Out Of Scope is not offered as work. It runs through `in_plan`, and it drops
+blocks with nothing left unless `keep_finished=True` — the planner needs a finished block too,
+since work was planned and done on it. Order is fewest-remaining first.
+
+**The planner counts "worked", which is wider than "executed" on purpose.** `STATUS.worked` is
+`counted` minus `remaining`: every case that has left the pile. A Cancel with a PIC is worked
+without being executed — nobody passed or failed it, but nobody will run it either. The
+burndown has to reconcile (remaining + worked = every counted case), so `phase_view` and
+`board_view` measure the plan against `worked`, while `day_view` and `calendar_view` — which
+Daily and Productivity read — keep `executed`. Both are sums over the same `daily_rows` rows.
 
 **The baseline is frozen lazily, and that is the whole answer to "a plan that changes".**
 Editing the plan for a day that has not arrived is *planning*; editing it on or after the day
 itself is *adjusting*. So the first save made when `today >= date` keeps the pre-edit state as
 the baseline, and a day nobody adjusted has none at all — which is correct rather than missing:
 nothing diverged, so the plan as it stands is also what was planned. No timer and no button are
-involved, because the app only runs when it is open. `rebaseline` exists for the morning the
-first edit was a typo. The alternative — overwriting the plan and comparing nothing — makes
+involved, because the app only runs when it is open. The baseline is stored but not shown on
+the redesigned page; it is kept because it costs nothing and is the only record of what a day
+was meant to be before it was rearranged. The alternative — overwriting the plan and comparing nothing — makes
 every day look exactly on target, which is what the rule is there to prevent.
 
-**A suggestion subtracts what the day already gave out, and names who has it.** `suggest` takes
-`remaining_rows`, narrows it to one `device_family` (the tester has one handset in their hand),
-and takes off the day's existing plan rows for that block, so two people are not sent to the same
-place by a screen that could see both. The takers are named rather than silently subtracted: a
-figure that shrank with no explanation is one nobody trusts, and adding a second person to a
-block is a decision somebody may still want to make. A block given away entirely keeps its row
-and sinks below the ones with work left.
-
-**Work nobody planned is shown, not hidden.** Every cut adds the rows that appear in the actuals
-but not in the plan, drawn `row--aside` — the same dashed rule `chip--aside` and `band--aside`
+**Work nobody planned is shown, not hidden.** The Day plan draws a cell for work run without a
+plan (`unplanned`, in the warn tone) and the List layout adds it as a row drawn `row--aside` — the same dashed rule `chip--aside` and `band--aside`
 use for "counted, but not part of this sum". A table of a day that listed only planned work would
 hide work that was done, which is the one thing a report of a day must not do.
 
@@ -822,8 +824,9 @@ half-written config: a config can be restored from the shipped copy and a plan i
 there is. It is **not** in `config/` — those four files are vocabularies shipped with the app,
 and a plan is operational data. `tcm/domain/plan.py` therefore holds **no singleton and reads no
 file at import**: "nobody has planned tomorrow" must be an empty table, not the `ImportError` a
-malformed taxonomy rightly is. `PlanRepository` is three methods — `day`, `days`, `put_day` —
-chosen because they map onto a table as cleanly as onto a file, which is what makes a
+malformed taxonomy rightly is. `PlanRepository` is five methods — `day`, `days`, `put_day`, and
+`settings` / `put_settings` for the one record that is not per day — chosen because they map
+onto a table as cleanly as onto a file, which is what makes a
 `SqlPlanRepository` a new class and one line in `create_app` rather than a rewrite. **When to
 actually make that swap:** a second person writing, or the file outgrowing a full load on every
 save. Neither is true of a few hundred rows a sprint.
@@ -835,12 +838,38 @@ block, and a refused edit must leave the stored plan exactly as it was. Validati
 **(pic, file, device) is unique within a day**, because two such rows are one row with the counts
 added, and left as two the actual for that work joins onto both and is counted twice.
 
-**Planning is three cuts of one dataset, and only one of them edits.** Day (one date, everybody)
-is where rows are typed and the suggestion table sits beside it; Person (one name, every day) and
-Calendar (every day, one line) report. Date cells in the two reporting cuts are `cell-link`
-buttons into the Day cut, the same idea as every status figure being a door into its cases.
-`views/planning.js` imports no other view: saving announces itself through `plan.js`, which is
-how Daily and Productivity hear that their plan figures moved.
+**Plan settings live in `plan.json` beside the days.** `PlanSettings` in `tcm/domain/plan.py` is
+the phase (`phase_start`, `phase_end`) and `daily_target`, cases per person per day. Nothing is
+stored until somebody edits the phase bar: `get_settings` fills a default — the phase starts on
+the first test date loaded and ends five working days out — so opening the screen writes
+nothing. **The target came back only as the member day-load yardstick.** A member whose planned
+day exceeds it is drawn in the warn tone; it does not return to Daily or Productivity, which
+still read the plan calendar. Working days are Mon–Fri with no holiday calendar; today is always
+a phase day, even on a weekend.
+
+**The page is the design canvas's, and its figures are the server's.** `/api/plan/phase?window=`
+serves the KPIs, the burndown series and the phase grid; `/api/plan/board/<date>` serves one day
+as slots (file × device) against members, with what each slot had left when today began, what
+the plan asks of it through that day, and by how much that overshoots. The browser arranges and
+classifies — cell states, "behind" labels — in `views/planning/cells.js`, and counts nothing.
+Two rules are worth knowing:
+
+- **The burndown's actual line sums every dated case, not every axis day.** A Saturday is not on
+  the axis, but the cases run on it left the pile; today's point also takes work dated after
+  today. Without that the line ends above the Remaining figure — the real samples showed a gap of
+  twelve thousand.
+- **The plan's finish is capped per slot.** Today contributes what its plan still has to run
+  (planned less what that person already worked there today); each later day its plan; every
+  slot capped at what that slot has left, so planning a finished slot twice covers nothing.
+
+`views/planning/` is layered like `views/detail/`: `state.js` → `cells.js` (derivation, no DOM)
+→ `render.js` (every DOM write but the editor's) and `editor.js` → `index.js`, the only module
+`main.js` imports. **The slot editor is a native `<dialog>` — the one floating surface in the
+app**, because rearranging a slot is a focused edit over the matrix it came from. It edits a
+working copy and writes the whole day on Save through `PUT /api/plan/<date>`; there is no
+per-slot endpoint. Saving announces itself through `plan.js`, which is how Daily and
+Productivity hear that their plan figures moved. No colour here is new: good / late / over come
+from the status tones, and everything else is ink.
 
 **Aggregation is shared, not owned by the routes.** [tcm/services/aggregation.py](tcm/services/aggregation.py) holds
 `summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` / `remaining_rows` as plain functions over
