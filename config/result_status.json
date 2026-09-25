@@ -50,6 +50,7 @@
       "match": [
         "保留"
       ],
+      "remaining": true,
       "review": true,
       "text": "text-warning-emphasis",
       "tone": "warn"
@@ -71,6 +72,7 @@
       "empty": true,
       "key": "NYS",
       "label": "NYS",
+      "remaining": true,
       "text": "",
       "tone": "neutral"
     },

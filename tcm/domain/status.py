@@ -93,7 +93,8 @@ class StatusSet:
     def __init__(self, statuses: list[Status], lookup: dict[str, str],
                  empty_key: str, fallback_key: str, needs_reason: list[str],
                  executed: list[str], issue: list[str], excluded: list[str],
-                 derived: dict[str, "Derivation"], review: list[str]):
+                 derived: dict[str, "Derivation"], review: list[str],
+                 remaining: list[str] | None = None):
         self.statuses = statuses
         self.keys = [s.key for s in statuses]
         self.needs_reason = needs_reason
@@ -118,6 +119,14 @@ class StatusSet:
         #: the plan. Detail exists to work through these, so a case that needs
         #: nobody's attention would only be noise there.
         self.review = review
+        #: Statuses whose cases are still to be run, in taxonomy order -- what
+        #: the planner hands out and the burndown counts down. Always holds the
+        #: empty status: a blank Result cell is work not done by definition.
+        self.remaining = list(remaining) if remaining is not None else [empty_key]
+        #: Work that has left the remaining pile: counted, and not remaining.
+        #: The planner's "done". Wider than `executed` on purpose -- a Cancel
+        #: with a PIC is off the pile even though nobody passed or failed it.
+        self.worked = [k for k in self.counted if k not in set(self.remaining)]
         self._lookup = lookup
         self._empty_key = empty_key
         self._fallback_key = fallback_key
@@ -152,6 +161,7 @@ class StatusSet:
         empty_keys, fallback_keys, executed_keys, issue_keys = [], [], [], []
         excluded_keys: list[str] = []
         review_keys: list[str] = []
+        remaining_keys: list[str] = []
         derive_specs: list[tuple[str, str, str]] = []
 
         for i, entry in enumerate(entries):
@@ -209,6 +219,8 @@ class StatusSet:
                 excluded_keys.append(key)
             if entry.get("review"):
                 review_keys.append(key)
+            if entry.get("remaining"):
+                remaining_keys.append(key)
 
             derive = entry.get("derive")
             if derive is not None:
@@ -280,9 +292,21 @@ class StatusSet:
                 f"a case outside the plan is not work to review"
             )
 
+        for flag, keys in (("excluded", excluded_keys), ("executed", executed_keys)):
+            clash = [k for k in remaining_keys if k in set(keys)]
+            if clash:
+                raise ValueError(
+                    f"{source}: status(es) {clash} are both 'remaining' and '{flag}'; "
+                    f"a case cannot be work still to do and {flag} at once"
+                )
+        if empty_keys[0] not in remaining_keys:
+            remaining_keys.append(empty_keys[0])
+        order = [s.key for s in statuses]
+        remaining_keys.sort(key=order.index)
+
         return cls(statuses, lookup, empty_keys[0], fallback_keys[0],
                    list(needs_reason), executed_keys, issue_keys, excluded_keys, derived,
-                   review_keys)
+                   review_keys, remaining_keys)
 
     def classify(self, result) -> str:
         """Map a raw result cell onto a status key."""
@@ -324,6 +348,7 @@ class StatusSet:
             "issue": list(self.issue),
             "excluded": list(self.excluded),
             "review": list(self.review),
+            "remaining": list(self.remaining),
         }
 
 

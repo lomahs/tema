@@ -682,3 +682,18 @@ def test_remaining_rows_sort_the_nearly_finished_first():
         + [case(file_name="Small.xlsx", result=None, row_num=i) for i in range(2)]
     )
     assert [r["file"] for r in rows] == ["Small.xlsx", "Big.xlsx"]
+
+
+def test_remaining_rows_count_every_remaining_status():
+    """Pending is still to run: the taxonomy says so, not this module."""
+    rows = aggregate.remaining_rows([
+        case(result=None), case(result="保留", row_num=5), case(result="OK", row_num=6),
+    ])
+    assert (rows[0]["remaining"], rows[0]["total"]) == (2, 3)
+
+
+def test_remaining_rows_can_keep_finished_blocks():
+    """The planner needs a finished block too: work was planned and done on it."""
+    cs = [case(result="OK")]
+    assert aggregate.remaining_rows(cs) == []
+    assert aggregate.remaining_rows(cs, keep_finished=True)[0]["remaining"] == 0

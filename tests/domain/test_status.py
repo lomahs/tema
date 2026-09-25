@@ -308,3 +308,41 @@ def test_the_taxonomy_is_published_with_its_review_statuses():
 
 def test_a_config_naming_no_review_statuses_is_allowed():
     assert StatusSet.from_dict(MINIMAL).review == []
+
+
+# --- remaining ---------------------------------------------------------------
+# What the planner still has to hand out. The empty status always is; the
+# config names any others.
+
+def test_the_empty_status_is_remaining_even_unflagged():
+    assert StatusSet.from_dict(MINIMAL).remaining == ["NYS"]
+
+
+def test_flagged_statuses_are_remaining_in_taxonomy_order():
+    cfg = json.loads(json.dumps(MINIMAL))
+    cfg["statuses"].insert(1, {"key": "Pending", "match": ["HOLD"], "remaining": True})
+    s = StatusSet.from_dict(cfg)
+    assert s.remaining == ["Pending", "NYS"]
+    # MINIMAL's fallback is not excluded, so it counts, and it is not remaining.
+    assert s.worked == ["OK", "Other"]
+
+
+def test_worked_is_counted_minus_remaining():
+    cfg = json.loads(json.dumps(MINIMAL))
+    cfg["statuses"][2]["excluded"] = True
+    cfg["needs_reason"] = []          # an excluded status may not owe a reason
+    assert StatusSet.from_dict(cfg).worked == ["OK"]
+
+
+@pytest.mark.parametrize("flag", ["excluded", "executed"])
+def test_remaining_cannot_be_combined_with(flag):
+    cfg = json.loads(json.dumps(MINIMAL))
+    cfg["statuses"][0]["remaining"] = True
+    cfg["statuses"][0][flag] = True
+    with pytest.raises(ValueError, match="remaining"):
+        StatusSet.from_dict(cfg)
+
+
+def test_shipped_taxonomy_counts_pending_as_remaining():
+    assert STATUS.remaining == ["Pending", "NYS"]
+    assert STATUS.to_dict()["remaining"] == ["Pending", "NYS"]

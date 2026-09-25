@@ -173,6 +173,10 @@ function renderStatuses(data) {
             <td>${toneSelect(s, i)}</td>
             <td><div class="config-flags">
                 ${flag(i, "executed", "exec", s.executed, "Counts as work carried out")}
+                ${flag(i, "remaining", "left", s.remaining || s.empty,
+                       s.empty ? "Blank results are always still to run"
+                               : "Still to run: the plan hands it out, the burndown counts it down",
+                       s.empty)}
                 ${flag(i, "issue", "issue", s.issue, "Reaches the report's Issues sheet")}
                 ${flag(i, "review", "review", s.review, "Listed in the Review view")}
                 ${flag(i, "excluded", "excl.", s.excluded, "Left out of the total, and of the report's columns")}
@@ -267,10 +271,10 @@ function deriveCell(status, i, keys) {
     </span>`;
 }
 
-/** One flag checkbox, labelled short because there are five per row. */
-function flag(i, field, label, on, title) {
+/** One flag checkbox, labelled short because there are six per row. */
+function flag(i, field, label, on, title, locked = false) {
     return `<label class="check" title="${esc(title)}">
-        <input type="checkbox" data-field="${field}" data-row="${i}"${on ? " checked" : ""}>
+        <input type="checkbox" data-field="${field}" data-row="${i}"${on ? " checked" : ""}${locked ? " disabled" : ""}>
         <span>${esc(label)}</span>
     </label>`;
 }
@@ -513,7 +517,7 @@ function editStatuses(data, el, field) {
         case "label": row.label = el.value; break;
         case "match": row.match = readList(el.value); break;
         case "tone": row.tone = el.value; break;
-        case "executed": case "issue": case "review": case "excluded":
+        case "executed": case "issue": case "review": case "excluded": case "remaining":
             setFlag(row, field, el.checked);
             break;
         case "needs_reason": {
