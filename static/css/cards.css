@@ -282,7 +282,16 @@
 .kpi--link { cursor: pointer; transition: border-color 90ms ease-out; }
 .kpi--link:hover { border-color: var(--rule-strong); }
 
-.kpi-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+/* `align-self` because a `.kpi` that is a <button> does not stretch its items,
+   and a head sized to its content leaves "View →" beside the label rather than
+   at the card's edge. */
+.kpi-head {
+    display: flex;
+    align-self: stretch;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+}
 
 /* The only place in the app where a non-status element carries emphasis, and
    it is ink: "View →" is an affordance, not a result. */
@@ -308,7 +317,9 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: var(--sp-4);
-    align-items: start;
+    /* Stretched, as the design has them: panels side by side share a bottom
+       edge, so a quiet day's short Today panel does not leave a ragged row. */
+    align-items: stretch;
     margin-bottom: var(--sp-5);
 }
 

@@ -10,13 +10,14 @@ import { refreshChartTheme, resizeCharts } from "./charts.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import {
     initShell, setActiveView, setNavCounts, setNavEnabled, setPageHead, setSourceSummary,
+    setToday,
 } from "./shell.js";
 import { initSourcePanel } from "./sourcePanel.js";
 import { initReportPanel, setReportEnabled } from "./reportPanel.js";
 import { initPreparePanel, refreshPrepare, runFileAction } from "./preparePanel.js";
 import { initFilesTable } from "./filesTable.js";
 import { initConfigView } from "./views/config.js";
-import { getReviewStatuses, setTaxonomy } from "./taxonomy.js";
+import { executedIn, setTaxonomy } from "./taxonomy.js";
 import { alignSummaryColumns, initSummaryView, renderSummary } from "./views/summary/index.js";
 import {
     currentFile, initFileView, renderFileHeads, showFile,
@@ -197,7 +198,9 @@ async function refreshViews(loadResult, { show = true } = {}) {
     // daily rows rather than the summary ones.
     renderSummary(summary, daily);
     initDaily(daily);
-    initProductivity(productivity);
+    // The daily rows ride along for the member × day heatmap, which is the same
+    // per-PIC figure as the table above it split by date.
+    initProductivity(productivity, daily);
 
     // The plan is not part of `fetchAll`: it is not read out of the workbooks
     // and it does not change when they are re-read. What Daily and Productivity
@@ -211,6 +214,7 @@ async function refreshViews(loadResult, { show = true } = {}) {
     setReportEnabled(true);
 
     setSourceSummary(loadResult);
+    setToday(todayFrom(daily));
     setNavCounts({ total: loadResult.loaded, review: reviewCount() });
     setNavEnabled(true);
 
@@ -234,6 +238,24 @@ async function refreshViews(loadResult, { show = true } = {}) {
     // The prepare panel works from the loaded source's file list, so it only
     // has something to show once a load has succeeded.
     await refreshPrepare();
+}
+
+/**
+ * Today's date and what was executed on it, for the rail.
+ *
+ * Summed from the daily rows `fetchAll` already carries, so the rail cannot
+ * disagree with Daily's row for today or with Summary's Today panel.
+ *
+ * @param {Object[]} daily `/api/daily` rows.
+ * @returns {{date: string, executed: number}}
+ */
+function todayFrom(daily) {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const executed = daily.filter((r) => r.date === date)
+        .reduce((acc, r) => acc + executedIn(r), 0);
+    return { date, executed };
 }
 
 /**

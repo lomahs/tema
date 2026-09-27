@@ -10,11 +10,14 @@
  */
 import { $, esc } from "../dom.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortRows } from "../sorting.js";
-import { getExecutedStatuses, toneFor } from "../taxonomy.js";
-import { hasPlan, onPlanChange, plannedForPic, plannedTotal } from "../plan.js";
+import { executedIn, getExecutedStatuses, getFailedStatuses, toneFor } from "../taxonomy.js";
+import { actualForPic, hasPlan, onPlanChange, plannedForPic, planTotals } from "../plan.js";
 
 /** @type {Object[]} rows from /api/productivity */
 let prodData = [];
+
+/** @type {Object[]} rows from /api/daily, for the heatmap */
+let dailyData = [];
 
 /** Members are worth reading fastest-first, so the default sort is descending. */
 const DEFAULT_SORT = { col: "productivity", asc: false };
@@ -23,7 +26,23 @@ const DEFAULT_SORT = { col: "productivity", asc: false };
 const prodSort = { ...DEFAULT_SORT };
 
 /** Columns that are not one of the executed statuses. */
-const NUMERIC_BASE = ["executed", "days", "productivity"];
+const NUMERIC_BASE = ["executed", "days", "productivity", "ngRate"];
+
+/**
+ * Share of a member's executed cases that failed, or null with nothing executed.
+ * @param {Object} r A productivity row.
+ * @returns {?number} 0–1.
+ */
+function failRate(r) {
+    const failed = getFailedStatuses().reduce((acc, st) => acc + (r[st.key] || 0), 0);
+    return r.executed ? failed / r.executed : null;
+}
+
+/** The NG rate column's heading, named after the statuses it counts. */
+function failLabel() {
+    const failed = getFailedStatuses();
+    return failed.length === 1 ? `${failed[0].label} rate` : "Fail rate";
+}
 
 /**
  * Wire the view. Call once, at startup.
@@ -45,7 +64,7 @@ export function initProductivityView() {
  * not behind, they were never given a figure to meet. Every member reads that
  * way until a day naming them is saved in Planning.
  *
- * @param {number} executed Cases this member carried out.
+ * @param {number} executed Cases this member carried out on their planned days.
  * @param {?number} planned Cases they were planned for, or null.
  * @returns {string} HTML.
  */
@@ -86,6 +105,10 @@ export function renderProductivityHead() {
         + sortableTh("executed", "Executed", { cls: "num center" })
         + sortableTh("days", "Working days", { cls: "num center" })
         + sortableTh("productivity", "Cases / day", { cls: "num center" })
+        // Only when the taxonomy has a status that is both executed and an
+        // issue — with none, the column would read 0% for everyone.
+        + (getFailedStatuses().length
+            ? sortableTh("ngRate", failLabel(), { cls: "num center" }) : "")
         + `<th class="progress-col">Attainment</th>`;
 
     makeSortable(SELECTOR, prodSort, renderProductivity);
@@ -101,8 +124,10 @@ export function renderProductivityHead() {
  *
  * @param {Object[]} data `/api/productivity` body.
  */
-export function initProductivity(data) {
-    prodData = data;
+export function initProductivity(data, daily = []) {
+    // The rate is carried on the row so the ordinary numeric sort can order by it.
+    prodData = data.map((r) => ({ ...r, ngRate: failRate(r) ?? -1 }));
+    dailyData = daily;
     prodSort.col = DEFAULT_SORT.col;
     prodSort.asc = DEFAULT_SORT.asc;
     paintSortIndicators(SELECTOR, prodSort);
@@ -121,9 +146,10 @@ function renderProductivity() {
 
     if (!rows.length) {
         $("#productivityBody").innerHTML =
-            `<tr class="empty-row"><td colspan="${statuses.length + 5}">`
+            `<tr class="empty-row"><td colspan="${statuses.length + 5 + (getFailedStatuses().length ? 1 : 0)}">`
             + "No executed cases yet.</td></tr>";
         $("#productivityFoot").innerHTML = "";
+        renderHeatmap();
         return;
     }
 
@@ -137,10 +163,23 @@ function renderProductivity() {
         <td class="num center">${r.executed}</td>
         <td class="num center">${r.days}</td>
         <td class="num center"><b>${r.productivity.toFixed(2)}</b></td>
-        ${attainCell(r.executed, plannedForPic(r.pic))}
+        ${rateCell(failRate(r))}
+        ${attainCell(actualForPic(r.pic), plannedForPic(r.pic))}
     </tr>`).join("");
 
     renderProductivityFoot(rows, statuses);
+    renderHeatmap();
+}
+
+/**
+ * One NG-rate cell, or nothing when the taxonomy has no failing status.
+ * @param {?number} rate 0–1, or null with nothing executed.
+ * @returns {string} HTML.
+ */
+function rateCell(rate) {
+    if (!getFailedStatuses().length) return "";
+    if (rate === null) return `<td class="num center zero">—</td>`;
+    return `<td class="num center" data-tone="danger">${(rate * 100).toFixed(1)}%</td>`;
 }
 
 /**
@@ -158,6 +197,13 @@ function renderProductivityFoot(rows, statuses) {
     const executed = sum("executed");
     const days = sum("days");
     const rate = days ? executed / days : 0;
+    const failed = getFailedStatuses().reduce((acc, st) => acc + sum(st.key), 0);
+
+    // Attainment is what planned people executed on their planned days, against
+    // that plan — the pairing each row above makes, summed. Taking the whole
+    // team's executed cases over every day as the numerator is how a plan of 165
+    // cases once read as 22,464% attained.
+    const plan = planTotals();
 
     $("#productivityFoot").innerHTML = `<tr>
         <td>Team</td>
@@ -165,6 +211,55 @@ function renderProductivityFoot(rows, statuses) {
         <td class="num center">${executed}</td>
         <td class="num center">${days}</td>
         <td class="num center">${rate.toFixed(2)}</td>
-        ${attainCell(executed, plannedTotal())}
+        ${rateCell(executed ? failed / executed : null)}
+        ${attainCell(plan.actual, plan.planned)}
     </tr>`;
+}
+
+/**
+ * Executed cases per member per day — the design's member × day heatmap.
+ *
+ * Summed from the `/api/daily` rows rather than counted, so a member's row adds
+ * up to their Executed figure in the table above: both are in-plan, dated,
+ * executed cases. Days are the dates anyone executed anything, oldest first.
+ *
+ * Shaded as an ink ramp, not a hue: a hue on this screen would be read as a
+ * status, and a busy day is not a good or bad outcome.
+ */
+function renderHeatmap() {
+    const cells = new Map();          // pic -> Map(date -> n)
+    const dates = new Set();
+    dailyData.forEach((r) => {
+        const n = executedIn(r);
+        if (!n) return;
+        const pic = r.pic || "N/A";
+        if (!cells.has(pic)) cells.set(pic, new Map());
+        const byDate = cells.get(pic);
+        byDate.set(r.date, (byDate.get(r.date) || 0) + n);
+        dates.add(r.date);
+    });
+
+    const days = [...dates].sort();
+    const pics = [...cells.keys()].sort();
+    if (!days.length) {
+        $("#heatmap").innerHTML = `<p class="empty-note heatmap-empty">No executed cases yet.</p>`;
+        $("#heatmapNote").textContent = "";
+        return;
+    }
+
+    let max = 1;
+    cells.forEach((byDate) => byDate.forEach((n) => { max = Math.max(max, n); }));
+    $("#heatmapNote").textContent = `Executed cases per member per day · darkest is ${max.toLocaleString()}`;
+
+    $("#heatmap").innerHTML = `<table class="ledger heatmap">
+        <thead><tr><th class="heat-pic">PIC</th>${days.map((d) =>
+            `<th class="heat-day num">${esc(d.slice(5))}</th>`).join("")}</tr></thead>
+        <tbody>${pics.map((pic) => `<tr><td class="heat-pic">${esc(pic)}</td>${days.map((d) => {
+            const n = cells.get(pic).get(d) || 0;
+            const level = n ? Math.max(8, Math.round((n / max) * 100)) : 0;
+            return `<td class="heat-cell"><span class="heat num${level > 55 ? " heat--dark" : ""}"`
+                + ` style="--heat:${level}%" title="${esc(pic)} · ${esc(d)}: ${n} executed">`
+                + `${n || ""}</span></td>`;
+        }).join("")}</tr>`).join("")}</tbody>
+    </table>`;
 }

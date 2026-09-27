@@ -227,6 +227,25 @@ def test_the_calendar_also_totals_each_persons_plan():
     assert svc.calendar_view(None, None, [])["by_pic"] == {"An": 45, "Binh": 20}
 
 
+def test_the_calendar_totals_what_each_person_did_on_their_planned_days():
+    """Attainment divides like by like: what a member executed on the days
+    somebody planned for them, against that plan.
+
+    Their executed cases across *every* day, over a plan covering two of them,
+    is how a plan of 15 read as 33,940% attained.
+    """
+    svc = service()
+    svc.save_day("2026-09-22", [entry(pic="An", planned=30)])
+    cases = [
+        case(pic="An", test_date="2026-09-21", result="OK", row_num=1),   # unplanned day
+        case(pic="An", test_date="2026-09-22", result="OK", row_num=2),
+        case(pic="An", test_date="2026-09-22", result="NG", row_num=3),
+        case(pic="Binh", test_date="2026-09-22", result="OK", row_num=4),  # never planned
+    ]
+
+    assert svc.calendar_view(None, None, cases)["actual_by_pic"] == {"An": 2}
+
+
 def test_the_per_person_totals_respect_the_range():
     svc = service()
     svc.save_day("2026-09-22", [entry(pic="An", planned=30)])

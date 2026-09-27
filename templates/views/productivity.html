@@ -20,5 +20,16 @@
                     </table>
                 </div>
             </section>
+
+            <!-- The table above, split by day. Each cell is one member's executed
+                 cases on one date, so a row adds up to that member's Executed
+                 figure — it is drawn from the same daily rows, not counted again. -->
+            <section class="card card--table">
+                <div class="card-head card-head--row">
+                    <h2>Member × day heatmap</h2>
+                    <p class="status-line" id="heatmapNote"></p>
+                </div>
+                <div class="scroll-x scroll-x--flush" id="heatmap"></div>
+            </section>
         </section>
 

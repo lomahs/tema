@@ -221,6 +221,28 @@ textarea.input {
     color: var(--ink-invert);
 }
 
+/* A segmented control: one choice out of a few, in one frame. The design joins
+   these (Matrix / List, the forecast window) because exactly one is always
+   pressed — separate pills would promise the multi-select the Result toggles
+   actually offer. */
+.toggles--seg {
+    flex-wrap: nowrap;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: var(--r-md);
+    overflow: hidden;
+}
+.toggles--seg .toggle {
+    min-height: 28px;
+    border: 0;
+    border-radius: 0;
+    color: var(--ink);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+}
+.toggles--seg .toggle + .toggle { border-left: 1px solid var(--rule); }
+.toggles--seg .toggle[aria-pressed="true"] { color: var(--ink-invert); }
+
 /* --- the summary overview -------------------------------------------------
  *
  * The KPI cards and panels are above; what remains here is the progress bar

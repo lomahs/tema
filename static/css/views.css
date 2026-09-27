@@ -125,6 +125,26 @@
 }
 .card-foot-end { display: flex; align-items: center; gap: var(--sp-2); }
 
+/* A card followed by a filter well — Daily's chart above its toolbar. The
+   toolbar carries its own bottom margin and nothing above it, so without this
+   the two frames sat a hairline apart. */
+.view > .card + .toolbar { margin-top: var(--sp-4); }
+/* Productivity's table and its heatmap, stacked. */
+#productivityView > .card + .card { margin-top: var(--sp-4); }
+
+/* Detail's table card opens with its own controls: the search, the folded
+   filters and the chips, ruled off from the rows below. Their margins are
+   the gap now, so they are zeroed here rather than doubled. */
+.detail-head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-5);
+    border-bottom: 1px solid var(--rule);
+}
+.detail-head > .filter-bar, .detail-head > .filter-well { margin-bottom: 0; }
+.detail-head > .chips:empty { display: none; }
+
 .inline-field {
     display: flex;
     align-items: center;
@@ -484,13 +504,23 @@
 .plan-muted { color: var(--ink-soft); font-size: var(--fs-xs); }
 
 /* --- phase bar ---------------------------------------------------------- */
+/* Framed like the KPI cards beneath it, as the design draws it: the phase is
+   the figure every card on the page is measured against, not a loose toolbar. */
 .plan-phase {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--sp-2) var(--sp-3);
     margin-bottom: var(--sp-3);
+    padding: var(--sp-2) var(--sp-4);
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-lg);
 }
+.plan-phase .inline-field { text-transform: uppercase; letter-spacing: var(--ls-eyebrow);
+                            font-size: var(--fs-xs); font-weight: 600; color: var(--ink-soft); }
+.plan-phase .inline-field .input { text-transform: none; letter-spacing: 0; font-weight: 400;
+                                   color: var(--ink); }
 .plan-phase .inline-field { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
 .plan-phase-arrow { color: var(--ink-faint); }
 .plan-phase-info { color: var(--ink-soft); font-size: var(--fs-sm); }
@@ -503,7 +533,12 @@
 .plan-day-headline { color: var(--ink-soft); font-size: var(--fs-sm); }
 .plan-day-controls { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .plan-stepper { display: inline-flex; align-items: center; gap: 2px; }
-.plan-badge--today { background: var(--ink); color: var(--ink-invert); }
+/* The title keeps its own width here: `.card-head--row h2` grows to fill its
+   row, and inside this nested row that pushed the badge to the far edge. */
+.plan-day-title-row h2 { flex: none; }
+/* A tint, not an inverted block: beside the title it is a label, and a solid
+   ink pill read as a button next to the real ones on the right. */
+.plan-badge--today { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
 .plan-note { padding: var(--sp-2) var(--sp-5); border-bottom: 1px solid var(--rule-soft); }
 #day-plan > .empty-note { padding: var(--sp-2) var(--sp-5); }
 
@@ -601,6 +636,12 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 /* The label columns keep their content width; the members' columns and Total
    share what is left. */
 .plan-matrix .plan-sticky { width: 1%; white-space: nowrap; }
+
+/* The phase grid spans the card for the same reason, and the same way: File
+   keeps its content width and the day columns share the rest. */
+#planGridTable { width: 100%; }
+.plan-grid { width: 100%; }
+.plan-grid td.plan-sticky, .plan-grid th.plan-sticky { width: 1%; white-space: nowrap; }
 
 .plan-list .plan-list-filters th { padding-block: var(--sp-1); background: var(--paper-sunk); }
 .plan-list .plan-list-filters .select { min-height: 28px; width: 100%; }

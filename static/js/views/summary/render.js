@@ -566,7 +566,9 @@ function renderFooter(i, bucket, count, page, pageCount, showAll) {
         pageSize: PAGE_SIZE,
         currentPage: page,
         showAll,
-        unit: "file",
+        // Rows, not files: a Split row is one device of one file, and the head
+        // above already counts the same figure as rows.
+        unit: "row",
         onPageChange: (p) => { paging.set(bucket.key, { ...state(), page: p }); render(); },
         onToggleAll: (all) => { paging.set(bucket.key, { page: 1, showAll: all }); render(); },
     });

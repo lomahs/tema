@@ -162,6 +162,9 @@ body {
     letter-spacing: var(--ls-tight);
 }
 .rail-sub { font-size: var(--fs-sm); color: var(--rail-ink-soft); }
+.rail-cards { display: flex; flex-direction: column; gap: var(--sp-2); }
+.rail-title { display: flex; flex-direction: column; gap: var(--sp-1); }
+.rail-date { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: 500; }
 
 /* --- rail navigation ------------------------------------------------------
  * The selected item is a filled block, as every other selected thing in this

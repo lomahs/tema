@@ -139,7 +139,7 @@ function renderDayHead(day, board) {
             </div>
             <button type="button" class="btn btn-sm" data-act="today">Today</button>
             <button type="button" class="btn btn-sm btn-primary" data-act="add-file">+ Add file</button>
-            <div class="toggles" role="group" aria-label="Layout">
+            <div class="toggles toggles--seg" role="group" aria-label="Layout">
                 <button type="button" class="toggle" data-act="layout" data-layout="matrix"
                         aria-pressed="${layout === "matrix"}">Matrix</button>
                 <button type="button" class="toggle" data-act="layout" data-layout="list"
@@ -271,7 +271,7 @@ export function renderBurndown() {
             <span class="legend-item"><span class="plan-swatch plan-swatch--actual"></span>Actual</span>
             <span class="legend-item"><span class="plan-swatch plan-swatch--forecast"></span>Forecast</span>
             <span class="plan-burn-pace">Pace from</span>
-            <div class="toggles" role="group" aria-label="Forecast pace window">
+            <div class="toggles toggles--seg" role="group" aria-label="Forecast pace window">
                 ${WINDOW_OPTIONS.map(([v, l]) => `<button type="button" class="toggle" data-act="window"
                     data-window="${v}" aria-pressed="${w === v}">${l}</button>`).join("")}
             </div>

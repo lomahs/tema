@@ -24,6 +24,8 @@ let needsReason = new Set();
 let executed = new Set();
 /** @type {Set<string>} status keys that are shown but left out of the total */
 let excluded = new Set();
+/** @type {Set<string>} status keys the report's Issues sheet lists */
+let issue = new Set();
 /** @type {Set<string>} status keys whose cases the detail view lists */
 let review = new Set();
 /** @type {Object<string, string>} status key -> tone */
@@ -38,7 +40,7 @@ let shadeOf = {};
  * read the status list to decide which columns to emit.
  *
  * @param {{statuses?: Status[], needs_reason?: string[], executed?: string[],
- *          excluded?: string[], review?: string[]}} taxonomy
+ *          excluded?: string[], review?: string[], issue?: string[]}} taxonomy
  */
 export function setTaxonomy(taxonomy) {
     statuses = taxonomy.statuses || [];
@@ -46,6 +48,7 @@ export function setTaxonomy(taxonomy) {
     executed = new Set(taxonomy.executed || []);
     excluded = new Set(taxonomy.excluded || []);
     review = new Set(taxonomy.review || []);
+    issue = new Set(taxonomy.issue || []);
     toneOf = Object.fromEntries(statuses.map((s) => [s.key, s.tone || "neutral"]));
 
     // Several statuses legitimately share a tone — OK and NG-OK are both good
@@ -133,6 +136,33 @@ export function colourFor(key) {
  */
 export function requiresReason(key) {
     return needsReason.has(key);
+}
+
+/**
+ * Executed cases in one row or roll-up, by the taxonomy's definition.
+ *
+ * One definition because four places ask it — Daily's column, the rail's Today
+ * card, Productivity's heatmap and its NG rate — and a copy per place is how a
+ * status newly flagged `executed` would reach some of them and not the others.
+ *
+ * @param {Object} row Any row carrying one count per status key.
+ * @returns {number}
+ */
+export function executedIn(row) {
+    return getExecutedStatuses().reduce((acc, s) => acc + (row[s.key] || 0), 0);
+}
+
+/**
+ * The executed statuses that are also issues — NG, as shipped.
+ *
+ * What Productivity's NG rate counts. Read off the `executed` and `issue`
+ * flags rather than named, so the column follows the taxonomy: a Pending is an
+ * issue but was never carried out, so it is not a failure rate's numerator.
+ *
+ * @returns {Status[]}
+ */
+export function getFailedStatuses() {
+    return statuses.filter((s) => executed.has(s.key) && issue.has(s.key));
 }
 
 /**

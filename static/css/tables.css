@@ -100,6 +100,11 @@
     text-transform: uppercase;
 }
 
+/* A header is a label even over a column of figures: `.num` would otherwise set
+   Total, Executed and Cases / day in the mono face at a different size from the
+   File and Device heads beside them, and one table would carry two header styles. */
+.ledger thead th.num { font-family: var(--font-sans); }
+
 .ledger tbody tr:hover td { background: var(--paper-hover); }
 
 .ledger tfoot td {
@@ -170,8 +175,10 @@
     vertical-align: middle;
     text-transform: none;
     letter-spacing: 0;
-    font-size: var(--fs-sm);
 }
+/* Except Total, which opens the band and is not a status name: it takes the
+   uppercase label every other non-status head carries. */
+.ledger th.band--first { text-transform: uppercase; letter-spacing: var(--ls-eyebrow); }
 .ledger th.band > button {
     white-space: normal;
     word-break: keep-all;   /* wrap at the space, never inside 対象外 */
@@ -232,6 +239,10 @@
     background: none;
     color: inherit;
     font: inherit;
+    /* A button inherits neither, so without these a sortable head dropped the
+       uppercase tracking its unsortable neighbours carry. */
+    letter-spacing: inherit;
+    text-transform: inherit;
     text-align: inherit;
     cursor: pointer;
     display: flex;
@@ -290,13 +301,11 @@
 .zero { color: var(--ink-faint) !important; }
 
 /* --- flags ---------------------------------------------------------------
- * A field that should have been filled in. A left rule plus a wash, rather
- * than a full red cell — across twelve columns the old treatment shouted.
+ * A field that should have been filled in. A wash and nothing else: Ticket ID
+ * and Note sit side by side and are always flagged together, so a left rule
+ * per cell drew two red bars across one missing reason.
  */
-.flag {
-    background: var(--tone-danger-bg);
-    box-shadow: inset 2px 0 0 var(--tone-danger);
-}
+.flag { background: var(--tone-danger-bg); }
 
 /* --- pager ---------------------------------------------------------------- */
 

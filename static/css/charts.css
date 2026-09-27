@@ -22,10 +22,9 @@
 }
 
 .bar-col {
-    /* Capped: a fortnight of days fills the strip, but four days stretched to
-       400px each read as slabs rather than as a chart. */
+    /* Stretched across the card, as the design draws it: a chart that packs
+       its bars to the left leaves two thirds of its own frame empty. */
     flex: 1 1 34px;
-    max-width: 96px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -49,7 +48,8 @@
     position: absolute;
     left: 0; right: 0; bottom: 0;
     border-radius: var(--r-sm) var(--r-sm) 0 0;
-    background: var(--tone-neutral);
+    /* Softened ink: at full strength a few wide bars read as solid slabs. */
+    background: var(--ink-soft);
 }
 .bar-fill[data-tone="success"] { background: var(--tone-success); }
 .bar-fill[data-tone="danger"]  { background: var(--tone-danger); }
@@ -69,8 +69,36 @@
 .chart-legend { display: flex; gap: var(--sp-4); font-size: var(--fs-sm); color: var(--ink-soft); }
 .chart-note { margin: var(--sp-3) 0 0; color: var(--ink-soft); font-size: var(--fs-sm); }
 
-.swatch--bar { background: var(--tone-success); }
+.swatch--bar { background: var(--ink-soft); border-radius: 2px; }
 .swatch--plan { width: 14px; height: 2px; border-radius: 0; background: var(--tone-danger); }
+
+/* --- the member × day heatmap ---------------------------------------------
+ * An ink ramp, mixed into the paper by `--heat`: a busy day is not a good or a
+ * bad outcome, so it must not borrow a status hue. `--ink` inverts in dark
+ * mode, so the ramp inverts with it and needs no second definition.
+ */
+.heatmap { width: auto; }
+.heatmap th, .heatmap td { border-bottom: 0; height: auto; }
+.heatmap .heat-pic { position: sticky; left: 0; z-index: 1; background: var(--paper-raised);
+                     padding: 3px var(--sp-4) 3px var(--sp-5); font-weight: 500; }
+.heatmap thead .heat-pic { z-index: 11; background: var(--paper-sunk); }
+.heatmap .heat-day { padding: var(--sp-2) 2px; text-align: center; font-size: 10px; }
+.heatmap .heat-cell { padding: 2px; }
+.heatmap tbody tr:hover td { background: none; }
+.heatmap tbody tr:hover .heat-pic { background: var(--paper-raised); }
+.heat {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 26px;
+    border-radius: var(--r-xs);
+    background: color-mix(in srgb, var(--ink) var(--heat, 0%), var(--paper-sunk));
+    color: var(--ink);
+    font-size: 10.5px;
+}
+.heat--dark { color: var(--ink-invert); }
+.heatmap-empty { padding: var(--sp-4) var(--sp-5); }
 
 /* --- a bar inside a table cell -------------------------------------------
  * Summary's Executed column, Daily's Cumulative, Productivity's Attainment.
@@ -155,9 +183,11 @@
 
 /* --- charts --------------------------------------------------------------- */
 
+/* Above the table card now, under the stat cards — which carry their own
+   bottom margin, so this one only needs to leave room beneath itself. */
 .charts-toggle {
     display: flex; align-items: center; gap: var(--sp-2);
-    margin: var(--sp-4) 0 0;
+    margin: 0 0 var(--sp-3);
 }
 
 .charts {

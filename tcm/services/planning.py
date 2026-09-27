@@ -245,18 +245,26 @@ class PlanningService:
         # endpoint because Productivity reports over every day at once, and a
         # request per member would be one request per row of that table.
         by_pic = defaultdict(int)
+        planned_pics = defaultdict(set)
         for day in self._repo.days():
             planned[day.date] = day.planned_total
             for e in day.entries:
                 people[day.date].add(e.pic)
+                planned_pics[day.date].add(e.pic)
                 if within(day.date):
                     by_pic[e.pic] += e.planned
 
         actual = defaultdict(int)
+        # What each planned person executed on the days they were planned —
+        # attainment's numerator. Their work on unplanned days is left out, or
+        # a two-day plan would be measured against a month of execution.
+        actual_by_pic = defaultdict(int)
         for (date, pic, _, _), done in _actuals(cases).items():
             actual[date] += done
             if done:
                 people[date].add(pic)
+            if within(date) and pic in by_pic and pic in planned_pics.get(date, ()):
+                actual_by_pic[pic] += done
 
         dates = sorted(set(planned) | set(actual))
         days = [
@@ -269,6 +277,7 @@ class PlanningService:
         return {
             "days": days,
             "by_pic": dict(by_pic),
+            "actual_by_pic": dict(actual_by_pic),
             "planned_total": sum(d["planned"] for d in days),
             "actual_total": sum(d["actual"] for d in days),
         }

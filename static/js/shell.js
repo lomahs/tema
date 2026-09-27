@@ -83,6 +83,21 @@ export function setSourceSummary(json) {
 }
 
 /**
+ * Report today's execution, in the rail's second card.
+ *
+ * The figure is handed in rather than counted here: this module owns chrome,
+ * and which statuses count as executed is the taxonomy's business.
+ *
+ * @param {{date: string, executed: number}} today
+ */
+export function setToday({ date, executed }) {
+    $("#railTodayDate").textContent = date;
+    $("#railTodayExec").textContent = executed
+        ? `${executed.toLocaleString()} case${executed === 1 ? "" : "s"} executed today`
+        : "Nothing executed yet today";
+}
+
+/**
  * Set the heading above whichever view is showing.
  *
  * @param {string} title

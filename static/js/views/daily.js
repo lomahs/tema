@@ -18,7 +18,7 @@ import { groupPath, renderGroupedTable, setAllGroups, toggleGroup } from "../gro
 import { renderPagination } from "../pagination.js";
 import { makeSortable, paintSortIndicators, sortableTh, sortGrouped } from "../sorting.js";
 import {
-    getExecutedStatuses, getStatuses, statusCells, statusHeadCells, sumRows,
+    executedIn, getStatuses, statusCells, statusHeadCells, sumRows,
 } from "../taxonomy.js";
 import { hasPlan, onPlanChange, plannedFor } from "../plan.js";
 
@@ -136,10 +136,6 @@ export function renderDailyHead() {
     paintSortIndicators("#dailyHead th.sortable", dailySort);
 }
 
-/** Executed cases in one row or roll-up, by the taxonomy's definition. */
-function executedOf(row) {
-    return getExecutedStatuses().reduce((acc, s) => acc + (row[s.key] || 0), 0);
-}
 
 /**
  * Roll-up for a group row.
@@ -178,7 +174,7 @@ function dailyAggregate(rows) {
  * @returns {string} HTML.
  */
 function dailyCells(row, depth) {
-    const executed = executedOf(row);
+    const executed = executedIn(row);
     const blank = `<td class="num"></td>`.repeat(3) + `<td class="progress-col"></td>`;
     const executedCell = `<td class="num${executed ? "" : " zero"}">${executed || "0"}</td>`;
 
@@ -296,7 +292,7 @@ function renderDaily() {
     // Cumulative runs in date order regardless of how the table is sorted:
     // a running total that reversed with the sort would not be one.
     const byDate = new Map();
-    rows.forEach((r) => byDate.set(r.date, (byDate.get(r.date) || 0) + executedOf(r)));
+    rows.forEach((r) => byDate.set(r.date, (byDate.get(r.date) || 0) + executedIn(r)));
     cumulative = new Map();
     let running = 0;
     [...byDate.keys()].sort().forEach((d) => {
@@ -349,13 +345,16 @@ function renderChart(byDate) {
         const n = byDate.get(d) || 0;
         const plan = plannedFor(d);
         const attain = plan ? (n / plan) * 100 : null;
-        const tone = attain === null ? "muted"
+        // A day with no plan has nothing to be on or behind, so its bar is plain
+        // ink rather than a tone: grey would read as disabled, green as met.
+        const tone = attain === null ? ""
             : attain >= 100 ? "success" : attain >= 80 ? "warn" : "danger";
+        const toneAttr = tone ? ` data-tone="${tone}"` : "";
         return `<div class="bar-col" title="${esc(d)}: ${n} executed${
             plan ? `, plan ${plan}` : ""}">
-            <span class="bar-count num" data-tone="${tone}">${n || ""}</span>
+            <span class="bar-count num"${toneAttr}>${n || ""}</span>
             <span class="bar-track">
-                <span class="bar-fill" data-tone="${tone}"
+                <span class="bar-fill"${toneAttr}
                       style="height:${((n / chartMax) * 100).toFixed(2)}%"></span>
                 ${plan ? `<span class="bar-plan"
                       style="bottom:${((plan / chartMax) * 100).toFixed(2)}%"></span>` : ""}
@@ -415,7 +414,7 @@ function renderDailyBody() {
             pic: $("#dailyFilterPIC").value,
         },
     })}`
-        + `<td class="num">${executedOf(totals).toLocaleString()}</td>`
+        + `<td class="num">${executedIn(totals).toLocaleString()}</td>`
         + `<td class="num"></td><td class="num"></td><td class="num"></td>`
         + `<td class="progress-col"></td></tr>`;
     $("#dailyCount").textContent = `${dates.length} day${dates.length === 1 ? "" : "s"}, `

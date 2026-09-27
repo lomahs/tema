@@ -578,7 +578,16 @@ Behavior worth preserving when touching the UI:
   group-by control is set). A page that split a group would make its roll-up a lie.
 - **Productivity is its own view, not a second table under Daily.** It reports over everything
   loaded and never answered to Daily's filters; sitting beneath them implied that it did. It
-  re-renders only on sort, never on filter change.
+  re-renders only on sort, never on filter change. **Attainment divides like by like**:
+  `calendar_view` serves `actual_by_pic` — what each planned person executed *on the days
+  they were planned* — beside `by_pic`, and both the member rows and the Team row read that
+  pair. Dividing a member's executed cases across every day by a plan covering two of them
+  is how a plan of 15 once read as 33,940% attained. The **member × day heatmap** under the
+  table is summed from the `/api/daily` rows `main.js` already holds (via `executedIn` in
+  `taxonomy.js`, the one definition of "executed in a row"), so a member's heatmap row adds
+  up to their Executed figure; it is an ink ramp, never a hue. The NG-rate column counts
+  `getFailedStatuses()` — statuses both `executed` and `issue` — and is omitted when the
+  taxonomy has none.
 - **`.scroll-x--rows` caps a pane at about ten rows** (`--rows`, plus two steps of slack for the
   header and totals row). That is what makes "Show all" a reasonable offer: every row renders and
   the *pane* scrolls, rather than the page growing to three thousand rows. It is also why a card

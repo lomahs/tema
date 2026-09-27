@@ -38,21 +38,31 @@
         </div>
 
         <div class="rail-open">
-            <div class="rail-head">
-                <div class="rail-title">
+            <div class="rail-title">
+                <div class="rail-head">
                     <div class="brand">Test Result Manager</div>
-                    <div class="rail-eyebrow">READS WORKBOOKS · WRITES THE REPORT</div>
+                    <button class="rail-icon rail-icon--quiet" id="btnRailClose"
+                            title="Hide sidebar" aria-label="Hide sidebar">«</button>
                 </div>
-                <button class="rail-icon rail-icon--quiet" id="btnRailClose"
-                        title="Hide sidebar" aria-label="Hide sidebar">«</button>
+                <!-- Under the brand, not beside the close button: at the rail's
+                     width the two side by side wrapped this onto two lines. -->
+                <div class="rail-eyebrow">WORKBOOKS IN · REPORT OUT</div>
             </div>
 
-            <!-- What is loaded. Stated as a fact in the chrome, so no view has
-                 to spend a line of its own saying it. -->
-            <div class="rail-card" id="sourceCard" hidden>
-                <span class="rail-eyebrow">Loaded</span>
-                <span class="rail-figure" id="sourceFigure"></span>
-                <span class="rail-sub" id="sourceSummary"></span>
+            <!-- What is loaded, and what today has added to it. Stated as facts
+                 in the chrome, so no view has to spend a line of its own saying
+                 them. -->
+            <div class="rail-cards" id="sourceCard" hidden>
+                <div class="rail-card">
+                    <span class="rail-eyebrow">Loaded</span>
+                    <span class="rail-figure" id="sourceFigure"></span>
+                    <span class="rail-sub" id="sourceSummary"></span>
+                </div>
+                <div class="rail-card">
+                    <span class="rail-eyebrow">Today</span>
+                    <span class="rail-date" id="railTodayDate"></span>
+                    <span class="rail-sub" id="railTodayExec"></span>
+                </div>
             </div>
 
             <nav class="rail-nav" id="viewNav">

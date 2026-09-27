@@ -41,6 +41,17 @@ let byDate = new Map();
  */
 let byPic = new Map();
 
+/**
+ * What each planned person executed on the days they were planned for.
+ *
+ * Attainment's numerator. A member's executed cases across every day would be
+ * measured against a plan covering only some of them, and read as thousands of
+ * percent attained.
+ *
+ * @type {Map<string, number>}
+ */
+let actualByPic = new Map();
+
 /** @type {Array<() => void>} */
 const listeners = [];
 
@@ -50,9 +61,10 @@ const listeners = [];
  *   A `/api/plan` response body.
  */
 export function setPlanCalendar(calendar) {
-    const { days = [], by_pic: perPic = {} } = calendar || {};
+    const { days = [], by_pic: perPic = {}, actual_by_pic: donePerPic = {} } = calendar || {};
     byDate = new Map(days.map((d) => [d.date, d]));
     byPic = new Map(Object.entries(perPic));
+    actualByPic = new Map(Object.entries(donePerPic));
     listeners.forEach((fn) => fn());
 }
 
@@ -79,11 +91,28 @@ export function plannedForPic(pic) {
     return byPic.has(pic) ? byPic.get(pic) : null;
 }
 
-/** @returns {number} Cases planned for everyone, across every day. */
-export function plannedTotal() {
-    let sum = 0;
-    byPic.forEach((n) => { sum += n; });
-    return sum;
+/**
+ * What one person executed on the days they were planned for.
+ *
+ * @param {string} pic
+ * @returns {number} 0 for a person nobody planned — ask {@link plannedForPic}
+ *   first, which is what tells "not planned" from "planned and did nothing".
+ */
+export function actualForPic(pic) {
+    return actualByPic.get(pic) || 0;
+}
+
+/**
+ * The whole team against the whole plan: every planned person's plan, and what
+ * each of them executed on their planned days.
+ *
+ * @returns {{planned: number, actual: number}}
+ */
+export function planTotals() {
+    let planned = 0;
+    let actual = 0;
+    byPic.forEach((n, pic) => { planned += n; actual += actualForPic(pic); });
+    return { planned, actual };
 }
 
 /** @returns {boolean} Whether any day at all has been planned. */
