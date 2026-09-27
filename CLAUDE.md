@@ -824,6 +824,10 @@ share one parent row; they round-trip identically because a `TestCase` records n
 newest — puts it in the in-memory `CaseStore` exactly where a load puts it, with
 `Snapshot.origin` set to `{id, taken_at, label}`. A load or reload clears `origin`, which is what
 makes Reload the way back to live data; saving needs something loaded and is a 400 otherwise.
+**Publishing and saving both refuse a snapshot on screen** (400, "Reload the source first"):
+the app starts on the newest snapshot, which may be days old, so a publish would stamp old
+figures as today's rows and a save would make a copy stamped *now* that becomes the next
+start's restore. Save is disabled in the UI for the same reason.
 About 70,000 sample cases save in a fraction of a second.
 
 **`compare_cases(base, head)` in `aggregation.py` is the one diff.** Both sides run through

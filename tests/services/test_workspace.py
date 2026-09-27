@@ -195,6 +195,18 @@ def test_reload_after_opening_a_snapshot_goes_live(snap_ws):
     assert loader.calls[-1] == ("folder", os.path.abspath(folder))
 
 
+def test_a_snapshot_on_screen_is_not_saved_again(snap_ws):
+    """A copy would be stamped now while holding old data, and become the
+    newest -- the one the next start restores -- under a misleading time."""
+    ws, folder, _ = snap_ws
+    ws.load_folder(folder)
+    sid = ws.save_snapshot("")[0]["id"]
+    ws.open_snapshot(sid)
+    body, status = ws.save_snapshot("again")
+    assert status == 400 and "Reload" in body["error"]
+    assert len(ws.snapshots()) == 1
+
+
 def test_unknown_snapshots_are_404(snap_ws):
     ws, _, _ = snap_ws
     assert ws.open_snapshot(99)[1] == 404

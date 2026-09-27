@@ -236,6 +236,27 @@ def test_publishing_before_anything_is_loaded_is_refused(client, monkeypatch):
     assert "load" in res.get_json()["error"].lower()
 
 
+def test_publishing_a_snapshot_is_refused(client, monkeypatch):
+    """The app starts on the newest snapshot, which may be days old.
+
+    Publishing replaces today's rows, so pressing Publish straight after a
+    restart would stamp old figures as today's. Reload first.
+    """
+    use_auth(client, FakeAuth("signed_in"))
+    seen = publishes(monkeypatch)
+    store = InMemoryCaseStore()
+    store.put(Snapshot(cases=[models.TestCase(file_name="TC.xlsx", sheet="Login",
+                                              device="iPhone", row_num=4, result="OK")],
+                       origin={"id": 1, "taken_at": "2026-09-20T09:00:00", "label": ""}))
+    client.application.extensions["workspace"] = Workspace(ExcelCaseLoader(), store)
+
+    res = client.post("/api/report/publish", json={"url": "https://x/r.xlsx"})
+
+    assert res.status_code == 400
+    assert "reload" in res.get_json()["error"].lower()
+    assert seen == {}
+
+
 def test_a_layout_the_report_file_does_not_match_is_reported_as_a_bad_request(
         client, monkeypatch):
     use_auth(client, FakeAuth("signed_in"))

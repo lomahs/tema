@@ -240,9 +240,9 @@ async function refreshViews(loadResult, { show = true } = {}) {
 
     // There is something to publish now.
     setReportEnabled(true);
-    // And something to keep. The history's "on screen" marker may have moved
-    // too — a load goes live, an open names a snapshot.
-    setSnapshotSaveEnabled(true);
+    // And something to keep — if it is live. The history's "on screen" marker
+    // may have moved too: a load goes live, an open names a snapshot.
+    setSnapshotSaveEnabled(!loadResult.origin, "A snapshot is on screen — reload the source first");
     await refreshSnapshots();
 
     setSourceSummary(loadResult);

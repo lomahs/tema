@@ -74,6 +74,20 @@ def test_a_new_pic_joins_the_roster_and_the_phase(db, store):
     assert [m.name for m in SqlPhaseRepository(db).members()] == ["Cy"]
 
 
+def test_a_baseline_does_not_put_anyone_back_on_the_phase(db, store):
+    """The baseline is history: someone taken off the phase stays off when a
+    day whose baseline still names them is saved again."""
+    phases = SqlPhaseRepository(db)
+    frozen = day(entries=(("An", "TC.xlsx", "iPhone", 5),),
+                 baseline=[("Old", "TC.xlsx", "iPhone", 5)], at="2026-09-22T09:00:00")
+    store.put_day(frozen)
+    phase = phases.phase(phases.active_id())
+    phases.update(Phase.from_dict({"name": phase.name, "members": ["An"]}, id=phase.id))
+    store.put_day(frozen)
+    assert store.members() == ["An"]
+    assert store.day("2026-09-22").baseline == [PlanEntry("Old", "TC.xlsx", "iPhone", 5)]
+
+
 def test_settings_are_the_active_phases(db, store):
     assert store.settings() == PlanSettings()
     store.put_settings(PlanSettings("2026-09-01", "2026-09-30", 40))

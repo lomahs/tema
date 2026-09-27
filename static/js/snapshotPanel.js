@@ -62,13 +62,15 @@ export async function refreshSnapshots() {
 }
 
 /**
- * Saving needs something loaded.
+ * Saving needs live data loaded. A snapshot on screen is refused by the server
+ * too: a copy would be stamped now while holding old data.
  * @param {boolean} on
+ * @param {string} [why] The tooltip saying what to do while it is off.
  */
-export function setSnapshotSaveEnabled(on) {
+export function setSnapshotSaveEnabled(on, why = "Load test cases first") {
     const btn = $("#btnSnapshotSave");
     btn.disabled = !on;
-    btn.title = on ? "" : "Load test cases first";
+    btn.title = on ? "" : why;
 }
 
 /**

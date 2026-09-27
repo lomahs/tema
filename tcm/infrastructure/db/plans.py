@@ -86,9 +86,13 @@ class SqlPlanRepository:
             for flag, entries in ((0, day.entries), (1, day.baseline or [])):
                 for e in entries:
                     mid = member_id(conn, e.pic)
-                    # A plan row names someone, so they are on this phase's roster.
-                    conn.execute("INSERT OR IGNORE INTO phase_member (phase_id, member_id) "
-                                 "VALUES (?, ?)", (pid, mid))
+                    # A plan row names someone, so they are on this phase's
+                    # roster. A baseline row is history: it needs a member row
+                    # to point at, but must not put back on the phase someone
+                    # who was taken off it.
+                    if not flag:
+                        conn.execute("INSERT OR IGNORE INTO phase_member (phase_id, member_id) "
+                                     "VALUES (?, ?)", (pid, mid))
                     conn.execute(
                         "INSERT INTO plan_entry (plan_day_id, is_baseline, member_id, file, "
                         "device, planned) VALUES (?, ?, ?, ?, ?, ?)",

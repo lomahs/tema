@@ -76,6 +76,13 @@ def publish_report():
         # a mis-click before loading must not reach the file.
         return jsonify({"error": "No test cases loaded. Load a source first."}), 400
 
+    if workspace().origin is not None:
+        # The app starts on the newest snapshot, which may be days old, and a
+        # publish replaces the run date's rows: stale figures would be stamped
+        # as today's. Only live data is published.
+        return jsonify({"error": "A snapshot is on screen, not live data. "
+                                 "Reload the source before publishing."}), 400
+
     try:
         identity().token()
     except NotConfigured as e:

@@ -105,6 +105,11 @@ class Workspace:
         snap = self._store.get()
         if snap.source is None and not snap.file_results:
             return {"error": "Nothing is loaded — load test cases before saving a snapshot."}, 400
+        if snap.origin is not None:
+            # A copy would be stamped now while holding old data, and would
+            # become the newest -- the one the next start restores.
+            return {"error": "A snapshot is on screen, not live data. "
+                             "Reload the source before saving a snapshot."}, 400
         return self._snapshots.save(snap, label), 201
 
     def snapshots(self) -> list:
