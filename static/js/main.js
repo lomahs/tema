@@ -5,15 +5,16 @@
  * parsed and the Chart.js global is available before anything here executes.
  */
 import { $ } from "./dom.js";
-import { fetchAll, getFile, getPlanCalendar, postReload } from "./api.js";
+import { fetchAll, getFile, getPlanCalendar, getWorkspace, postReload } from "./api.js";
 import { refreshChartTheme, resizeCharts } from "./charts.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import {
     initShell, setActiveView, setNavCounts, setNavEnabled, setPageHead, setSourceSummary,
     setToday,
 } from "./shell.js";
-import { initSourcePanel } from "./sourcePanel.js";
+import { initSourcePanel, showState } from "./sourcePanel.js";
 import { initReportPanel, setReportEnabled } from "./reportPanel.js";
+import { initSnapshotPanel, refreshSnapshots, setSnapshotSaveEnabled } from "./snapshotPanel.js";
 import { initPreparePanel, refreshPrepare, runFileAction } from "./preparePanel.js";
 import { initFilesTable } from "./filesTable.js";
 import { initConfigView } from "./views/config.js";
@@ -212,6 +213,10 @@ async function refreshViews(loadResult, { show = true } = {}) {
 
     // There is something to publish now.
     setReportEnabled(true);
+    // And something to keep. The history's "on screen" marker may have moved
+    // too — a load goes live, an open names a snapshot.
+    setSnapshotSaveEnabled(true);
+    await refreshSnapshots();
 
     setSourceSummary(loadResult);
     setToday(todayFrom(daily));
@@ -321,6 +326,13 @@ initFileView({ onBack: () => showView(fileOrigin), onDrillIn: openStatusCases })
 initSourcePanel({ onLoaded: refreshViews });
 initReportPanel();
 initPreparePanel({ onApplied: reloadAfterPrepare });
+// Opening a snapshot is a load by another name: redraw everything, and stay on
+// Tools, where the reader pressed Open. Comparing is navigation, so it comes
+// back here the way a file name does.
+initSnapshotPanel({
+    onOpened: (state) => { showState(state); return refreshViews(state, { show: false }); },
+    onCompare: () => {},
+});
 // The two Tools panels share one table of workbooks; it reports a pressed row
 // button to whichever of them owns that action.
 initFilesTable({
@@ -341,7 +353,19 @@ initProductivityView();
 // same arrangement `theme.js` uses and the one `target.js` used before it.
 initPlanningView();
 
-// Nothing is loaded yet, so the only view that can answer anything is Tools.
-// It is the empty state now: a separate "nothing loaded" panel in front of the
-// folder field said the same thing twice.
-showView("tools");
+/**
+ * Open on whatever the server already holds.
+ *
+ * The server starts on the newest snapshot, so a restart lands on the data the
+ * reader last kept rather than on an empty app. With nothing kept it is Tools —
+ * the empty state, and the only view that can answer anything then.
+ */
+async function start() {
+    const { ok, json } = await getWorkspace();
+    if (ok && json.loaded) {
+        showState(json);
+        await refreshViews(json);
+    }
+    else showView("tools");
+}
+start();

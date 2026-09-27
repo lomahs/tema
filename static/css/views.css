@@ -880,3 +880,12 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 .plan-phase-target .input { width: 9ch; }
 .plan-burn-mark--end span { left: auto; right: 4px; }
 .plan-grid-controls { margin-left: auto; }
+
+/* --- snapshots ------------------------------------------------------------
+   The Tools card's history. The row on screen is marked with the sunk paper and
+   its chip, never a hue: colour means status. */
+.ledger tr.is-current td { background: var(--paper-sunk); }
+.ledger td.actions { white-space: nowrap; }
+/* Full width, like the source card: half a grid cell cannot hold the history
+   table and its actions without scrolling sideways. */
+#snapshotSection { grid-column: 1 / -1; }

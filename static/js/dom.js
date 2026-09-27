@@ -30,3 +30,17 @@ export function esc(v) {
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
+
+/**
+ * An ISO timestamp as "27 Sep 2026 14:02", the way snapshots are named on screen.
+ * @param {?string} iso
+ * @returns {string}
+ */
+export function formatStamp(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const date = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    return `${date} ${time}`;
+}

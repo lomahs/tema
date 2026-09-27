@@ -84,6 +84,50 @@
                 </div>
             </section>
 
+            <!-- Snapshots: what was loaded, kept with the time it was kept. The
+                 app starts on the newest one. Nothing here writes to a workbook;
+                 `snapshotPanel.js` owns it and knows nothing about the views. -->
+            <section class="card" id="snapshotSection">
+                <div class="card-head">
+                    <h2>Snapshots</h2>
+                    <p>A snapshot keeps what is loaded now, so it can be opened or compared
+                       later. The app starts on the newest one. Reload returns to live data.</p>
+                </div>
+                <div class="stack">
+                    <div class="row">
+                        <div class="field" style="flex:1">
+                            <label for="snapshotLabel">Label (optional)</label>
+                            <input type="text" id="snapshotLabel" class="input" maxlength="120"
+                                   placeholder="End of day 3">
+                        </div>
+                        <button id="btnSnapshotSave" type="button" class="btn" disabled
+                                title="Load test cases first">Save snapshot</button>
+                    </div>
+                    <div class="status-line" id="snapshotStatus"></div>
+                    <p class="empty-note" id="snapshotEmpty">No snapshots yet.</p>
+                    <div class="scroll-x scroll-x--rows" id="snapshotTableWrap" hidden>
+                        <table class="ledger">
+                            <thead><tr>
+                                <th>Taken</th><th>Label</th><th class="num">Files</th>
+                                <th class="num">Cases</th><th>Actions</th>
+                            </tr></thead>
+                            <tbody id="snapshotBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="row" id="snapshotCompareRow" hidden>
+                        <div class="field">
+                            <label for="snapshotBase">Compare</label>
+                            <select id="snapshotBase" class="select"></select>
+                        </div>
+                        <div class="field">
+                            <label for="snapshotHead">with</label>
+                            <select id="snapshotHead" class="select"></select>
+                        </div>
+                        <button id="btnSnapshotCompare" type="button" class="btn">Compare</button>
+                    </div>
+                </div>
+            </section>
+
             <section class="card">
                 <div class="card-head">
                     <h2>Where the report goes</h2>

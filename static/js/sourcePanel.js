@@ -56,6 +56,33 @@ export function initSourcePanel({ onLoaded }) {
 }
 
 /**
+ * Report a load that did not come through this panel — the snapshot the server
+ * restored at startup, or one opened from the Snapshots card.
+ *
+ * The file table and Reload need it as much as a live load: without it the
+ * table's Status and Cases columns sit empty and Reload stays off, when
+ * Reload is exactly the way from a snapshot back to live data.
+ *
+ * @param {{loaded: number, file_count: number, file_results: Object[],
+ *   source: ?{type: string, value: string|string[]}, origin: ?Object}} state
+ */
+export function showState(state) {
+    setLoadResults(state.file_results);
+    const src = state.source;
+    btnReload.disabled = !src;
+    if (src) {
+        sourceType.value = src.type;
+        if (src.type === "folder") folderPath.value = src.value;
+        else filePaths.value = [].concat(src.value).join("\n");
+        sourceType.dispatchEvent(new Event("change"));
+    }
+    loadStatus.innerHTML = state.origin
+        ? `Showing a snapshot of <b>${state.loaded}</b> cases from <b>${state.file_count}</b> `
+          + "file(s). Reload reads the source again."
+        : `Loaded <b>${state.loaded}</b> cases from <b>${state.file_count}</b> file(s).`;
+}
+
+/**
  * Where the dialog should open: the folder already in view, or the folder the
  * last listed file sits in. Blank means the OS picks.
  * @param {"folder"|"files"} mode

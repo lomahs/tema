@@ -376,3 +376,68 @@ export async function putPlanSettings(settings) {
     });
     return { ok: res.ok, json: await res.json() };
 }
+
+// --- snapshots and phases -----------------------------------------------------
+
+/**
+ * A JSON request for the endpoints below. Like the helpers above, a 4xx is an
+ * answer, not an exception.
+ * @returns {Promise<ApiResponse>}
+ */
+async function call(url, method = "GET", body) {
+    const init = { method };
+    if (body !== undefined) {
+        init.headers = { "Content-Type": "application/json" };
+        init.body = JSON.stringify(body);
+    }
+    const res = await fetch(url, init);
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * What is loaded now — including a snapshot the server restored at startup.
+ * @returns {Promise<ApiResponse>} `{loaded, file_count, file_results, source, origin}`.
+ */
+export const getWorkspace = () => call("/api/workspace");
+
+/**
+ * The snapshot history, newest first, and the one on screen.
+ * @returns {Promise<ApiResponse>} `{snapshots: [{id, taken_at, label, source,
+ *   case_count, file_count}], origin}`.
+ */
+export const getSnapshots = () => call("/api/snapshots");
+
+/** Keep what is loaded now. @param {string} label */
+export const postSnapshot = (label) => call("/api/snapshots", "POST", { label });
+
+/** Put a snapshot on screen. Answers like {@link getWorkspace}. @param {number} id */
+export const postOpenSnapshot = (id) => call(`/api/snapshots/${id}/open`, "POST");
+
+/** @param {number} id */
+export const deleteSnapshot = (id) => call(`/api/snapshots/${id}`, "DELETE");
+
+/**
+ * What changed from `base` to `head`.
+ * @returns {Promise<ApiResponse>} `{base, head, totals, total, rows, transitions, unchanged}`.
+ */
+export const getSnapshotCompare = (base, head) =>
+    call(`/api/snapshots/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
+
+/**
+ * Phases and the roster. Every write below answers with the same shape.
+ * @returns {Promise<ApiResponse>} `{phases, active_id, members, suggestions}`.
+ */
+export const getPhases = () => call("/api/phases");
+export const postPhase = (body) => call("/api/phases", "POST", body);
+export const putPhase = (id, body) => call(`/api/phases/${id}`, "PUT", body);
+export const deletePhase = (id) => call(`/api/phases/${id}`, "DELETE");
+export const postActivatePhase = (id) => call(`/api/phases/${id}/activate`, "POST");
+
+/**
+ * Put someone on the roster.
+ * @param {string} name
+ * @param {?number} [phaseId] Also put them on this phase.
+ */
+export const postMember = (name, phaseId = null) =>
+    call("/api/members", "POST", { name, phase_id: phaseId });
+export const deleteMember = (id) => call(`/api/members/${id}`, "DELETE");

@@ -12,7 +12,7 @@
  * what a view contains either — `main.js` hands it a callback and it reports
  * clicks back through that.
  */
-import { $, $$ } from "./dom.js";
+import { $, $$, formatStamp } from "./dom.js";
 
 /** Called with a view name when a nav item is pressed. */
 let onNavigate = () => {};
@@ -68,10 +68,13 @@ export function setNavCounts({ total, review }) {
  * Report what is currently loaded, in the rail.
  *
  * Two lines rather than one sentence: the case count is the figure someone
- * checks at a glance, and the file count is the context for it.
+ * checks at a glance, and the file count is the context for it. A third says
+ * whether that is live data or a snapshot, because the two look identical
+ * everywhere else and a restart now opens on a snapshot.
  *
- * @param {?{loaded: number, file_count: number}} json An API load response, or
- *   `null` to clear the card.
+ * @param {?{loaded: number, file_count: number, origin?: ?Object}} json An API
+ *   load response or `/api/workspace` state, or `null` to clear the card. No
+ *   `origin` means live.
  */
 export function setSourceSummary(json) {
     const card = $("#sourceCard");
@@ -80,6 +83,10 @@ export function setSourceSummary(json) {
     $("#sourceFigure").textContent = json.loaded.toLocaleString();
     $("#sourceSummary").textContent =
         `cases · ${json.file_count} file${json.file_count === 1 ? "" : "s"}`;
+    const o = json.origin;
+    $("#sourceOrigin").textContent = o
+        ? `Snapshot · ${formatStamp(o.taken_at)}${o.label ? ` · ${o.label}` : ""}`
+        : "Live";
 }
 
 /**
