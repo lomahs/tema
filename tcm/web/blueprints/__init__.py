@@ -20,3 +20,12 @@ def identity():
 def planning():
     """The PlanningService this app was built with."""
     return current_app.extensions["planning"]
+
+
+def phase_service():
+    """The PhaseService this app was built with.
+
+    Not `phases()`: importing the `phases` blueprint module binds that name on
+    this package, and would silently replace a helper called the same.
+    """
+    return current_app.extensions["phases"]

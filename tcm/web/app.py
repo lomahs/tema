@@ -5,15 +5,19 @@ import os
 from flask import Flask
 
 from tcm import settings
+from tcm.infrastructure.db.bootstrap import open_database
+from tcm.infrastructure.db.phases import SqlPhaseRepository
+from tcm.infrastructure.db.plans import SqlPlanRepository
+from tcm.infrastructure.db.snapshots import SqlSnapshotRepository
 from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.graph.auth import GraphAuth
-from tcm.infrastructure.plan.json_store import JsonPlanRepository
-from tcm.infrastructure.config_repo import JsonFileConfigRepository
 from tcm.infrastructure.store.memory import InMemoryCaseStore
 from tcm.services.identity import IdentityService
+from tcm.services.phases import PhaseService
 from tcm.services.planning import PlanningService
 from tcm.services.workspace import Workspace
-from tcm.web.blueprints import analytics, pages, plan, prepare, sharepoint, source
+from tcm.web.blueprints import analytics, pages, plan, prepare, sharepoint, snapshots, source
+from tcm.web.blueprints import phases as phases_bp
 from tcm.web.blueprints import settings as settings_bp
 
 #: templates/ and static/ stayed at the repository root: they are the app's
@@ -22,18 +26,21 @@ from tcm.web.blueprints import settings as settings_bp
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def create_app(workspace=None, identity=None, planning=None):
+def create_app(workspace=None, identity=None, planning=None, phases=None, database=None):
     """Build the app.
 
     Args:
         workspace: A `Workspace`, or None to build the shipped one over the
-            Excel reader and an in-memory store.
+            Excel reader, an in-memory store and the database's snapshots --
+            and to start it on the newest snapshot.
         identity: An `IdentityService`, or None to build one over Graph.
-        planning: A `PlanningService`, or None to build one over the plan file
-            named by `settings.PLAN_FILE`.
+        planning: A `PlanningService`, or None to build one over the database.
+        phases: A `PhaseService`, or None to build one over the database.
+        database: An open `Database`, or None to open `settings.DATABASE_FILE`
+            when any of the three above needs it.
 
-    All three are arguments so a test can build an app over fakes without
-    patching a module; nothing in the app changes them after construction.
+    All are arguments so a test can build an app over fakes without patching a
+    module; nothing in the app changes them after construction.
     """
     app = Flask(
         __name__,
@@ -41,22 +48,28 @@ def create_app(workspace=None, identity=None, planning=None):
         static_folder=os.path.join(_ROOT, "static"),
     )
 
-    app.extensions["workspace"] = workspace or Workspace(
-        ExcelCaseLoader(), InMemoryCaseStore())
+    if database is None and (workspace is None or planning is None or phases is None):
+        # Opened here and nowhere else. A database that cannot be opened or
+        # migrated stops the app, like a malformed shipped config: running on
+        # without the plan would invite a save over it.
+        database = open_database(settings.DATABASE_FILE)
+
+    if workspace is None:
+        workspace = Workspace(ExcelCaseLoader(), InMemoryCaseStore(),
+                              SqlSnapshotRepository(database))
+        workspace.restore_latest()
+    app.extensions["workspace"] = workspace
     app.extensions["identity"] = identity or IdentityService(GraphAuth(
         client_id=settings.GRAPH_CLIENT_ID,
         tenant_id=settings.GRAPH_TENANT_ID,
         scopes=settings.GRAPH_SCOPES,
         cache_path=settings.GRAPH_TOKEN_CACHE,
     ))
+    app.extensions["planning"] = planning or PlanningService(SqlPlanRepository(database))
+    app.extensions["phases"] = phases or PhaseService(SqlPhaseRepository(database))
 
-    # The plan file is not read here: unlike the vocabularies, a plan is
-    # operational data, and an empty or absent one is the normal state rather
-    # than something worth refusing to start over.
-    app.extensions["planning"] = planning or PlanningService(
-        JsonPlanRepository(JsonFileConfigRepository(), settings.PLAN_FILE))
-
-    for module in (source, analytics, plan, prepare, settings_bp, sharepoint, pages):
+    for module in (source, snapshots, analytics, plan, phases_bp, prepare, settings_bp,
+                   sharepoint, pages):
         app.register_blueprint(module.bp)
 
     return app
