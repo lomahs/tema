@@ -6,20 +6,41 @@ owns it, which is what `tests/web/test_api.py` did between every test.
 
 The store is only updated once a load succeeds, so a failed call leaves the
 previously loaded data -- and the source `reload` repeats -- untouched.
+
+A snapshot opened from the database goes into the same store a load does, with
+`origin` set; a load or reload clears it, which is what makes Reload the way
+back to live data.
 """
 import os
 
-from tcm.domain.ports import CaseLoader, CaseStore, Snapshot
+from tcm.domain.ports import CaseLoader, CaseStore, Snapshot, SnapshotRepository
+from tcm.services.aggregation import compare_cases
+
+_NO_STORE = {"error": "Snapshots are not available: no database is configured."}
 
 
 class Workspace:
-    """One loaded source and its cases."""
+    """One loaded source and its cases, and the snapshots kept of them."""
 
-    def __init__(self, loader: CaseLoader, store: CaseStore):
+    def __init__(self, loader: CaseLoader, store: CaseStore,
+                 snapshots: SnapshotRepository = None):
         self._loader = loader
         self._store = store
+        self._snapshots = snapshots
 
     # --- what is loaded now ------------------------------------------------
+
+    @property
+    def origin(self):
+        """None for a live load; the snapshot's `{id, taken_at, label}` otherwise."""
+        return self._store.get().origin
+
+    def state(self) -> dict:
+        """What is loaded now, in the shape a load answers with, plus where it came from."""
+        snap = self._store.get()
+        return {"loaded": len(snap.cases), "file_count": len(snap.file_results),
+                "file_results": snap.file_results, "source": snap.source,
+                "origin": snap.origin}
 
     @property
     def cases(self):
@@ -75,6 +96,55 @@ class Workspace:
         if src["type"] == "folder":
             return self._loader.find_workbooks(src["value"])
         return self._loader.exclude_lock_files(src["value"])
+
+    # --- snapshots -----------------------------------------------------------
+
+    def save_snapshot(self, label: str = ""):
+        if self._snapshots is None:
+            return _NO_STORE, 400
+        snap = self._store.get()
+        if snap.source is None and not snap.file_results:
+            return {"error": "Nothing is loaded — load test cases before saving a snapshot."}, 400
+        return self._snapshots.save(snap, label), 201
+
+    def snapshots(self) -> list:
+        return self._snapshots.list() if self._snapshots else []
+
+    def open_snapshot(self, snapshot_id: int):
+        if self._snapshots is None:
+            return _NO_STORE, 400
+        snap = self._snapshots.load(snapshot_id)
+        if snap is None:
+            return {"error": f"No snapshot with id {snapshot_id}"}, 404
+        self._store.put(snap)
+        return self.state(), 200
+
+    def delete_snapshot(self, snapshot_id: int):
+        if self._snapshots is None:
+            return _NO_STORE, 400
+        if not self._snapshots.delete(snapshot_id):
+            return {"error": f"No snapshot with id {snapshot_id}"}, 404
+        return {"deleted": snapshot_id}, 200
+
+    def restore_latest(self) -> bool:
+        """Put the newest snapshot in the store. False when there is none."""
+        if self._snapshots is None:
+            return False
+        sid = self._snapshots.latest_id()
+        if sid is None:
+            return False
+        self._store.put(self._snapshots.load(sid))
+        return True
+
+    def compare(self, base_id: int, head_id: int):
+        if self._snapshots is None:
+            return _NO_STORE, 400
+        base, head = self._snapshots.load(base_id), self._snapshots.load(head_id)
+        missing = [i for i, s in ((base_id, base), (head_id, head)) if s is None]
+        if missing:
+            return {"error": f"No snapshot with id {missing[0]}"}, 404
+        return {"base": base.origin, "head": head.origin,
+                **compare_cases(base.cases, head.cases)}, 200
 
     def _remember(self, source, cases, file_results):
         self._store.put(Snapshot(cases=cases, file_results=file_results, source=source))

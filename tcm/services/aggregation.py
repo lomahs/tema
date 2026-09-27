@@ -401,3 +401,56 @@ def remaining_rows(cases, keep_finished=False):
     # stable order rather than one the dict happened to produce.
     rows.sort(key=lambda r: (r["remaining"], r["file"], r["device"]))
     return rows
+
+
+def compare_cases(base, head):
+    """What changed between two loads, classified with today's taxonomy.
+
+    Both sides run through `in_plan`, so the figures are the ones Summary's
+    Total would have shown for each. Cases are matched on (file, sheet, device,
+    row): a case on one side only is added (`from: None`) or removed
+    (`to: None`). Every matched key is either a transition or unchanged, so the
+    two add up to every case either side holds.
+    """
+    base, head = in_plan(base), in_plan(head)
+
+    def with_total(counts):
+        return {**counts, "total": _counted_total(counts)}
+
+    def diff(b, h):
+        return {k: h[k] - b[k] for k in b}
+
+    totals_b, totals_h = STATUS.zero_counts(), STATUS.zero_counts()
+    per_row = defaultdict(lambda: (STATUS.zero_counts(), STATUS.zero_counts()))
+    status_of = ({}, {})
+    for side, cases, totals in ((0, base, totals_b), (1, head, totals_h)):
+        for c in cases:
+            key = STATUS.classify_case(c)
+            totals[key] += 1
+            per_row[(c.file_name, c.device)][side][key] += 1
+            status_of[side][(c.file_name, c.sheet, c.device, c.row_num)] = key
+
+    rows = []
+    for (file_name, device), (b, h) in sorted(per_row.items()):
+        b, h = with_total(b), with_total(h)
+        rows.append({"file": file_name, "device": device,
+                     "base": b, "head": h, "delta": diff(b, h)})
+
+    moves, unchanged = Counter(), 0
+    for key in status_of[0].keys() | status_of[1].keys():
+        was, now = status_of[0].get(key), status_of[1].get(key)
+        if was == now:
+            unchanged += 1
+        else:
+            moves[(was, now)] += 1
+
+    tb, th = _counted_total(totals_b), _counted_total(totals_h)
+    return {
+        "totals": {k: {"base": totals_b[k], "head": totals_h[k],
+                       "delta": totals_h[k] - totals_b[k]} for k in STATUS.keys},
+        "total": {"base": tb, "head": th, "delta": th - tb},
+        "rows": rows,
+        "transitions": [{"from": f, "to": t, "count": n} for (f, t), n in
+                        sorted(moves.items(), key=lambda kv: (-kv[1], str(kv[0])))],
+        "unchanged": unchanged,
+    }

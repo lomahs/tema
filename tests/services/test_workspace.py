@@ -142,3 +142,68 @@ def test_source_workbooks_for_a_folder_is_re_globbed_not_remembered(tmp_path):
 
     assert ws.source_workbooks() == [
         str(tmp_path / "TC.xlsx"), str(tmp_path / "New.xlsx")]
+
+
+# --- snapshots ---------------------------------------------------------------
+
+@pytest.fixture
+def snap_ws(tmp_path):
+    from tcm.infrastructure.db.bootstrap import open_database
+    from tcm.infrastructure.db.snapshots import SqlSnapshotRepository
+
+    folder = str(tmp_path)
+    cases = [models.TestCase(file_name="A.xlsx", sheet="S", device="iPhone", row_num=1,
+                             scope="FPT", result="OK")]
+    files = [{"file": "A.xlsx", "path": folder + "/A.xlsx", "status": "ok"}]
+    loader = FakeLoader(by_folder={os.path.abspath(folder): (cases, files)})
+    repo = SqlSnapshotRepository(open_database(str(tmp_path / "db" / "tcm.db")))
+    return Workspace(loader, InMemoryCaseStore(), repo), folder, loader
+
+
+def test_saving_with_nothing_loaded_is_refused(snap_ws):
+    ws, _, _ = snap_ws
+    body, status = ws.save_snapshot("x")
+    assert status == 400 and "Nothing is loaded" in body["error"]
+
+
+def test_a_saved_snapshot_is_restored_by_a_fresh_workspace(snap_ws):
+    ws, folder, loader = snap_ws
+    ws.load_folder(folder)
+    meta, status = ws.save_snapshot("day 1")
+    assert status == 201 and meta["case_count"] == 1
+    fresh = Workspace(loader, InMemoryCaseStore(), ws._snapshots)
+    assert fresh.restore_latest() is True
+    assert len(fresh.cases) == 1
+    assert fresh.origin["id"] == meta["id"]
+    assert fresh.state()["origin"]["label"] == "day 1"
+
+
+def test_a_live_load_has_no_origin(snap_ws):
+    ws, folder, _ = snap_ws
+    ws.load_folder(folder)
+    assert ws.origin is None and ws.state()["loaded"] == 1
+
+
+def test_reload_after_opening_a_snapshot_goes_live(snap_ws):
+    ws, folder, loader = snap_ws
+    ws.load_folder(folder)
+    sid = ws.save_snapshot("")[0]["id"]
+    body, status = ws.open_snapshot(sid)
+    assert status == 200 and body["origin"]["id"] == sid
+    ws.reload()
+    assert ws.origin is None
+    assert loader.calls[-1] == ("folder", os.path.abspath(folder))
+
+
+def test_unknown_snapshots_are_404(snap_ws):
+    ws, _, _ = snap_ws
+    assert ws.open_snapshot(99)[1] == 404
+    assert ws.delete_snapshot(99)[1] == 404
+    assert ws.compare(1, 99)[1] == 404
+
+
+def test_without_a_snapshot_store_nothing_is_restored():
+    ws = Workspace(FakeLoader(), InMemoryCaseStore())
+    assert ws.restore_latest() is False
+    assert ws.snapshots() == []
+    assert ws.save_snapshot("")[1] == 400
