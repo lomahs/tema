@@ -1,6 +1,6 @@
 """The interfaces this application talks to the outside world through.
 
-Each has one implementation today. The rule is that a port exists where a test
+Each has one production implementation. The rule is that a port exists where a test
 already needs a stand-in, or where a swap is genuinely planned -- not wherever
 a boundary could be drawn. `ReportWorkbook` is the clearest case: the publisher
 has been driven through a hand-written fake since it was first tested, so the
@@ -22,11 +22,14 @@ class Snapshot:
             including the ones that failed -- a malformed TOOL_DATA row must
             not sink the batch.
         source: What was loaded, as `{"type": "folder"|"files", "value": ...}`.
+        origin: None for a live load; `{"id", "taken_at", "label"}` when the
+            cases came out of a stored snapshot.
     """
 
     cases: list[TestCase] = field(default_factory=list)
     file_results: list[dict] = field(default_factory=list)
     source: Optional[dict] = None
+    origin: Optional[dict] = None
 
 
 @runtime_checkable
@@ -142,14 +145,12 @@ class FilePicker(Protocol):
 
 @runtime_checkable
 class PlanRepository(Protocol):
-    """Where the test plan is kept. A JSON file today; the SQLite seam.
+    """Where the test plan is kept: the active phase's days and settings.
 
-    Three methods rather than a whole-document read and write, because those two
-    map cleanly onto a table as well as onto a file: a day is a row, and a
-    `SqlPlanRepository` fetching one is a `WHERE date = ?` rather than a full
-    load. That is the swap this port exists for — the plan is the one thing in
-    the app that is authored rather than read out of a workbook, so it is the
-    one thing a store has to keep.
+    Per-day methods rather than a whole-document read and write, because a day
+    is a row: `SqlPlanRepository` fetching one is a `WHERE date = ?` rather than
+    a full load. The plan is the one thing in the app that is authored rather
+    than read out of a workbook, so it is the one thing a store has to keep.
 
     `day` answers for a date nobody planned with an empty `DayPlan`, never None,
     so no caller has to ask whether the store had heard of the date.
@@ -157,6 +158,9 @@ class PlanRepository(Protocol):
     `settings` / `put_settings` hold the one record that is not per day -- the
     phase and the daily target -- and `settings` answers with the defaults when
     nothing was saved, for the same reason `day` never answers None.
+
+    `members` is the active phase's roster; an empty list means nobody has
+    made one.
     """
 
     def day(self, date: str):
@@ -172,4 +176,72 @@ class PlanRepository(Protocol):
         ...
 
     def put_settings(self, settings) -> None:
+        ...
+
+    def members(self) -> list:
+        ...
+
+
+@runtime_checkable
+class SnapshotRepository(Protocol):
+    """Saved loads. A snapshot is the cases and file results as they were read.
+
+    `save` answers the stored snapshot's metadata --
+    `{"id", "taken_at", "label", "source", "case_count", "file_count"}` -- which
+    is also what each item of `list` is, newest first. `load` answers None for an
+    id it does not know, and `delete` False.
+    """
+
+    def save(self, snapshot: Snapshot, label: str) -> dict:
+        ...
+
+    def list(self) -> list:
+        ...
+
+    def load(self, snapshot_id: int) -> Optional[Snapshot]:
+        ...
+
+    def delete(self, snapshot_id: int) -> bool:
+        ...
+
+    def latest_id(self) -> Optional[int]:
+        ...
+
+
+@runtime_checkable
+class PhaseRepository(Protocol):
+    """Phases, the member roster, and which phase is active.
+
+    An unknown id raises `tcm.domain.phase.NotFound`; a rule broken -- a
+    duplicate name, the last phase, a member still planned -- raises ValueError.
+    """
+
+    def phases(self) -> list:
+        ...
+
+    def phase(self, phase_id: int):
+        ...
+
+    def create(self, phase):
+        ...
+
+    def update(self, phase):
+        ...
+
+    def delete(self, phase_id: int) -> None:
+        ...
+
+    def active_id(self) -> int:
+        ...
+
+    def set_active(self, phase_id: int) -> None:
+        ...
+
+    def members(self) -> list:
+        ...
+
+    def add_member(self, name: str):
+        ...
+
+    def delete_member(self, member_id: int) -> None:
         ...

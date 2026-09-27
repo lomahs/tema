@@ -37,6 +37,11 @@ class FakePlanRepository:
     def put_settings(self, settings):
         self._settings = settings
 
+    _members = ()
+
+    def members(self):
+        return list(self._members)
+
 
 @pytest.fixture
 def client():

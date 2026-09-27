@@ -34,6 +34,11 @@ class FakePlanRepository:
     def put_settings(self, settings):
         self._settings = settings
 
+    _members = ()
+
+    def members(self):
+        return list(self._members)
+
 
 def service(days=None, today="2026-09-22"):
     return PlanningService(FakePlanRepository(days), today=lambda: today)

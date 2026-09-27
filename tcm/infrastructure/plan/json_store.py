@@ -85,6 +85,10 @@ class JsonPlanRepository:
         doc["settings"] = settings.to_dict()
         self._write(doc)
 
+    def members(self) -> list:
+        """A JSON plan has no roster."""
+        return []
+
     # --- the file ----------------------------------------------------------
 
     def _read(self) -> dict:
