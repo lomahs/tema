@@ -141,3 +141,20 @@ def fixed_scopes():
     yield SCOPES
     SCOPES.__dict__.clear()
     SCOPES.__dict__.update(saved)
+
+
+# --- the database ------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def isolated_database(tmp_path_factory, monkeypatch):
+    """Point the database at a fresh temp file for every test.
+
+    Autouse because `create_app()` with no arguments opens the database, and a
+    test that forgot this would write into the user's real ~/.test-management.
+    A directory of its own rather than `tmp_path`, so tests that list their
+    `tmp_path` never see a stray `tcm.db` beside their workbooks.
+    """
+    import tcm.settings as app_settings
+    path = tmp_path_factory.mktemp("db") / "tcm.db"
+    monkeypatch.setattr(app_settings, "DATABASE_FILE", str(path))
+    return path

@@ -15,7 +15,7 @@ PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "tcm"
 #: Nothing in the domain may reach a framework. The vocabularies still read
 #: their JSON at import, so this names frameworks rather than forbidding I/O;
 #: the ConfigRepository port is where that gets cut properly.
-FRAMEWORKS = {"flask", "pandas", "openpyxl", "requests", "msal"}
+FRAMEWORKS = {"flask", "pandas", "openpyxl", "requests", "msal", "sqlite3", "sqlalchemy"}
 
 #: Which `tcm.<layer>` each layer may import. `tcm.settings` sits outside the
 #: layers on purpose and is allowed everywhere.

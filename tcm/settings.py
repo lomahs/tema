@@ -56,6 +56,13 @@ PLAN_FILE = os.path.expanduser(
     os.environ.get("PLAN_FILE", "~/.test-management/plan.json")
 )
 
+# The database: load snapshots and the test plan. Not in config/ for the reason
+# the plan never was -- it is this machine's operational data, and the plan in
+# it is the only copy there is.
+DATABASE_FILE = os.path.expanduser(
+    os.environ.get("TCM_DATABASE", "~/.test-management/tcm.db")
+)
+
 # --- Microsoft Graph -------------------------------------------------------
 # Publishing the report needs an Azure app registration with "Allow public
 # client flows" enabled; see README.md. Without a client id the SharePoint
