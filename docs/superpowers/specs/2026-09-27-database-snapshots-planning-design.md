@@ -27,13 +27,13 @@ Taken with the user on 2026-09-27.
 | Snapshot history | List, open, delete, compare | User's call |
 | Phases | Named, many, exactly one active | User's call; replaces the single `PlanSettings` record |
 | Members | Global roster; each phase picks its members; unknown PICs in the data offered as suggestions | User's call |
-| Existing `plan.json` | Imported once into "Phase 1", file renamed, never deleted | The plan is the only copy there is |
+| Existing `plan.json` | Not imported. `JsonPlanRepository`, `settings.PLAN_FILE` and their tests are deleted; a leftover file is ignored | User's call — the existing plan data is not needed |
 
 ## Where the database is
 
 `~/.test-management/tcm.db`, overridable with `TCM_DATABASE` (`settings.DATABASE_FILE`).
-It sits beside `plan.json` and the Graph token cache for the reason `plan.json`
-does: it is this machine's operational data, not the project's shipped config.
+It sits beside the Graph token cache: it is this machine's operational data,
+not the project's shipped config, and a plan in it is the only copy there is.
 
 ## Schema
 
@@ -143,20 +143,14 @@ that already exists and has a lower version, it is copied** with SQLite's online
 backup API to `tcm.db.v<old>-<timestamp>.bak` beside it. A fresh file needs no
 backup.
 
-## First boot: importing `plan.json`
+## First boot
 
-When the database has no phase at all:
-
-- If `settings.PLAN_FILE` exists, it is read through the existing
-  `JsonPlanRepository`, and in one transaction: a phase **"Phase 1"** is created
-  from its settings; every PIC named in any entry or baseline becomes a member
-  and joins that phase; every day is inserted as it is. Then the file is renamed
-  to `plan.json.imported`. A `plan.json` that fails to parse aborts the import
-  and **startup continues with an empty "Phase 1"**, logging the error and
-  leaving the file untouched, so the next start tries again.
-- If it does not exist, an empty "Phase 1" is created.
-
-Either way there is always at least one phase and exactly one active phase.
+When the database has no phase at all, an empty **"Phase 1"** is created and
+made active. From then on there is always at least one phase and exactly one
+active phase. `plan.json` is not read: the JSON plan store is removed
+(`tcm/infrastructure/plan/`, `settings.PLAN_FILE`,
+`tests/infrastructure/test_plan_store.py`), and a file left in
+`~/.test-management` is simply ignored.
 
 ## Components
 
@@ -190,10 +184,8 @@ Either way there is always at least one phase and exactly one active phase.
   phase**, resolved at call time from `app_state`, so switching phase needs no
   rebuild of anything. `settings()` / `put_settings()` read and write the active
   phase's dates and target.
-- `bootstrap.py` — `open_database(path, plan_file)`: migrate, then the first-boot
-  import above. Called only from `create_app`.
-
-`tcm/infrastructure/plan/json_store.py` stays, used by the importer only.
+- `bootstrap.py` — `open_database(path)`: migrate, then create "Phase 1" if
+  there is no phase. Called only from `create_app`.
 
 ### Services (`tcm/services/`)
 
@@ -291,16 +283,16 @@ the workspace, `PlanningService(SqlPlanRepository)` and `PhaseService`, and call
 ## Testing
 
 - `tests/conftest.py` gains an autouse fixture pointing `settings.DATABASE_FILE`
-  and `settings.PLAN_FILE` into `tmp_path`, so no test can touch
+  into `tmp_path`, so no test can touch
   `~/.test-management`.
-- `tests/infrastructure/test_db_*.py`: migrations and backup, the importer
-  (incl. baseline, empty baseline, bad JSON), snapshot round trip (order,
+- `tests/infrastructure/test_db_*.py`: migrations, backup and first boot,
+  snapshot round trip (order,
   `None`s, file results), phases/members/plans incl. `RESTRICT` and
   auto-add-member.
 - `tests/services/`: workspace snapshot flow and origin, `compare_cases`
   (partition, added/removed, `in_plan`), phase service rules, board roster.
-- `tests/web/`: every new endpoint; the existing planning API tests run against
-  the SQL repository.
+- `tests/web/`: every new endpoint; the existing planning service and API tests
+  run against the SQL repository (they used `JsonPlanRepository` over a temp file).
 - `tests/domain/test_ports.py`: the SQL repositories answer their ports.
 - `tests/test_layering.py`: `sqlite3` and `sqlalchemy` join the frameworks the
   domain may not import.
