@@ -431,3 +431,21 @@ def test_the_burndown_reconciles_with_excluded_and_undated_cases():
     v = svc.phase_view(cs)
     assert v["kpis"]["at_start"] == 16
     assert v["burndown"]["actual"][-1] == v["kpis"]["remaining"] == 10
+
+
+# --- the board's members ---------------------------------------------------
+
+def test_the_board_offers_the_roster_when_there_is_one():
+    repo = FakePlanRepository({"2026-09-22": DayPlan.from_dict(
+        "2026-09-22", {"entries": [entry(pic="Cy")]})})
+    repo._members = ("An", "Bo")
+    svc = PlanningService(repo, today=lambda: "2026-09-22")
+    board = svc.board_view([case(pic="Zed", result="OK", test_date="2026-09-22")], "2026-09-22")
+    # The roster, plus whoever the day's plan names -- not every PIC in the data.
+    assert board["members"] == ["An", "Bo", "Cy"]
+
+
+def test_without_a_roster_the_board_offers_everyone_as_before():
+    svc = service()
+    board = svc.board_view([case(pic="Zed", result="OK", test_date="2026-09-22")], "2026-09-22")
+    assert board["members"] == ["Zed"]

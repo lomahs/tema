@@ -539,7 +539,14 @@ class PlanningService:
         load = defaultdict(int)
         for e in day.entries:
             load[e.pic] += e.planned
-        members = (facts.pics | {e.pic for _, e in facts.plans}) - {_NO_PIC}
+        # A phase with a roster offers the roster, plus anyone this day's plan
+        # already names; without one, everyone the data or the plan knows of,
+        # as before the roster existed.
+        roster = set(self._repo.members())
+        if roster:
+            members = (roster | {e.pic for e in day.entries}) - {_NO_PIC}
+        else:
+            members = (facts.pics | {e.pic for _, e in facts.plans}) - {_NO_PIC}
         every_slot = set(facts.rem) | {slot for (slot, _) in facts.by_slot_date}
         available = [{"file": s[0], "device": s[1],
                       "remaining_at_start": facts.remaining_at_start(s),
