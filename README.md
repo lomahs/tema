@@ -44,13 +44,19 @@ test-case-management/
 │   │   └── report/
 │   │       ├── layout.py        # ReportLayout: cột nào của file báo cáo giữ gì
 │   │       └── builder.py       # dòng tổng hợp -> lưới ô theo layout
-│   │   └── plan/
-│   │       └── json_store.py    # JsonPlanRepository: kế hoạch + cài đặt phase trong ~/.test-management/plan.json
+│   │   └── db/                  # SQLite (~/.test-management/tcm.db): snapshot, phase, thành viên, kế hoạch
+│   │       ├── database.py      # mở kết nối, migrate schema, backup trước khi migrate
+│   │       ├── schema.py        # danh sách migration (PRAGMA user_version)
+│   │       ├── bootstrap.py     # open_database: migrate + tạo "Phase 1" nếu chưa có phase nào
+│   │       ├── snapshots.py     # SqlSnapshotRepository: lưu / mở / xoá snapshot
+│   │       ├── phases.py        # SqlPhaseRepository: phase, danh sách thành viên, phase đang dùng
+│   │       └── plans.py         # SqlPlanRepository: kế hoạch theo ngày của phase đang dùng
 │   ├── services/              # nghiệp vụ điều phối domain + infrastructure
 │   │   ├── workspace.py        # nguồn đang load + các case của nó (CaseLoader + CaseStore)
 │   │   ├── identity.py         # ai đang đăng nhập Graph, tiến trình device login
 │   │   ├── aggregation.py      # tổng hợp summary / daily / productivity / issues / remaining
 │   │   ├── planning.py         # kế hoạch theo ngày, KPI/burndown/lưới của phase, bảng một ngày
+│   │   ├── phases.py           # phase và thành viên; gợi ý PIC có trong dữ liệu mà chưa có trong danh sách
 │   │   ├── publishing.py       # ghi 3 bảng vào workbook trên SharePoint
 │   │   ├── preparation.py      # chạy 2 thao tác trên nhiều file, lỗi tính theo file (thao tác trên file nguồn)
 │   │   └── settings_store.py   # đọc/ghi các file JSON cấu hình, validate rồi áp dụng
@@ -278,7 +284,38 @@ của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không s�
 | GET    | `/api/plan/phase` | Query `?window=3\|5\|10\|all` — KPI, burndown và lưới ngày của cả phase |
 | GET    | `/api/plan/board/<date>` | Một ngày: file × device đối với thành viên, kế hoạch và thực tế |
 | GET    | `/api/plan/settings` | Phase (`phase_start`, `phase_end`) và `daily_target`, có giá trị mặc định |
-| PUT    | `/api/plan/settings` | Body `{phase_start, phase_end, daily_target}` — lưu vào `plan.json` |
+| PUT    | `/api/plan/settings` | Body `{phase_start, phase_end, daily_target}` — lưu vào phase đang dùng |
+| GET    | `/api/workspace` | Dữ liệu đang nạp: `{loaded, file_count, file_results, source, origin}` (`origin` = snapshot, `null` = live) |
+| GET    | `/api/snapshots` | Danh sách snapshot (mới nhất trước) và snapshot đang hiển thị |
+| POST   | `/api/snapshots` | Body `{"label": "..."}` — lưu dữ liệu đang nạp thành snapshot |
+| POST   | `/api/snapshots/<id>/open` | Mở một snapshot (như một lần load) |
+| DELETE | `/api/snapshots/<id>` | Xoá snapshot |
+| GET    | `/api/snapshots/compare` | Query `?base=<id>&head=<id>` — so sánh hai snapshot |
+| GET    | `/api/phases` | `{phases, active_id, members, suggestions}` |
+| POST   | `/api/phases` | Body `{name, phase_start?, phase_end?, daily_target?, members?, activate?}` |
+| PUT    | `/api/phases/<id>` | Ghi đè tên, ngày, target và danh sách thành viên |
+| DELETE | `/api/phases/<id>` | Xoá phase và kế hoạch của nó (không xoá được phase cuối cùng) |
+| POST   | `/api/phases/<id>/activate` | Chọn phase đang dùng |
+| POST   | `/api/members` | Body `{name, phase_id?}` — thêm thành viên (và vào phase nếu có `phase_id`) |
+| DELETE | `/api/members/<id>` | Xoá thành viên (bị từ chối nếu còn kế hoạch ghi tên họ) |
+
+## Cơ sở dữ liệu: snapshot và kế hoạch
+
+Snapshot và kế hoạch được lưu trong SQLite tại `~/.test-management/tcm.db`. Đặt env
+`TCM_DATABASE=/đường/dẫn/khác.db` để dùng file khác. Schema tự migrate khi khởi động; trước khi
+migrate một database cũ, app sao lưu nó thành `tcm.db.v<N>-<thời gian>.bak` bên cạnh.
+
+- **Snapshot** (Tools → Snapshots): *Save snapshot* lưu toàn bộ dữ liệu đang nạp kèm thời điểm
+  và nhãn (tuỳ chọn). Khi khởi động, app tự mở snapshot mới nhất — thanh bên hiện
+  *Snapshot · thời gian · nhãn*; bấm *Reload* để đọc lại file nguồn và quay về *Live*. Có thể mở,
+  xoá, hoặc chọn hai snapshot rồi *Compare* để xem tổng theo status, số case chuyển trạng thái
+  (vd. NYS → OK) và thay đổi theo từng file/device. Snapshot lưu giá trị ô gốc, nên sửa taxonomy
+  vẫn áp dụng đúng cho snapshot cũ.
+- **Phase và thành viên** (Planning → Phases & members): có nhiều phase, mỗi phase có tên, ngày
+  bắt đầu/kết thúc, target và danh sách thành viên; một phase đang dùng (chọn ở thanh phase).
+  Mọi con số kế hoạch — Planning, dòng Plan của Daily, Attainment của Productivity — đều theo
+  phase đang dùng. Tên PIC có trong dữ liệu nhưng chưa có trong danh sách được gợi ý để thêm.
+- `plan.json` cũ không còn được dùng và không được chuyển sang database.
 
 ## Phân loại kết quả
 

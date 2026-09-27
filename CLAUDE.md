@@ -20,12 +20,15 @@ Use the project venv (Python 3.14) — it holds Flask/pandas/openpyxl:
 .venv/bin/python -m pytest tests/web/test_api.py::test_reload_reuses_the_remembered_source -q   # one test
 .venv/bin/python -m tools.generate_samples --out samples/generated --seed 1  # synthetic .xlsx
 RESULT_STATUS_CONFIG=/path/my_status.json .venv/bin/python app.py            # alternate taxonomy
+TCM_DATABASE=/tmp/scratch.db .venv/bin/python app.py                          # a throwaway database
 ```
 
 `PORT` and `DEBUG` are env vars (see [tcm/settings.py](tcm/settings.py)); `DEBUG` defaults to
 on. `RESULT_STATUS_CONFIG` and its siblings each default to a file that ships in
 [config/](config/) — set the env var to point at your own instead of editing the shipped one.
-There is no linter or formatter configured.
+`TCM_DATABASE` is the one that points at state rather than config: the SQLite file holding
+snapshots and the plan, `~/.test-management/tcm.db` by default. There is no linter or formatter
+configured.
 
 ## Architecture
 
@@ -34,6 +37,11 @@ Read flow: browser → `/api/load` in [tcm/web/blueprints/source.py](tcm/web/blu
 the `CaseStore` the workspace keeps the load in ([tcm/infrastructure/store/memory.py](tcm/infrastructure/store/memory.py)) →
 [tcm/services/aggregation.py](tcm/services/aggregation.py) → the GET endpoints → ES modules under
 [static/js/](static/js/).
+
+Snapshot flow: `/api/snapshots` → [Workspace](tcm/services/workspace.py) →
+[tcm/infrastructure/db/snapshots.py](tcm/infrastructure/db/snapshots.py) → SQLite. A restart
+restores the newest snapshot into the same in-memory `CaseStore` a load fills, so every read
+above runs unchanged; the database is never queried per request for cases.
 
 Write flow: `/api/report/publish` → [tcm/services/publishing.py](tcm/services/publishing.py) →
 [tcm/infrastructure/graph/workbook.py](tcm/infrastructure/graph/workbook.py) → Microsoft Graph. Reading stays local;
@@ -46,7 +54,7 @@ The package is layered, and the layering is enforced, not aspirational:
 | Layer | May import |
 |---|---|
 | `tcm/settings.py` | nothing from the package — it sits outside the layers deliberately |
-| `tcm/domain/` | `tcm.domain`, `tcm.settings` only — never flask, pandas, openpyxl, requests or msal |
+| `tcm/domain/` | `tcm.domain`, `tcm.settings` only — never flask, pandas, openpyxl, requests, msal, sqlite3 or sqlalchemy |
 | `tcm/infrastructure/` | `tcm.domain`, `tcm.infrastructure`, `tcm.settings` |
 | `tcm/services/` | `tcm.domain`, `tcm.infrastructure`, `tcm.services`, `tcm.settings` |
 | `tcm/web/` | anything — the only layer that imports flask |
@@ -57,7 +65,7 @@ module-level `_load_default()` that reads a JSON file out of `config/` the momen
 `tcm.domain.status` / `.scope` / `.device` / `.sheet_labels` is first imported — so import order
 and `CONFIG_DIR` are load-bearing, and a malformed shipped config fails as an `ImportError` at
 startup rather than as an error the request that hit it could report. `tests/test_layering.py`
-forbids five *framework names* (see its `FRAMEWORKS` comment), not I/O in general, which is what
+forbids seven *framework names* (see its `FRAMEWORKS` comment), not I/O in general, which is what
 lets this stand without the test contradicting it.
 
 `services → infrastructure` is deliberate, not a hole in the rule: a service that needs to
@@ -76,9 +84,9 @@ now lives in `tcm/infrastructure/report/` instead.
 
 ## Ports and the composition root
 
-There are seven ports, all of them in [tcm/domain/ports.py](tcm/domain/ports.py): `CaseLoader`,
-`CaseStore`, `ReportWorkbook`, `ConfigRepository`, `TokenProvider`, `FilePicker` and
-`PlanRepository`. Where one
+There are nine ports, all of them in [tcm/domain/ports.py](tcm/domain/ports.py): `CaseLoader`,
+`CaseStore`, `ReportWorkbook`, `ConfigRepository`, `TokenProvider`, `FilePicker`,
+`PlanRepository`, `SnapshotRepository` and `PhaseRepository`. Where one
 exists, the service that needs it takes it as a constructor argument — `Workspace(loader, store)`,
 `IdentityService(auth)` — instead of importing an implementation and being stuck with it.
 **What bounds the set is that a port exists where a test already needs a stand-in, or where a
@@ -90,14 +98,22 @@ clearest case: the publisher has been driven through a hand-written `FakeWorkboo
 first tested, so that interface already existed and had simply never been written down; naming
 it changed no behaviour and made the fake checkable against the real client. `CaseStore` is the
 other kind — the database seam, where a `SqlCaseStore` with the same two methods is what a
-multi-user version swaps in.
+multi-user version swaps in. The three database ports are that kind too, and the swap is real
+rather than hypothetical: the engine is stdlib `sqlite3` because the choice between it and
+SQLAlchemy was left open, and every line of SQL lives in `tcm/infrastructure/db/` so that
+choosing the other rewrites that folder and `create_app` and nothing else.
 
 **`create_app` in [tcm/web/app.py](tcm/web/app.py) is the only place implementations are
-chosen.** It builds the shipped `Workspace` over the Excel loader and the in-memory store, and
-the shipped `IdentityService` over Graph, puts both on `app.extensions`, and registers the
-blueprints; a blueprint reaches for them through the `workspace()` / `identity()` helpers in
-`tcm/web/blueprints/__init__.py` and never imports either. It takes `workspace` and `identity`
-arguments for the sake of tests: an app over fakes is built by passing them, not by patching a
+chosen.** It opens the database (`open_database` migrates it and makes sure a phase exists),
+builds the shipped `Workspace` over the Excel loader, the in-memory store and the SQL snapshot
+repository — and starts it on the newest snapshot — the `PlanningService` and `PhaseService`
+over the SQL repositories, and the `IdentityService` over Graph, puts them on
+`app.extensions`, and registers the blueprints; a blueprint reaches for them through the `workspace()` / `identity()` helpers in
+`tcm/web/blueprints/__init__.py` and never imports either. (The phase one is
+`phase_service()`, not `phases()`: importing the `phases` blueprint module binds that name on
+the package and would silently replace the helper.) It takes `workspace`, `identity`,
+`planning`, `phases` and `database` arguments for the sake of tests, and opens the database only
+when one of the first four needs it: an app over fakes is built by passing them, not by patching a
 module attribute and remembering to put it back. That is what removed the per-test reset the
 suite used to need — each test gets its own app, so there is no shared store to clear.
 
@@ -109,9 +125,14 @@ exception a missing or unreadable file raises — but "build an app" being a fil
 against the user's home directory is easy to miss in a factory, and worth knowing before it
 surprises someone in a sandboxed test run or a container with no `$HOME`.
 
+It also opens — and on first run creates and migrates — `settings.DATABASE_FILE`, which is a
+write, not a read. That is why `tests/conftest.py` has an **autouse** `isolated_database`
+fixture pointing it at a fresh temp file per test: a bare `create_app()` in a test that forgot
+would otherwise write into the user's real `~/.test-management`.
+
 **What the port checks prove is narrower than it looks.**
 [tests/domain/test_ports.py](tests/domain/test_ports.py) asserts `issubclass(impl, Port)` for
-each of the six, because a Protocol nothing is checked against is a comment. But `issubclass`
+each of them, because a Protocol nothing is checked against is a comment. But `issubclass`
 against a `runtime_checkable` Protocol is `hasattr`-based: it catches a method that was deleted
 or renamed, and it catches nothing else. Dropping `width` from `delete_rows`, reordering its
 parameters, or changing what it returns all still pass. **The ports pin each interface's shape,
@@ -120,7 +141,7 @@ and `FakeWorkbook` agreeing on signatures, which is exactly what they cannot do.
 those two together is `tests/services/test_publish_integration.py`, which runs the real client,
 links and workbook against a fake Graph service that parses the addresses it is sent.
 
-Three of the six are not actually wired the way the rule above describes, and each is worth
+Three of them are not actually wired the way the rule above describes, and each is worth
 knowing before it is read as a live seam.
 
 `FilePicker` is the one port with no production caller: `NativeDialog` in
@@ -517,11 +538,11 @@ real and worth stating:** every day already in the workbooks reads that way unti
 so Daily's Plan column starts out empty. That is the price of dropping the standing target, and
 it was chosen deliberately over a figure derived from an average.
 
-**The shell is a rail and eight views, one of which is not in the rail.** `shell.js` owns the dark sidebar — nav, the loaded-source
+**The shell is a rail and nine views, two of which are not in the rail.** `shell.js` owns the dark sidebar — nav, the loaded-source
 card, the two counts it carries, and the page heading — and nothing else; it does not know what a
 view contains, so `main.js` hands it an `onNavigate` callback and it reports clicks back through
 that. `main.js` owns `VIEWS`, which is the single list of what exists: Summary, Daily,
-Productivity, Planning, Detail, File, Tools and Config. Adding a view means adding an entry
+Productivity, Planning, Detail, File, Compare, Tools and Config. Adding a view means adding an entry
 there and a `<section class="view" id="<name>View">`, and nothing else.
 
 `templates/index.html` is the shell — the rail, the page heading and the two script tags —
@@ -533,7 +554,9 @@ indent to the partial's *first* line — which already carries its own, so the b
 opening each partial lands eight spaces too deep while every line under it stays put. The
 rendered-output diff that proves the split changed nothing is what surfaced it.
 
-**File is the one view with no nav item.** It is a drill-in: it reports on a workbook you
+**File and Compare are the views with no nav item.** Compare is the drill-in behind the
+Snapshots card's Compare button and returns to Tools; everything below about File's Back button
+and `main.js` owning the navigation holds for it too. File is a drill-in: it reports on a workbook you
 picked, so it is entered by clicking a file name and left through the Back button it draws
 itself, and nothing in the rail is lit while it shows. That is also why its `title` is a
 function rather than a string — the heading is the workbook — and why `main.js`, which owns
@@ -633,8 +656,16 @@ Behavior worth preserving when touching the UI:
   pulled over the app; making it a view removed the scrim, the focus trap, the escape key and the
   open/closed state that all the panels had to be kept in step with. It is also the empty state:
   the app opens on Tools, because with nothing loaded it is the only screen that can answer
-  anything. `sourcePanel.js`, `reportPanel.js` and `preparePanel.js` still know nothing about it,
-  or about each other.
+  anything — unless the server restored a snapshot, in which case `main.js` asks
+  `/api/workspace` at startup and opens on Summary instead. `sourcePanel.js`, `reportPanel.js`,
+  `preparePanel.js` and `snapshotPanel.js` still know nothing about it, or about each other.
+- **`snapshotPanel.js` is the fourth panel: it owns keeping a load.** Save, the history, Open,
+  Delete and the two Compare selects. Opening one is a load by another name, so it reports
+  through `onOpened` and `main.js` redraws exactly as after a load — and hands the same state to
+  `sourcePanel.showState`, which fills the file table's Status and Cases and turns Reload on.
+  Reload is the way from a snapshot back to live data, so a restored snapshot with Reload
+  disabled would be a dead end. The rail's source card carries a third line, *Live* or
+  *Snapshot · 27 Sept 2026 14:02 · label*, because the two look identical everywhere else.
 - **Config is a view, not a fifth Tools card**, because all four files are editable whether or
   not anything is loaded. `views/config.js` follows the panels' rule and knows nothing about the
   other views: saving the taxonomy changes what every figure on screen *means*, so `main.js` owns
@@ -780,6 +811,36 @@ Behavior worth preserving when touching the UI:
   from it would not reconcile with Summary's total. Its label names the day being compared
   *against*, not the latest one.
 
+## Snapshots and the database
+
+**A snapshot is a load, kept — cells, never statuses.** `SqlSnapshotRepository` stores each case
+as the raw cells it was read from (`test_case`), under the file it came from (`snapshot_file`,
+which also keeps that file's whole `file_results` entry as JSON). Classification stays per
+request, so an old snapshot re-reads correctly after a taxonomy edit and no taxonomy change ever
+needs a data migration. Cases name their file by basename only, so two subfolders' `TC.xlsx`
+share one parent row; they round-trip identically because a `TestCase` records nothing more.
+
+**Aggregation never queries the database.** Opening a snapshot — or the restart restoring the
+newest — puts it in the in-memory `CaseStore` exactly where a load puts it, with
+`Snapshot.origin` set to `{id, taken_at, label}`. A load or reload clears `origin`, which is what
+makes Reload the way back to live data; saving needs something loaded and is a 400 otherwise.
+About 70,000 sample cases save in a fraction of a second.
+
+**`compare_cases(base, head)` in `aggregation.py` is the one diff.** Both sides run through
+`in_plan` and today's taxonomy, so its totals are the ones Summary's Total would have shown for
+each. Cases match on (file, sheet, device, row): a key on one side only is added (`from: null`)
+or removed (`to: null`), and **transitions + unchanged equals every key either side holds** —
+`tests/services/test_compare.py` asserts it, the same partition property the status slices
+keep.
+
+**The schema is versioned and backed up.** `tcm/infrastructure/db/schema.py` is an append-only
+list of migrations; `PRAGMA user_version` is the version. `Database.migrate` copies an existing
+database to `tcm.db.v<N>-<timestamp>.bak` with SQLite's online backup before running anything,
+runs each migration in its own transaction with its version bump, and refuses a database newer
+than it understands. `PRAGMA foreign_keys = ON` is set per connection because every cascade and
+`RESTRICT` in the schema depends on it, and a connection is opened per unit of work because the
+dev server is threaded.
+
 ## Planning
 
 **The plan is the one thing in the app that is authored rather than read out of a workbook.**
@@ -826,19 +887,35 @@ plan (`unplanned`, in the warn tone) and the List layout adds it as a row drawn 
 use for "counted, but not part of this sum". A table of a day that listed only planned work would
 hide work that was done, which is the one thing a report of a day must not do.
 
-**Storage is a JSON file behind a port, and the port is the point.**
-`~/.test-management/plan.json` (`settings.PLAN_FILE`), written atomically through the same
-`ConfigRepository` the editable configs use, because a half-written plan is worse than a
-half-written config: a config can be restored from the shipped copy and a plan is the only copy
-there is. It is **not** in `config/` — those four files are vocabularies shipped with the app,
-and a plan is operational data. `tcm/domain/plan.py` therefore holds **no singleton and reads no
-file at import**: "nobody has planned tomorrow" must be an empty table, not the `ImportError` a
-malformed taxonomy rightly is. `PlanRepository` is five methods — `day`, `days`, `put_day`, and
-`settings` / `put_settings` for the one record that is not per day — chosen because they map
-onto a table as cleanly as onto a file, which is what makes a
-`SqlPlanRepository` a new class and one line in `create_app` rather than a rewrite. **When to
-actually make that swap:** a second person writing, or the file outgrowing a full load on every
-save. Neither is true of a few hundred rows a sprint.
+**Storage is the database, behind the port that was written for it.** The plan lives in
+`plan_day` / `plan_entry` rows in `~/.test-management/tcm.db` (`settings.DATABASE_FILE`), and it
+is **not** in `config/` — those four files are vocabularies shipped with the app, and a plan is
+operational data and the only copy there is. `tcm/domain/plan.py` therefore holds **no singleton
+and reads no file at import**: "nobody has planned tomorrow" must be an empty table, not the
+`ImportError` a malformed taxonomy rightly is. `PlanRepository` is six methods — `day`, `days`,
+`put_day`, `settings` / `put_settings` for the one record that is not per day, and `members` for
+the roster — and `SqlPlanRepository` answers every one of them **for the active phase**,
+resolved per call from `app_state`, so switching phase needs nothing rebuilt. The old
+`plan.json` store was removed rather than migrated (the user's call); a leftover file is ignored.
+
+**A plan belongs to a phase, and exactly one phase is active.** `tcm/domain/phase.py` holds
+`Phase` (name, dates, target, members) and `Member`; the tables are `phase`, `member` and
+`phase_member`. `open_database` creates "Phase 1" when there is none, the last phase cannot be
+deleted, and deleting the active one moves active to the newest remaining — so the planner always
+has somewhere to read and write. Every plan figure in the app — Planning, Daily's plan line,
+Productivity's attainment — reads the active phase, because they all go through the one
+repository. `/api/phases` and `/api/members` are the CRUD; every write answers with the whole
+overview so the Phases & members card redraws from one response.
+
+**A member is a name, and the name is the join.** `test_case.pic` is text read verbatim out of a
+workbook; `plan_entry.member_id` is a foreign key. They meet by name, which is how a plan was
+always joined to its actuals, and it is why a member cannot be renamed: the rename would reach
+the roster and not the spreadsheets. Saving a day that names someone not on the roster adds them
+(to the roster and to the phase) in the same transaction, so a plan never refers to nobody; a
+member still named by a plan row cannot be deleted (`RESTRICT`, and a message saying how many
+days). The board's member columns are the phase roster plus whoever that day's plan names, and
+fall back to "everyone in the data" only while the roster is empty. PICs in the data that are not
+on the roster come back as `suggestions`.
 
 **A day is written whole.** `PUT /api/plan/<date>` replaces its rows, the way
 `PUT /api/config/<name>` replaces a config, and for the same reason — a plan is rearranged as a
@@ -847,9 +924,10 @@ block, and a refused edit must leave the stored plan exactly as it was. Validati
 **(pic, file, device) is unique within a day**, because two such rows are one row with the counts
 added, and left as two the actual for that work joins onto both and is counted twice.
 
-**Plan settings live in `plan.json` beside the days.** `PlanSettings` in `tcm/domain/plan.py` is
-the phase (`phase_start`, `phase_end`) and `daily_target`, cases per person per day. Nothing is
-stored until somebody edits the phase bar: `get_settings` fills a default — the phase starts on
+**Plan settings are the active phase's columns.** `PlanSettings` in `tcm/domain/plan.py` is
+the phase's `phase_start`, `phase_end` and `daily_target`, cases per person per day, and
+`Phase.settings` is how a phase hands them to the planner. Dates stay NULL until somebody sets
+them: `get_settings` fills a default — the phase starts on
 the first test date loaded and ends five working days out — so opening the screen writes
 nothing. **The target came back only as the member day-load yardstick.** A member whose planned
 day exceeds it is drawn in the warn tone; it does not return to Daily or Productivity, which
@@ -872,8 +950,11 @@ Two rules are worth knowing:
   slot capped at what that slot has left, so planning a finished slot twice covers nothing.
 
 `views/planning/` is layered like `views/detail/`: `state.js` → `cells.js` (derivation, no DOM)
-→ `render.js` (every DOM write but the editor's) and `editor.js` → `index.js`, the only module
-`main.js` imports. **The slot editor is a native `<dialog>` — the one floating surface in the
+→ `render.js` (every DOM write but the editor's and the Phases card's), `editor.js` and
+`phases.js` → `index.js`, the only module `main.js` imports. `phases.js` reaches the phase bar
+and the reload cycle only through the two hooks `index.js` installs (`onChanged` reloads every
+plan figure, `onListed` redraws just the bar's phase select), the same shape as the editor's
+`setOnSave`. **The slot editor is a native `<dialog>` — the one floating surface in the
 app**, because rearranging a slot is a focused edit over the matrix it came from. It edits a
 working copy and writes the whole day on Save through `PUT /api/plan/<date>`; there is no
 per-slot endpoint. Saving announces itself through `plan.js`, which is how Daily and
