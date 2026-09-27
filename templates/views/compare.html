@@ -1,0 +1,29 @@
+        <!-- ==================== Compare ====================
+             Two snapshots side by side: the drill-in behind Tools' Compare
+             button. Like File it has no nav item and draws its own Back. Both
+             sides are classified with the taxonomy as it is now, over the scope
+             groups in the plan. Filled by views/compare.js. -->
+        <section class="view" id="compareView" hidden>
+            <div class="file-bar">
+                <button class="btn btn-quiet" id="btnCompareBack">&lsaquo; Back</button>
+                <span class="compare-sides" id="compareSides"></span>
+            </div>
+
+            <section class="card card--table">
+                <div class="card-head card-head--row"><h2>Totals</h2></div>
+                <div class="scroll-x"><table class="ledger" id="compareTotals"></table></div>
+            </section>
+
+            <section class="card card--table">
+                <div class="card-head card-head--row">
+                    <h2>What moved</h2>
+                    <span class="card-note" id="compareUnchanged"></span>
+                </div>
+                <div class="scroll-x scroll-x--rows"><table class="ledger" id="compareMoves"></table></div>
+            </section>
+
+            <section class="card card--table">
+                <div class="card-head card-head--row"><h2>By file and device</h2></div>
+                <div class="scroll-x scroll-x--rows"><table class="ledger" id="compareRows"></table></div>
+            </section>
+        </section>

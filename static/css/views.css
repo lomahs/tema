@@ -889,3 +889,6 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 /* Full width, like the source card: half a grid cell cannot hold the history
    table and its actions without scrolling sideways. */
 #snapshotSection { grid-column: 1 / -1; }
+/* The Compare view's "base → head" line beside its Back button. */
+.compare-sides { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--ink-soft); margin-left: var(--sp-3); }
+#compareView > .card { margin-bottom: var(--sp-4); }

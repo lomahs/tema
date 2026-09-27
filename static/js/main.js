@@ -5,7 +5,10 @@
  * parsed and the Chart.js global is available before anything here executes.
  */
 import { $ } from "./dom.js";
-import { fetchAll, getFile, getPlanCalendar, getWorkspace, postReload } from "./api.js";
+import {
+    fetchAll, getFile, getPlanCalendar, getSnapshotCompare, getStatuses as fetchStatuses,
+    getWorkspace, postReload,
+} from "./api.js";
 import { refreshChartTheme, resizeCharts } from "./charts.js";
 import { initTheme, onThemeChange } from "./theme.js";
 import {
@@ -18,11 +21,12 @@ import { initSnapshotPanel, refreshSnapshots, setSnapshotSaveEnabled } from "./s
 import { initPreparePanel, refreshPrepare, runFileAction } from "./preparePanel.js";
 import { initFilesTable } from "./filesTable.js";
 import { initConfigView } from "./views/config.js";
-import { executedIn, setTaxonomy } from "./taxonomy.js";
+import { executedIn, getStatuses, setTaxonomy } from "./taxonomy.js";
 import { alignSummaryColumns, initSummaryView, renderSummary } from "./views/summary/index.js";
 import {
     currentFile, initFileView, renderFileHeads, showFile,
 } from "./views/file.js";
+import { initCompareView, showCompare } from "./views/compare.js";
 import { setJumpHandler } from "./views/summaryOverview.js";
 import { initDaily, initDailyView, renderDailyHead } from "./views/daily.js";
 import {
@@ -74,6 +78,12 @@ const VIEWS = {
         title: () => openFileName || "File",
         sub: () => "Every case in this workbook, sheet by sheet. Includes scope groups "
                  + "outside the plan, so its figures can exceed Review's.",
+    },
+    compare: {
+        // A drill-in like File, reached from Tools' Snapshots card.
+        title: "Compare",
+        sub: () => "What changed between two snapshots. Both are classified with the "
+                 + "taxonomy as it is now, over the scope groups in the plan.",
     },
     tools: {
         title: "Tools",
@@ -162,6 +172,23 @@ async function openFile(name, origin) {
     fileOrigin = origin;
     showFile(json, { backTo: titleOf(origin) });
     showView("file");
+}
+
+/**
+ * Open the Compare view on two snapshots.
+ *
+ * The taxonomy is only set by a load, and comparing needs none — so it is
+ * fetched here when nothing has set it yet, or the view would have no columns.
+ *
+ * @param {number} base
+ * @param {number} head
+ */
+async function openCompare(base, head) {
+    const { ok, json } = await getSnapshotCompare(base, head);
+    if (!ok) return;
+    if (!getStatuses().length) setTaxonomy(await fetchStatuses());
+    showCompare(json, { backTo: titleOf("tools") });
+    showView("compare");
 }
 
 /**
@@ -322,6 +349,7 @@ function openStatusCases(ctx) {
 // Clicking a file name is navigation, so it comes back through here rather than
 // either module importing the file view: `views/summary/**` and `filesTable.js`
 // report the name, this decides what to do with it and what Back should say.
+initCompareView({ onBack: () => showView("tools") });
 initFileView({ onBack: () => showView(fileOrigin), onDrillIn: openStatusCases });
 initSourcePanel({ onLoaded: refreshViews });
 initReportPanel();
@@ -331,7 +359,7 @@ initPreparePanel({ onApplied: reloadAfterPrepare });
 // back here the way a file name does.
 initSnapshotPanel({
     onOpened: (state) => { showState(state); return refreshViews(state, { show: false }); },
-    onCompare: () => {},
+    onCompare: openCompare,
 });
 // The two Tools panels share one table of workbooks; it reports a pressed row
 // button to whichever of them owns that action.
