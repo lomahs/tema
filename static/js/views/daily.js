@@ -345,8 +345,8 @@ function renderChart(byDate) {
         const n = byDate.get(d) || 0;
         const plan = plannedFor(d);
         const attain = plan ? (n / plan) * 100 : null;
-        // A day with no plan has nothing to be on or behind, so its bar is plain
-        // ink rather than a tone: grey would read as disabled, green as met.
+        // A day with no plan has nothing to be on or behind, so its bar keeps
+        // the Executed colour the legend names; a planned day shows how it went.
         const tone = attain === null ? ""
             : attain >= 100 ? "success" : attain >= 80 ? "warn" : "danger";
         const toneAttr = tone ? ` data-tone="${tone}"` : "";

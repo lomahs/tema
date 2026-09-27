@@ -249,7 +249,7 @@ function renderHeatmap() {
 
     let max = 1;
     cells.forEach((byDate) => byDate.forEach((n) => { max = Math.max(max, n); }));
-    $("#heatmapNote").textContent = `Executed cases per member per day · darkest is ${max.toLocaleString()}`;
+    $("#heatmapNote").textContent = `Executed cases per member per day · strongest is ${max.toLocaleString()}`;
 
     $("#heatmap").innerHTML = `<table class="ledger heatmap">
         <thead><tr><th class="heat-pic">PIC</th>${days.map((d) =>

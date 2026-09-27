@@ -467,18 +467,6 @@ throughout to mark what is a figure, and at these row densities the distinction 
 telling you which columns you can compare down the page and which you can only read. `--font-mono`
 also still carries what is genuinely code: case numbers, paths, Excel column letters.
 
-**The interface has no accent colour.** Colour on screen always means *status*. Nav selection,
-primary buttons, selection and focus are rendered as inverted ink blocks (inside the rail, as
-`--rail-hover` blocks — the ground there is already ink), and the device/PIC charts use a
-monochrome ink ramp, so a device breakdown can never be misread as a pass/fail one. Do not
-introduce a brand or accent hue; it will collide with the five status tones. **The design canvas
-this palette came from has one** — a green primary, `#1F6F5C`, a few degrees from OK's own
-`#2E7D5B` — and it was deliberately not adopted. That is the collision this rule exists to
-prevent, and it is the one place the implementation departs from the canvas on purpose.
-
-The one exception is `.btn-danger` on the prepare panel's Apply: the only control in the app that
-destroys something a file cannot give back, and the only one allowed to carry a status colour.
-
 **Frontend state ownership.** No framework, no bundler; `templates/index.html` loads
 [static/js/main.js](static/js/main.js) as `<script type="module">`. An imported ES binding can't be
 reassigned by the importer, so each piece of mutable state lives in exactly one module and is
@@ -608,7 +596,8 @@ Behavior worth preserving when touching the UI:
   is how a plan of 15 once read as 33,940% attained. The **member × day heatmap** under the
   table is summed from the `/api/daily` rows `main.js` already holds (via `executedIn` in
   `taxonomy.js`, the one definition of "executed in a row"), so a member's heatmap row adds
-  up to their Executed figure; it is an ink ramp, never a hue. The NG-rate column counts
+  up to their Executed figure; it is a `--tone-success` ramp, the colour Daily's
+  Executed bars take. The NG-rate column counts
   `getFailedStatuses()` — statuses both `executed` and `issue` — and is omitted when the
   taxonomy has none.
 - **`.scroll-x--rows` caps a pane at about ten rows** (`--rows`, plus two steps of slack for the

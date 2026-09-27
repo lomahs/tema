@@ -48,8 +48,9 @@
     position: absolute;
     left: 0; right: 0; bottom: 0;
     border-radius: var(--r-sm) var(--r-sm) 0 0;
-    /* Softened ink: at full strength a few wide bars read as solid slabs. */
-    background: var(--ink-soft);
+    /* Executed work, in the success tone; a planned day overrides it below
+       with how the day went against its plan. */
+    background: var(--tone-success);
 }
 .bar-fill[data-tone="success"] { background: var(--tone-success); }
 .bar-fill[data-tone="danger"]  { background: var(--tone-danger); }
@@ -69,13 +70,13 @@
 .chart-legend { display: flex; gap: var(--sp-4); font-size: var(--fs-sm); color: var(--ink-soft); }
 .chart-note { margin: var(--sp-3) 0 0; color: var(--ink-soft); font-size: var(--fs-sm); }
 
-.swatch--bar { background: var(--ink-soft); border-radius: 2px; }
+.swatch--bar { background: var(--tone-success); border-radius: 2px; }
 .swatch--plan { width: 14px; height: 2px; border-radius: 0; background: var(--tone-danger); }
 
 /* --- the member × day heatmap ---------------------------------------------
- * An ink ramp, mixed into the paper by `--heat`: a busy day is not a good or a
- * bad outcome, so it must not borrow a status hue. `--ink` inverts in dark
- * mode, so the ramp inverts with it and needs no second definition.
+ * A success-tone ramp, mixed into the paper by `--heat`: every cell counts
+ * executed work, so it takes the same tone as Daily's bars. The tone has its
+ * own dark-mode value, so the ramp needs no second definition.
  */
 .heatmap { width: auto; }
 .heatmap th, .heatmap td { border-bottom: 0; height: auto; }
@@ -93,7 +94,7 @@
     width: 38px;
     height: 26px;
     border-radius: var(--r-xs);
-    background: color-mix(in srgb, var(--ink) var(--heat, 0%), var(--paper-sunk));
+    background: color-mix(in srgb, var(--tone-success) var(--heat, 0%), var(--paper-sunk));
     color: var(--ink);
     font-size: 10.5px;
 }
@@ -130,6 +131,11 @@
     text-overflow: ellipsis;
     text-align: left;
 }
+/* The rule above is for file names. A figure in the status band is a link too,
+   and a block-level button shrinks to its text rather than filling the cell, so
+   it sits at the left edge whatever the cell's alignment. Stretched across the
+   cell, it can take the band's right alignment. */
+#summaryTables .band .cell-link { width: 100%; text-align: inherit; }
 
 /* --- the folded filter panel --------------------------------------------- */
 

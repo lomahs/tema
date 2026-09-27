@@ -156,7 +156,9 @@
        of comparable figures rather than columns sized by how long their label
        happens to be — "Pending（保留）" is three times the width of "OK". */
     width: var(--band-w);
-    text-align: center;
+    /* Right-aligned like every other column of figures, so units stack under
+       units and a six-figure count reads against a two-figure one. */
+    text-align: right;
 }
 .ledger tbody tr:hover .band { background: var(--paper-hover); }
 .ledger .band--first { border-left: 1px solid var(--rule-strong); }
@@ -251,7 +253,9 @@
 }
 
 .ledger th.num.sortable > button { justify-content: flex-end; }
-.ledger th.band.sortable > button { justify-content: center; padding: 0 12px; }
+/* A band head ends where the figures beneath it end, so its sort glyph moves
+   to the left strip: on the right it would push the label 6px in from them. */
+.ledger th.band.sortable > button { justify-content: flex-end; padding: 0 var(--sp-3) 0 18px; }
 .ledger th.sortable > button:hover { color: var(--ink); }
 
 /* A persistent, low-contrast affordance — not a hover-only underline.
@@ -266,6 +270,7 @@
     color: var(--ink-faint);
     font-size: 9px;
 }
+.ledger th.band.sortable > button::after { right: auto; left: 3px; }
 .ledger th[aria-sort="ascending"] > button::after  { content: "\25B2"; color: var(--ink); }
 .ledger th[aria-sort="descending"] > button::after { content: "\25BC"; color: var(--ink); }
 
