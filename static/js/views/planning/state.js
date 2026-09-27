@@ -31,8 +31,9 @@ export const listSort = { col: "pic", asc: true };
 /** The List layout's filters; "" is "all". `file` is an index into the day's files. */
 export const listFilter = { pic: "", file: "", status: "" };
 
-/** The last responses: `phase` from /api/plan/phase, `board` from /api/plan/board/<date>. */
-export const data = { phase: null, board: null };
+/** The last responses: `phase` from /api/plan/phase, `board` from /api/plan/board/<date>,
+ *  `phases` from /api/phases (every phase, the active one, the roster). */
+export const data = { phase: null, board: null, phases: null };
 
 export const getDay = () => day;
 export const setDay = (v) => { day = v; };

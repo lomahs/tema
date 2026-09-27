@@ -881,6 +881,21 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 .plan-burn-mark--end span { left: auto; right: 4px; }
 .plan-grid-controls { margin-left: auto; }
 
+/* The Phases & members card. Inputs sit in the ledger's cells, so they shrink
+   to the column rather than setting its width; the active row is marked with
+   the sunk paper and an "Active" chip, never a hue. */
+#planPhaseTable .input { width: 100%; min-width: 0; }
+#planPhaseTable td:first-child .input { min-width: 12rem; }
+#planPhaseTable .input[type="date"] { width: 10.5rem; }
+#planPhaseTable .input[type="number"] { width: 9ch; }
+.plan-phase-new, .plan-member-new { margin-top: var(--sp-3); }
+.plan-phase-new .input, .plan-member-new .input { max-width: 20rem; }
+.plan-members-head { margin: var(--sp-5) 0 var(--sp-2); font-size: var(--fs-md); font-weight: 600; }
+.plan-member { padding-right: var(--sp-2); }
+.plan-suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+                    margin-top: var(--sp-3); }
+.plan-suggestions:empty { display: none; }
+
 /* --- snapshots ------------------------------------------------------------
    The Tools card's history. The row on screen is marked with the sunk paper and
    its chip, never a hue: colour means status. */

@@ -39,8 +39,17 @@ export function renderPhase() {
     const p = data.phase;
     if (!p) return;
     const s = p.settings;
-    $("#planPhase").innerHTML = `
+    // The phase select comes from /api/phases, which may land after the phase
+    // figures do; the bar is drawn again when it does.
+    const o = data.phases;
+    const select = o ? `
         <label class="inline-field">Phase
+            <select class="select" data-act="phase-select" aria-label="Active phase">
+                ${o.phases.map((ph) => `<option value="${ph.id}"${ph.id === o.active_id ? " selected" : ""}>${esc(ph.name)}</option>`).join("")}
+            </select>
+        </label>` : "";
+    $("#planPhase").innerHTML = `${select}
+        <label class="inline-field">From
             <input type="date" class="input input-mono" data-setting="phase_start" value="${esc(s.phase_start)}">
         </label>
         <span class="plan-phase-arrow" aria-hidden="true">→</span>

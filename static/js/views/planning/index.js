@@ -9,11 +9,13 @@
  */
 import { $ } from "../../dom.js";
 import {
-    getPlanBoard, getPlanCalendar, getPlanPhase, putPlanDay, putPlanSettings,
+    getPhases, getPlanBoard, getPlanCalendar, getPlanPhase, postActivatePhase, putPlanDay,
+    putPlanSettings,
 } from "../../api.js";
 import { setPlanCalendar } from "../../plan.js";
 import { shiftWorkday } from "./cells.js";
 import { closeEditor, initEditor, openEditor, setOnSave } from "./editor.js";
+import { bindPhases, renderPhases } from "./phases.js";
 import {
     GRID_STEP, drawn, gridBounds, hideTip, renderBurndown, renderDay, renderGrid,
     renderKpis, renderPhase, showError, showTip,
@@ -54,9 +56,29 @@ async function loadBoard() {
     renderGrid();            // the grid marks the day the Day plan is on
 }
 
+async function loadPhases() {
+    const res = await getPhases();
+    if (!res.ok) return;
+    data.phases = res.json;
+    renderPhases();
+    renderPhase();
+}
+
 async function reloadAll() {
+    await loadPhases();
     await loadPhase();
     await loadBoard();
+}
+
+/**
+ * Everything that reads the plan, redrawn: the planner and its Phases card,
+ * and — through `plan.js` — Daily's plan line and Productivity's attainment.
+ * Switching phase changes all of them at once.
+ */
+async function afterPlanChange() {
+    await reloadAll();
+    const cal = await getPlanCalendar();
+    if (cal.ok) setPlanCalendar(cal.json);
 }
 
 /**
@@ -66,9 +88,8 @@ async function reloadAll() {
 async function saveDay(entries) {
     const res = await putPlanDay(getDay(), entries);
     if (!res.ok) return res.json.error || "The plan could not be saved.";
-    await reloadAll();
-    const cal = await getPlanCalendar();
-    if (cal.ok) setPlanCalendar(cal.json);
+    // A save can put a new name on the roster, so the Phases card redraws too.
+    await afterPlanChange();
     return null;
 }
 
@@ -90,6 +111,12 @@ async function goToDay(date, focus = null) {
 
 function bindPhase() {
     $("#planPhase").addEventListener("change", async (ev) => {
+        if (ev.target.matches('[data-act="phase-select"]')) {
+            const res = await postActivatePhase(Number(ev.target.value));
+            if (!res.ok) { showError("#planPhaseError", res.json.error); renderPhase(); return; }
+            await afterPlanChange();
+            return;
+        }
         const el = ev.target.closest("[data-setting]");
         if (!el) return;
         const s = { ...data.phase.settings };
@@ -101,7 +128,8 @@ function bindPhase() {
             renderPhase();           // put the inputs back to what is stored
             return;
         }
-        await reloadAll();
+        // The Phases card shows the same dates, and Daily reads the phase too.
+        await afterPlanChange();
     });
 }
 
@@ -244,6 +272,7 @@ export function initPlanningView() {
     bindGrid();
     initEditor();
     setOnSave(saveDay);
+    bindPhases({ onChanged: afterPlanChange, onListed: renderPhase });
 }
 
 /** (Re)load the phase and the open day. Called after every load of the workbooks. */

@@ -27,6 +27,27 @@
                 <div class="scroll-x" id="planGridTable"></div>
             </section>
 
+            <!-- Phases and who is in them. The active phase is the one every
+                 plan figure in the app reads. Filled by views/planning/phases.js. -->
+            <section class="card" id="planPhases">
+                <div class="card-head card-head--row"><h2>Phases &amp; members</h2></div>
+                <p class="empty-note is-error" id="planPhasesError" hidden></p>
+                <div class="scroll-x"><table class="ledger" id="planPhaseTable"></table></div>
+                <div class="row plan-phase-new">
+                    <input type="text" class="input" id="planNewPhaseName" placeholder="New phase name"
+                           aria-label="New phase name">
+                    <button type="button" class="btn" data-act="create-phase">Add phase</button>
+                </div>
+                <h3 class="plan-members-head" id="planMembersHead">Members</h3>
+                <div class="checks" id="planMembers"></div>
+                <div class="row plan-member-new">
+                    <input type="text" class="input" id="planNewMember" placeholder="Add a member by name"
+                           aria-label="New member name">
+                    <button type="button" class="btn" data-act="add-member">Add</button>
+                </div>
+                <div class="plan-suggestions" id="planSuggestions"></div>
+            </section>
+
             <div class="plan-tip" id="planTip" role="tooltip" hidden></div>
 
             <dialog class="plan-editor" id="planEditor" aria-labelledby="planEditorTitle"></dialog>
