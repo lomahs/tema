@@ -66,21 +66,44 @@ export const STATE_LABEL = {
 };
 
 /**
- * How far behind a planned figure is.
+ * How a planned figure stands against what was run.
  *
  * `onPlan` counts only work that was planned — a member who ran ten unplanned
  * cases and none of their own is behind. Past days are "missed", today and
  * later "to go".
  *
- * @returns {{text: string, kind: ""|"ok"|"togo"|"missed"}}
+ * A total can beat its plan while a cell under it falls short: one member ran
+ * twenty over on one file and left three undone on another. That is not "on
+ * plan" and it is not simply "missed 3" beside a figure reading 120 / 100, so
+ * it is its own kind, `offset`: the surplus as the headline and the shortfall
+ * as a `note` beneath it, naming how many cells (`short`, of `unit`) owe it.
+ *
+ * @returns {{text: string, kind: ""|"ok"|"exceeded"|"offset"|"togo"|"missed",
+ *            gap: number, note?: {text: string, kind: "togo"|"missed"}}}
  */
-export function behind(planned, onPlan, date, today) {
-    if (date > today || !planned) return { text: "", kind: "" };
+export function behind(planned, worked, onPlan, date, today, short = 0, unit = "cell") {
+    if (date > today || !planned) return { text: "", kind: "", gap: 0 };
     const gap = Math.max(0, planned - onPlan);
-    if (!gap) return { text: "✓ on plan", kind: "ok" };
-    return date < today ? { text: `missed ${gap}`, kind: "missed" }
-                        : { text: `${gap} to go`, kind: "togo" };
+    const extra = worked - planned;
+    if (!gap) {
+        return extra > 0 ? { text: `exceeded +${num(extra)}`, kind: "exceeded", gap }
+                         : { text: "✓ on plan", kind: "ok", gap };
+    }
+    const late = date < today ? { text: `missed ${num(gap)}`, kind: "missed" }
+                              : { text: `${num(gap)} to go`, kind: "togo" };
+    if (extra < 0) return { ...late, gap };
+    const where = short ? ` · ${short} ${unit}${short === 1 ? "" : "s"}` : "";
+    return {
+        text: extra > 0 ? `exceeded +${num(extra)}` : "total met",
+        kind: "offset", gap,
+        note: { text: `${late.text}${where}`, kind: late.kind },
+    };
 }
+
+const num = (n) => Number(n || 0).toLocaleString();
+
+/** How many of `cells` ran less than they planned. */
+const shortOf = (cells) => cells.filter((c) => c.planned && c.worked < c.planned).length;
 
 /**
  * The day, arranged for drawing.
@@ -118,15 +141,16 @@ export function arrangeDay(board) {
         return {
             ...s, index: r, cells, planned, worked, onPlan,
             firstOfFile: !prev || prev.file !== s.file,
-            behind: behind(planned, onPlan, date, today),
+            behind: behind(planned, worked, onPlan, date, today, shortOf(cells), "member"),
         };
     });
 
     const totals = members.map((pic, m) => {
-        const planned = slots.reduce((a, s) => a + s.cells[m].planned, 0);
-        const worked = slots.reduce((a, s) => a + s.cells[m].worked, 0);
-        const onPlan = slots.reduce((a, s) => a + Math.min(s.cells[m].planned, s.cells[m].worked), 0);
-        const b = behind(planned, onPlan, date, today);
+        const mine = slots.map((s) => s.cells[m]);
+        const planned = mine.reduce((a, c) => a + c.planned, 0);
+        const worked = mine.reduce((a, c) => a + c.worked, 0);
+        const onPlan = mine.reduce((a, c) => a + Math.min(c.planned, c.worked), 0);
+        const b = behind(planned, worked, onPlan, date, today, shortOf(mine), "file");
         return { pic, planned, worked, onPlan, behind: b,
                  overTarget: (board.load[pic] || 0) > board.daily_target };
     });
@@ -135,17 +159,19 @@ export function arrangeDay(board) {
     const worked = slots.reduce((a, s) => a + s.worked, 0);
     const onPlan = slots.reduce((a, s) => a + s.onPlan, 0);
     const unplanned = board.cells.filter((c) => !c.planned && c.worked && c.pic !== NO_PIC);
-    const behindMembers = totals.filter((t) => t.behind.kind === "missed" || t.behind.kind === "togo").length;
-    const behindSlots = slots.filter((s) => s.behind.kind === "missed" || s.behind.kind === "togo").length;
+    const behindMembers = totals.filter((t) => t.behind.gap > 0).length;
+    const behindSlots = slots.filter((s) => s.behind.gap > 0).length;
 
     return {
         date, today, showDone, members, slots, totals,
-        planned, worked, onPlan, behind: behind(planned, onPlan, date, today),
+        planned, worked, onPlan,
+        behind: behind(planned, worked, onPlan, date, today, behindSlots, "file/device"),
         unplanned: { rows: unplanned.length, cases: unplanned.reduce((a, c) => a + c.worked, 0) },
         activeMembers: active.length,
         files: [...new Set(board.slots.map((s) => s.file))],
         summary: !showDone || !planned ? null
-            : !behindMembers ? { text: "All members on plan", kind: "ok" }
+            : !behindMembers ? { text: worked > planned ? `All members on plan · exceeded +${num(worked - planned)}`
+                                                        : "All members on plan", kind: "ok" }
             : { text: `${behindMembers} member${behindMembers > 1 ? "s" : ""} · ${behindSlots} file/device `
                     + (date < today ? "missed plan" : "not done yet"),
                 kind: date < today ? "missed" : "togo" },
