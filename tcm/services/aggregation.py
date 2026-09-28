@@ -262,12 +262,14 @@ def daily_rows(cases):
     cases = in_plan(cases)
     return [
         {"file": file_name, "device": device, "pic": pic, "date": date,
-         "total": _counted_total(counts), **counts}
+         "total": _counted_total(counts), **counts,
+         "executed": sum(counts.get(k, 0) for k in STATUS.executed),
+         "worked": sum(counts.get(k, 0) for k in STATUS.worked)}
         for (file_name, device, pic, date), group, counts in _group_counts(cases, key_fn)
     ]
 
 
-def productivity_rows(cases):
+def productivity_rows(cases, until=None):
     """Cases executed per working day, per PIC.
 
     "Executed" is whatever the taxonomy flags as such (`STATUS.executed`), so
@@ -277,28 +279,41 @@ def productivity_rows(cases):
     dilute the rate. Undated cases belong to no day, so they are left out
     entirely — the same rule `daily_rows` follows, as are cases in a scope group
     outside the plan.
+
+    Each row also counts the statuses that are worked but not executed (Cancel,
+    as shipped), and `worked` beside `executed`: executed is what the rate
+    divides, worked is what a plan is measured against, and a reader has to be
+    able to see how one becomes the other. Only executed cases make a day a
+    working day. `until` leaves out every case dated after it — the Member tab
+    stops at yesterday, because today is half a day.
     """
     executed_keys = STATUS.executed
+    aside_keys = [k for k in STATUS.worked if k not in set(executed_keys)]
     buckets = defaultdict(list)
     for c in in_plan(cases):
-        if not c.test_date:
+        if not c.test_date or (until is not None and c.test_date > until):
             continue
         buckets[c.pic or "N/A"].append(c)
 
     rows = []
     for pic, group in sorted(buckets.items()):
         counts = {key: 0 for key in executed_keys}
+        aside = {key: 0 for key in aside_keys}
         days = set()
         for c in group:
             key = STATUS.classify_case(c)
             if key in counts:
                 counts[key] += 1
                 days.add(c.test_date)
+            elif key in aside:
+                aside[key] += 1
         executed = sum(counts.values())
         rows.append({
             "pic": pic,
             **counts,
+            **aside,
             "executed": executed,
+            "worked": executed + sum(aside.values()),
             "days": len(days),
             "productivity": round(executed / len(days), 2) if days else 0,
         })

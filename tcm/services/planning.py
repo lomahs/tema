@@ -22,13 +22,15 @@ appear in the actuals but not in the plan. A table that listed only planned work
 would hide work that was done, which is the one thing a report of a day must not
 do.
 
-**The planner counts "worked", not "executed".** `phase_view` and `board_view`
-measure the plan against cases that have left the remaining pile
-(`STATUS.worked`), because the burndown has to reconcile: what is remaining plus
-what was worked is every counted case. `executed` is narrower -- a Cancel with a
-PIC is off the pile without anyone passing or failing it -- and stays the
-yardstick of `day_view` and `calendar_view`, which Daily and Productivity read.
-Both are sums over the same `daily_rows` rows; neither counts cases itself.
+**Against a plan, the app counts "worked"; for productivity, "executed".**
+Every figure here measures the plan against cases that have left the remaining
+pile (`STATUS.worked`, the `worked` field `daily_rows` carries): the burndown
+has to reconcile -- what is remaining plus what was worked is every counted
+case -- and a plan of 100 that ended 90 OK and 10 Cancel is on plan, because
+the ten are no longer work anybody has to do. `executed` is narrower -- a Cancel
+with a PIC is off the pile without anyone passing or failing it -- and is what
+throughput is measured in (Productivity's rate, Daily's Executed bars). Both are
+fields of the same `daily_rows` rows; nothing here counts cases itself.
 """
 import math
 from collections import defaultdict
@@ -36,7 +38,6 @@ from datetime import datetime, date as _date
 
 from tcm.domain.plan import (DayPlan, PlanEntry, PlanSettings, add_workdays,
                              parse_date, phase_days)
-from tcm.domain.status import STATUS
 from tcm.services.aggregation import daily_rows, remaining_rows
 
 
@@ -44,18 +45,8 @@ def _today() -> str:
     return _date.today().isoformat()
 
 
-def _executed(row: dict) -> int:
-    """How many cases of a `daily_rows` row count as work carried out.
-
-    `STATUS.executed`, not the row's `total`: a case left Pending was worked on
-    and not finished, and the app's headline figure has been "Executed" rather
-    than "Done" everywhere else for that reason.
-    """
-    return sum(row.get(key, 0) for key in STATUS.executed)
-
-
 def _actuals(cases, date=None, pic=None) -> dict:
-    """`daily_rows` re-keyed by (date, pic, file, device) -> executed count."""
+    """`daily_rows` re-keyed by (date, pic, file, device) -> worked count."""
     out = {}
     for row in daily_rows(cases):
         if date is not None and row["date"] != date:
@@ -63,13 +54,8 @@ def _actuals(cases, date=None, pic=None) -> dict:
         if pic is not None and row["pic"] != pic:
             continue
         key = (row["date"], row["pic"], row["file"], row["device"])
-        out[key] = out.get(key, 0) + _executed(row)
+        out[key] = out.get(key, 0) + row["worked"]
     return out
-
-
-def _worked(row: dict) -> int:
-    """Cases of a `daily_rows` row that have left the remaining pile."""
-    return sum(row.get(key, 0) for key in STATUS.worked)
 
 
 #: What `daily_rows` calls a case with no PIC. It counts toward every total but
@@ -119,7 +105,7 @@ class _Facts:
         self.by_date = defaultdict(int)            # date -> worked
         # `daily_rows` drops undated cases, so every row here has a date.
         for row in daily_rows(cases):
-            n = _worked(row)
+            n = row["worked"]
             if not n:
                 continue
             slot, date = (row["file"], row["device"]), row["date"]
@@ -240,31 +226,16 @@ class PlanningService:
 
         planned = {}
         people = defaultdict(set)
-        # Per person across the whole range, which is the figure Productivity
-        # measures a member against. It rides here rather than behind its own
-        # endpoint because Productivity reports over every day at once, and a
-        # request per member would be one request per row of that table.
-        by_pic = defaultdict(int)
-        planned_pics = defaultdict(set)
         for day in self._repo.days():
             planned[day.date] = day.planned_total
             for e in day.entries:
                 people[day.date].add(e.pic)
-                planned_pics[day.date].add(e.pic)
-                if within(day.date):
-                    by_pic[e.pic] += e.planned
 
         actual = defaultdict(int)
-        # What each planned person executed on the days they were planned —
-        # attainment's numerator. Their work on unplanned days is left out, or
-        # a two-day plan would be measured against a month of execution.
-        actual_by_pic = defaultdict(int)
         for (date, pic, _, _), done in _actuals(cases).items():
             actual[date] += done
             if done:
                 people[date].add(pic)
-            if within(date) and pic in by_pic and pic in planned_pics.get(date, ()):
-                actual_by_pic[pic] += done
 
         dates = sorted(set(planned) | set(actual))
         days = [
@@ -276,8 +247,6 @@ class PlanningService:
         ]
         return {
             "days": days,
-            "by_pic": dict(by_pic),
-            "actual_by_pic": dict(actual_by_pic),
             "planned_total": sum(d["planned"] for d in days),
             "actual_total": sum(d["actual"] for d in days),
         }

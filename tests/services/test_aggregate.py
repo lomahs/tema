@@ -153,6 +153,46 @@ def test_daily_rows_name_an_absent_pic_rather_than_dropping_the_row():
     assert rows[0]["pic"] == "N/A"
 
 
+def test_daily_rows_carry_what_was_executed_and_what_was_worked():
+    """Worked is what a plan is measured against, executed what productivity is.
+
+    A Cancel with a PIC left the pile without being run, so it is worked and
+    not executed; a Pending is neither.
+    """
+    rows = aggregate.daily_rows([
+        case(result="OK", test_date="2026-08-05", pic="lee"),
+        case(result="対象外", test_date="2026-08-05", pic="lee"),
+        case(result="保留", test_date="2026-08-05", pic="lee"),
+    ])
+    assert (rows[0]["executed"], rows[0]["worked"]) == (1, 2)
+
+
+def test_productivity_rows_count_worked_statuses_that_were_not_executed():
+    """Executed + Cancel is the member's worked total, which the plan is read against."""
+    rows = aggregate.productivity_rows([
+        case(result="OK", test_date="2026-08-03", pic="alice"),
+        case(result="対象外", test_date="2026-08-03", pic="alice"),
+    ])
+    assert (rows[0]["executed"], rows[0]["Cancel"], rows[0]["worked"]) == (1, 1, 2)
+
+
+def test_a_cancelled_case_does_not_make_a_day_a_working_day():
+    rows = aggregate.productivity_rows([
+        case(result="OK", test_date="2026-08-03", pic="alice"),
+        case(result="対象外", test_date="2026-08-04", pic="alice"),
+    ])
+    assert rows[0]["days"] == 1
+
+
+def test_productivity_rows_can_stop_at_a_date():
+    """Today is half a day; counting it would drag every rate down."""
+    rows = aggregate.productivity_rows([
+        case(result="OK", test_date="2026-08-03", pic="alice"),
+        case(result="OK", test_date="2026-08-04", pic="alice"),
+    ], until="2026-08-03")
+    assert (rows[0]["executed"], rows[0]["days"]) == (1, 1)
+
+
 def test_productivity_rows_measure_executed_cases_per_working_day():
     rows = aggregate.productivity_rows([
         case(result="OK", test_date="2026-08-03", pic="alice"),

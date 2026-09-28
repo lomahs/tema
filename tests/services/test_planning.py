@@ -146,7 +146,7 @@ def test_work_on_another_day_does_not_count_toward_this_one():
 
 
 def test_a_case_run_but_not_finished_is_not_counted_as_done():
-    """`actual` is executed work, the same measure Productivity and Summary use."""
+    """`actual` is worked: a Pending is still in the pile."""
     svc = service()
     svc.save_day("2026-09-22", [entry(pic="An")])
     view = svc.day_view("2026-09-22", [
@@ -154,6 +154,17 @@ def test_a_case_run_but_not_finished_is_not_counted_as_done():
         case(pic="An", test_date="2026-09-22", result="保留", row_num=5),
     ])
     assert view["rows"][0]["actual"] == 1
+
+
+def test_a_cancelled_case_counts_toward_the_plan():
+    """Plan 100, 90 OK and 10 Cancel is on plan: the ten are no longer work to do."""
+    svc = service()
+    svc.save_day("2026-09-22", [entry(pic="An", planned=2)])
+    view = svc.day_view("2026-09-22", [
+        case(pic="An", test_date="2026-09-22", result="OK"),
+        case(pic="An", test_date="2026-09-22", result="対象外", row_num=5),
+    ])
+    assert view["rows"][0]["diff"] == 0
 
 
 def test_work_nobody_planned_still_shows_up():
@@ -218,45 +229,19 @@ def test_a_day_worked_without_a_plan_still_appears_in_the_calendar():
     assert [(d["date"], d["planned"], d["actual"]) for d in days] == [("2026-09-22", 0, 1)]
 
 
-def test_the_calendar_also_totals_each_persons_plan():
-    """Productivity measures a member against what *they* were planned for.
-
-    It reports over every day at once, so a per-day calendar cannot answer it
-    and a request per member would be one request per row. The figure rides on
-    the calendar instead, which the browser already fetches once.
-    """
+def test_the_calendar_counts_a_cancelled_case_as_done():
+    """So against plan is worked: a Cancel left the pile without being run."""
     svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", planned=30), entry(pic="Binh", planned=20)])
-    svc.save_day("2026-09-23", [entry(pic="An", planned=15)])
-
-    assert svc.calendar_view(None, None, [])["by_pic"] == {"An": 45, "Binh": 20}
-
-
-def test_the_calendar_totals_what_each_person_did_on_their_planned_days():
-    """Attainment divides like by like: what a member executed on the days
-    somebody planned for them, against that plan.
-
-    Their executed cases across *every* day, over a plan covering two of them,
-    is how a plan of 15 read as 33,940% attained.
-    """
-    svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", planned=30)])
-    cases = [
-        case(pic="An", test_date="2026-09-21", result="OK", row_num=1),   # unplanned day
-        case(pic="An", test_date="2026-09-22", result="OK", row_num=2),
-        case(pic="An", test_date="2026-09-22", result="NG", row_num=3),
-        case(pic="Binh", test_date="2026-09-22", result="OK", row_num=4),  # never planned
-    ]
-
-    assert svc.calendar_view(None, None, cases)["actual_by_pic"] == {"An": 2}
+    days = svc.calendar_view(None, None, [
+        case(pic="An", test_date="2026-09-22", result="OK", row_num=1),
+        case(pic="An", test_date="2026-09-22", result="対象外", row_num=2)])["days"]
+    assert days[0]["actual"] == 2
 
 
-def test_the_per_person_totals_respect_the_range():
-    svc = service()
-    svc.save_day("2026-09-22", [entry(pic="An", planned=30)])
-    svc.save_day("2026-09-23", [entry(pic="An", planned=15)])
-
-    assert svc.calendar_view("2026-09-23", None, [])["by_pic"] == {"An": 15}
+def test_the_calendar_no_longer_carries_per_person_totals():
+    """The Member tab asks `/api/member/*` for those; two sources would drift."""
+    view = service().calendar_view(None, None, [])
+    assert "by_pic" not in view and "actual_by_pic" not in view
 
 
 # --- the phase and the day board -------------------------------------------
