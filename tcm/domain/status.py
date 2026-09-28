@@ -349,6 +349,7 @@ class StatusSet:
             "excluded": list(self.excluded),
             "review": list(self.review),
             "remaining": list(self.remaining),
+            "worked": list(self.worked),
         }
 
 

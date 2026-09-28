@@ -90,3 +90,9 @@ def test_with_nothing_loaded_every_endpoint_answers_empty(client):
 
 def test_the_old_productivity_endpoint_is_gone(client):
     assert client.get("/api/productivity").status_code == 404
+
+
+def test_the_taxonomy_names_what_counts_against_a_plan(client):
+    """The Member tab draws a column for each status worked but not executed."""
+    body = client.get("/api/statuses").get_json()
+    assert body["worked"] == ["OK", "NG", "NG-OK", "Cancel"]

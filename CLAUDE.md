@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Overview
 
 Flask web app that reads test cases out of Excel workbooks (`.xlsx`) and aggregates
-progress / results into the views the rail lists (Summary, Daily, Productivity, Detail,
+progress / results into the views the rail lists (Summary, Daily, Member, Planning, Detail,
 Tools, Config) plus the File page they drill into. Single-user local tool:
 no database, no build step, no auth. README.md is written in Vietnamese and holds the
 full Excel-format and sample-generator reference.
@@ -107,11 +107,13 @@ choosing the other rewrites that folder and `create_app` and nothing else.
 chosen.** It opens the database (`open_database` migrates it and makes sure a phase exists),
 builds the shipped `Workspace` over the Excel loader, the in-memory store and the SQL snapshot
 repository — and starts it on the newest snapshot — the `PlanningService` and `PhaseService`
-over the SQL repositories, and the `IdentityService` over Graph, puts them on
+over the SQL repositories, the `MemberService` over that `PlanningService` (it adds no I/O of its
+own, so it takes no argument), and the `IdentityService` over Graph, puts them on
 `app.extensions`, and registers the blueprints; a blueprint reaches for them through the `workspace()` / `identity()` helpers in
 `tcm/web/blueprints/__init__.py` and never imports either. (The phase one is
 `phase_service()`, not `phases()`: importing the `phases` blueprint module binds that name on
-the package and would silently replace the helper.) It takes `workspace`, `identity`,
+the package and would silently replace the helper; the Member tab's is `member_report()` for the
+same reason.) It takes `workspace`, `identity`,
 `planning`, `phases` and `database` arguments for the sake of tests, and opens the database only
 when one of the first four needs it: an app over fakes is built by passing them, not by patching a
 module attribute and remembering to put it back. That is what removed the per-test reset the
@@ -188,7 +190,7 @@ exactly one `"fallback": true` (unknown values → Other) — the fallback is wh
 land in exactly one column, which several tests assert. `needs_reason` lists the
 statuses that must carry a Ticket ID or a Note; `/api/summary` reports violators under
 `missing_reason`. `"executed": true` marks the statuses that count as work carried out —
-`/api/productivity` divides those cases by the days a PIC actually tested. Any number of statuses
+`/api/member/productivity` divides those cases by the days a PIC actually tested. Any number of statuses
 may set it (a config with none simply yields a productivity table of zeros).
 
 Each status also carries a `tone` — `success` / `danger` / `warn` / `neutral` / `muted` — which
@@ -318,7 +320,7 @@ still mean the same thing.
 work that is reported but not committed to.** It keeps its Summary table — the count has to stay
 visible, so the card is drawn in full and marked `chip--aside`, the dashed rule that means "the
 sum stops here" — and it leaves *every figure that adds groups together*: the KPI strip, Daily,
-Productivity and the published report — and it is the one Detail card a reader has to press for
+the Member tab and the published report — and it is the one Detail card a reader has to press for
 themselves. `in_plan(cases)` in [tcm/services/aggregation.py](tcm/services/aggregation.py)
 is the one definition of "counts toward the total", and `SCOPES.counted` / `SCOPES.is_counted`
 the one definition of which groups do. Three things follow, and each is enforced rather than
@@ -472,8 +474,8 @@ also still carries what is genuinely code: case numbers, paths, Excel column let
 reassigned by the importer, so each piece of mutable state lives in exactly one module and is
 reached through functions: taxonomy in `taxonomy.js`, the per-status case cache and the
 chosen statuses/scopes/filters/page/expansion in `views/detail/state.js`, Summary's buckets,
-grouping, shared sort and per-table paging in `views/summary/state.js`, daily rows in `views/daily.js`, per-PIC productivity rows in
-`views/productivity.js`, Chart.js instances in `charts.js`, theme in `theme.js`,
+grouping, shared sort and per-table paging in `views/summary/state.js`, daily rows in `views/daily.js`, the Member tab's served
+figures and the week on screen in `views/member/index.js`, Chart.js instances in `charts.js`, theme in `theme.js`,
 the plan calendar in `plan.js`, the open day, layout, forecast window and grid position in
 `views/planning/state.js`, the working copy of each config file in `views/config.js`.
 
@@ -511,15 +513,17 @@ declaring its own copy is the bug this shape exists to prevent.
 **`plan.js` holds the plan as the rest of the app reads it, and it replaced a single number.**
 There used to be a `target.js`: cases per person per day, kept in `localStorage`, multiplied by
 the people who happened to work that day to produce Daily's plan line, the daily log's Plan and
-Attain columns and Productivity's attainment bar. It is gone. Those three figures now come from
-what somebody actually planned for a named day — see the Planning section below — and `plan.js`
-is where they read it, announcing changes through `onPlanChange` exactly as `theme.js` does.
-It holds the *calendar* (one line per day, plus a per-PIC total), because that is what Daily and
-Productivity need and it is small; the phase and a single day's board are fetched by
-`views/planning/` when somebody is looking at them.
+Attain columns and Productivity's attainment bar. It is gone. Those figures now come from
+what somebody actually planned for a named day — see the Planning section below. `plan.js`
+holds the *calendar* (one line per day), because that is what Daily needs and it is small, and
+announces changes through `onPlanChange` exactly as `theme.js` does. It no longer carries a
+per-PIC total: the Member tab asks `/api/member/*`, whose figures are computed together on the
+server, and two sources for one attainment figure is how they would come to disagree. The phase
+and a single day's board are fetched by `views/planning/` when somebody is looking at them.
 
-**A day nobody planned has no plan figure, not a plan of zero.** `plannedFor(date)` and
-`plannedForPic(pic)` answer `null`, and Daily draws no line and no Attain figure for such a day.
+**A day nobody planned has no plan figure, not a plan of zero.** `plannedFor(date)` answers
+`null`, and Daily draws no line and no Attain figure for such a day; the Member tab's `delta`,
+`adherence` and `attainment` are `null` for a member or a day with no plan, for the same reason.
 Zero is a plan somebody set; the absence of one is not, and a chart drawing a flat zero across
 every day that predates this feature would be inventing a target nobody agreed to. **The cost is
 real and worth stating:** every day already in the workbooks reads that way until it is planned,
@@ -530,7 +534,7 @@ it was chosen deliberately over a figure derived from an average.
 card, the two counts it carries, and the page heading — and nothing else; it does not know what a
 view contains, so `main.js` hands it an `onNavigate` callback and it reports clicks back through
 that. `main.js` owns `VIEWS`, which is the single list of what exists: Summary, Daily,
-Productivity, Planning, Detail, File, Compare, Tools and Config. Adding a view means adding an entry
+Member, Planning, Detail, File, Compare, Tools and Config. Adding a view means adding an entry
 there and a `<section class="view" id="<name>View">`, and nothing else.
 
 `templates/index.html` is the shell — the rail, the page heading and the two script tags —
@@ -574,8 +578,9 @@ that must survive a click belongs in a JS array, not in an attribute.
 
 Behavior worth preserving when touching the UI:
 - `refreshViews()` in `main.js` must call `setTaxonomy()` before any header/card render.
-- **Every** sortable header is now generated — `renderDailyHead`, `renderProductivityHead` and
-  `renderDetailHead` each replace their `<th>`s and so each calls `makeSortable` itself. None is
+- **Every** sortable header is now generated — `renderDailyHead`, `renderMemberHead` and
+  `renderDetailHead` each replace their `<th>`s and so each calls `makeSortable` itself (the
+  member matrix rebuilds its whole table per render and rebinds the same way). None is
   bound at init any more. Binding one twice sorts twice per click and looks like nothing happened.
   Summary is the exception in shape only: it has no `renderSummaryHead`, because it draws one
   table per bucket and cannot know how many headers it needs until the data arrives —
@@ -587,19 +592,32 @@ Behavior worth preserving when touching the UI:
   first, not the file that happens to own the worst row.
 - Paging counts **groups**, not rows, wherever grouping is on (Daily always; Detail when the
   group-by control is set). A page that split a group would make its roll-up a lie.
-- **Productivity is its own view, not a second table under Daily.** It reports over everything
-  loaded and never answered to Daily's filters; sitting beneath them implied that it did. It
-  re-renders only on sort, never on filter change. **Attainment divides like by like**:
-  `calendar_view` serves `actual_by_pic` — what each planned person executed *on the days
-  they were planned* — beside `by_pic`, and both the member rows and the Team row read that
-  pair. Dividing a member's executed cases across every day by a plan covering two of them
-  is how a plan of 15 once read as 33,940% attained. The **member × day heatmap** under the
-  table is summed from the `/api/daily` rows `main.js` already holds (via `executedIn` in
-  `taxonomy.js`, the one definition of "executed in a row"), so a member's heatmap row adds
-  up to their Executed figure; it is a `--tone-success` ramp, the colour Daily's
-  Executed bars take. The NG-rate column counts
-  `getFailedStatuses()` — statuses both `executed` and `issue` — and is omitted when the
-  taxonomy has none.
+- **Member is its own view, not a second table under Daily.** It reports over everything
+  loaded and never answered to Daily's filters. It holds two cards, and **every figure on it is
+  the server's** (`tcm/services/members.py`, behind four `/api/member/*` endpoints):
+  - *Productivity by member* is throughput — `executed` over the days a member tested — with
+    the statuses that are worked but not executed (Cancel) drawn beside the band as
+    `band--aside`, because **Executed + Cancel = the member's Actual** against the plan below.
+    The NG rate and the Team row are served, not summed in the browser.
+  - *Plan vs actual by day* is one Monday-to-Friday week of member × day cells, paged a week at
+    a time, beside the phase totals — Plan, Actual, Δ, On plan, Unplanned — which do not move as
+    the reader pages. Cells take the Planning grid's kinds (`on` / `over` / `under` /
+    `unplanned` / `wip` / `future`) and the same tone tokens, so a day reads alike on both
+    screens; a `!` marks a planned slot run short that day, which work elsewhere can hide.
+  - **Everything stops at yesterday.** Today is half a day: counted in, it reads every member
+    as behind each morning and drags every rate down. There is no lower bound — work before the
+    phase began still counts, which leans Δ towards "ahead" (a deliberate call).
+  - **On plan is cumulative per slot and capped**: for each (file, device) a member was planned
+    on, the lesser of what they worked there and what they were planned there, over their plan.
+    Catching up the next day and running ahead are credited; beating the plan is not — that
+    excess is Δ's to report.
+  - **Weekends have no column** (not wanted for now), but work done on one still reaches the
+    totals, so a row's cells fall short of its total by exactly that. The tests pin it.
+  - The four endpoints exist because they are wanted at different times — productivity, totals
+    and the week list per load or plan change, one week per page — and each names the day it
+    counts through (`through`) so they can be seen to agree. `views/member/index.js` refreshes
+    on `onPlanChange` *and* when `main.js` asks after a load; the two arrive together, so a
+    refresh in flight absorbs the second and runs once more rather than twice at once.
 - **`.scroll-x--rows` caps a pane at about ten rows** (`--rows`, plus two steps of slack for the
   header and totals row). That is what makes "Show all" a reasonable offer: every row renders and
   the *pane* scrolls, rather than the page growing to three thousand rows. It is also why a card
@@ -858,12 +876,16 @@ case derived into Out Of Scope is not offered as work. It runs through `in_plan`
 blocks with nothing left unless `keep_finished=True` — the planner needs a finished block too,
 since work was planned and done on it. Order is fewest-remaining first.
 
-**The planner counts "worked", which is wider than "executed" on purpose.** `STATUS.worked` is
+**Against a plan the app counts "worked"; for throughput, "executed".** `STATUS.worked` is
 `counted` minus `remaining`: every case that has left the pile. A Cancel with a PIC is worked
-without being executed — nobody passed or failed it, but nobody will run it either. The
-burndown has to reconcile (remaining + worked = every counted case), so `phase_view` and
-`board_view` measure the plan against `worked`, while `day_view` and `calendar_view` — which
-Daily and Productivity read — keep `executed`. Both are sums over the same `daily_rows` rows.
+without being executed — nobody passed or failed it, but nobody will run it either — so a plan
+of 100 that ended 90 OK and 10 Cancel is on plan. The burndown has to reconcile too (remaining +
+worked = every counted case). So **every** plan comparison — `phase_view`, `board_view`,
+`day_view`, `calendar_view`, Daily's Attain and bar tone, the Member tab's Actual — measures
+`worked`, while throughput — Daily's Executed column and bars, the Member tab's productivity —
+stays `executed`. `daily_rows` carries both as fields, so nothing downstream re-derives them
+from the taxonomy, and `/api/statuses` names the `worked` keys so the browser can draw the
+worked-but-not-executed columns without naming a status. A Pending is neither: still owed.
 
 **The baseline is frozen lazily, and that is the whole answer to "a plan that changes".**
 Editing the plan for a day that has not arrived is *planning*; editing it on or after the day
@@ -896,7 +918,7 @@ resolved per call from `app_state`, so switching phase needs nothing rebuilt. Th
 `phase_member`. `open_database` creates "Phase 1" when there is none, the last phase cannot be
 deleted, and deleting the active one moves active to the newest remaining — so the planner always
 has somewhere to read and write. Every plan figure in the app — Planning, Daily's plan line,
-Productivity's attainment — reads the active phase, because they all go through the one
+the Member tab — reads the active phase, because they all go through the one
 repository. `/api/phases` and `/api/members` are the CRUD; every write answers with the whole
 overview so the Phases & members card redraws from one response.
 
@@ -923,8 +945,8 @@ the phase's `phase_start`, `phase_end` and `daily_target`, cases per person per 
 them: `get_settings` fills a default — the phase starts on
 the first test date loaded and ends five working days out — so opening the screen writes
 nothing. **The target came back only as the member day-load yardstick.** A member whose planned
-day exceeds it is drawn in the warn tone; it does not return to Daily or Productivity, which
-still read the plan calendar. Working days are Mon–Fri with no holiday calendar; today is always
+day exceeds it is drawn in the warn tone; it does not return to Daily or the Member tab, which
+read the plan itself. Working days are Mon–Fri with no holiday calendar; today is always
 a phase day, even on a weekend.
 
 **The page is the design canvas's, and its figures are the server's.** `/api/plan/phase?window=`
@@ -950,13 +972,15 @@ plan figure, `onListed` redraws just the bar's phase select), the same shape as 
 `setOnSave`. **The slot editor is a native `<dialog>` — the one floating surface in the
 app**, because rearranging a slot is a focused edit over the matrix it came from. It edits a
 working copy and writes the whole day on Save through `PUT /api/plan/<date>`; there is no
-per-slot endpoint. Saving announces itself through `plan.js`, which is how Daily and
-Productivity hear that their plan figures moved. No colour here is new: good / late / over come
+per-slot endpoint. Saving announces itself through `plan.js`, which is how Daily and the
+Member tab hear that their plan figures moved. No colour here is new: good / late / over come
 from the status tones, and everything else is ink.
 
 **Aggregation is shared, not owned by the routes.** [tcm/services/aggregation.py](tcm/services/aggregation.py) holds
 `summary_rows` / `daily_rows` / `productivity_rows` / `issue_rows` / `remaining_rows` as plain functions over
-`TestCase` lists. The five GET endpoints are `jsonify` wrappers around them, and the report
+`TestCase` lists. The GET endpoints are `jsonify` wrappers around them — the Member tab's
+through `MemberService`, which re-keys `daily_rows` and `productivity_rows` rather than
+counting — and the report
 publisher calls the same functions — so the numbers on screen and the numbers in the
 SharePoint report cannot drift. Put new aggregation here, not in a route.
 

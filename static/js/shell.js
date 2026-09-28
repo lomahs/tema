@@ -109,7 +109,7 @@ export function setToday({ date, executed }) {
  *
  * @param {string} title
  * @param {string} sub One sentence on what this view counts. Views whose scope
- *   differs from the obvious one — Productivity ignores Daily's filters, Review
+ *   differs from the obvious one — Member ignores Daily's filters, Review
  *   holds only open work — are the reason this line exists.
  */
 export function setPageHead(title, sub) {

@@ -5,7 +5,7 @@
  * refresh cycle; `render.js` draws, `editor.js` edits one slot, `cells.js`
  * derives, `state.js` holds. Like every view it calls no `fetch` of its own and
  * imports no other view: saving a day announces itself through `plan.js`,
- * which is how Daily and Productivity hear that their plan figures moved.
+ * which is how Daily and the Member tab hear that their plan figures moved.
  */
 import { $ } from "../../dom.js";
 import {
@@ -72,7 +72,7 @@ async function reloadAll() {
 
 /**
  * Everything that reads the plan, redrawn: the planner and its Phases card,
- * and — through `plan.js` — Daily's plan line and Productivity's attainment.
+ * and — through `plan.js` — Daily's plan line and the Member tab.
  * Switching phase changes all of them at once.
  */
 async function afterPlanChange() {

@@ -129,8 +129,8 @@
    toolbar carries its own bottom margin and nothing above it, so without this
    the two frames sat a hairline apart. */
 .view > .card + .toolbar { margin-top: var(--sp-4); }
-/* Productivity's table and its heatmap, stacked. */
-#productivityView > .card + .card { margin-top: var(--sp-4); }
+/* The Member tab's productivity table and its plan matrix, stacked. */
+#memberView > .card + .card { margin-top: var(--sp-4); }
 
 /* Detail's table card opens with its own controls: the search, the folded
    filters and the chips, ruled off from the rows below. Their margins are
@@ -907,3 +907,57 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 /* The Compare view's "base → head" line beside its Back button. */
 .compare-sides { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--ink-soft); margin-left: var(--sp-3); }
 #compareView > .card { margin-bottom: var(--sp-4); }
+
+/* --- the member matrix -----------------------------------------------------
+   Plan against actual, member by day, then the phase totals. A cell is drawn
+   the way the Planning grid draws a day — on / over / under / unplanned / in
+   progress / ahead — from the same tone tokens, so the two screens colour a
+   day alike. The totals are ruled off with the band's strong rule: they are
+   the phase, not the week on screen. */
+.member-pager { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; }
+.member-week { min-width: 12rem; text-align: center; font-size: var(--fs-sm); font-weight: 600; }
+#memberMatrixHead { align-items: flex-start; }
+#memberView .empty-note { padding: var(--sp-3) var(--sp-5); }
+.member-matrix td.member-cell { padding: 2px; }
+.member-matrix .member-name { white-space: nowrap; font-weight: 500; }
+.member-matrix th.member-day { text-align: center; font-size: var(--fs-xs); }
+.member-matrix th.member-day span { display: block; }
+.member-matrix th.member-day.is-today { color: var(--ink); background: var(--paper-hover); }
+.member-matrix th.member-day.is-out { color: var(--ink-faint); font-weight: 400; }
+.member-matrix .member-total--first { border-left: 1px solid var(--rule-strong); }
+.member-matrix tfoot td.member-cell { text-align: center; }
+.member-fig {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 4.5rem;
+    height: 36px;
+    border-radius: var(--r-sm);
+    color: var(--ink);
+    line-height: 1.15;
+}
+.member-sub { font-size: 10.5px; color: inherit; opacity: .8; }
+.member-fig[data-kind="future"]    { background: var(--tone-neutral-bg); color: var(--ink-soft); }
+.member-fig[data-kind="wip"]       { background: var(--level-0); color: var(--ink-soft); }
+.member-fig[data-kind="on"]        { background: var(--tone-success-bg); color: var(--tone-success-fg); }
+.member-fig[data-kind="over"]      { background: color-mix(in srgb, var(--tone-success) 35%, var(--tone-success-bg)); }
+.member-fig[data-kind="under"]     { background: var(--tone-danger-bg);  color: var(--tone-danger-fg); }
+.member-fig[data-kind="unplanned"] { background: var(--tone-warn-bg);    color: var(--tone-warn-fg); }
+/* A planned slot run short that day — possibly hidden by work elsewhere, which
+   is why it is a mark on the cell rather than the cell's colour. */
+.member-short {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    width: 13px;
+    height: 13px;
+    border-radius: var(--r-full);
+    background: var(--tone-warn);
+    color: var(--ink-invert);
+    font-size: 9.5px;
+    font-weight: 700;
+    line-height: 13px;
+    text-align: center;
+}

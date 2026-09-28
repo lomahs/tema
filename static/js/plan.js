@@ -6,13 +6,15 @@
  * every plan figure in the app was multiplied out of, kept in `localStorage`
  * because nothing on the server knew about it. A plan says what was actually
  * meant to happen on a given day, for named people on named files, so it lives
- * on the server, it differs per day, and it is the thing Daily's plan line and
- * Productivity's attainment bar are now drawn from.
+ * on the server, it differs per day, and it is the thing Daily's plan line is
+ * drawn from.
  *
  * What is held here is the *calendar*: one line per day, planned against done.
- * That is what Daily and Productivity need, and it is small — a few hundred
- * numbers for a sprint. The phase and a single day's board are fetched by
- * `views/planning/` when somebody is actually looking at them.
+ * That is what Daily needs, and it is small — a few hundred numbers for a
+ * sprint. The phase and a single day's board are fetched by `views/planning/`,
+ * and each member's figures by `views/member/`, when somebody is looking at
+ * them; the calendar used to carry per-person totals too, and two sources for
+ * one attainment figure is how they would come to disagree.
  *
  * It lives in its own module for the reason `theme.js` and the old `target.js`
  * do: an imported ES binding cannot be reassigned by the importer, so the value
@@ -30,41 +32,16 @@
 /** @type {Map<string, PlanDay>} keyed by "YYYY-MM-DD" */
 let byDate = new Map();
 
-/**
- * Cases planned per person, across every day.
- *
- * Productivity reports over the whole load at once, so it cannot read a per-day
- * figure, and a request per member would be one request per row of its table.
- * The server sends this alongside the calendar instead.
- *
- * @type {Map<string, number>}
- */
-let byPic = new Map();
-
-/**
- * What each planned person executed on the days they were planned for.
- *
- * Attainment's numerator. A member's executed cases across every day would be
- * measured against a plan covering only some of them, and read as thousands of
- * percent attained.
- *
- * @type {Map<string, number>}
- */
-let actualByPic = new Map();
-
 /** @type {Array<() => void>} */
 const listeners = [];
 
 /**
  * Adopt a fresh calendar and tell everyone drawing from it.
- * @param {{days: PlanDay[], by_pic: Object<string, number>}} calendar
- *   A `/api/plan` response body.
+ * @param {{days: PlanDay[]}} calendar A `/api/plan` response body.
  */
 export function setPlanCalendar(calendar) {
-    const { days = [], by_pic: perPic = {}, actual_by_pic: donePerPic = {} } = calendar || {};
+    const { days = [] } = calendar || {};
     byDate = new Map(days.map((d) => [d.date, d]));
-    byPic = new Map(Object.entries(perPic));
-    actualByPic = new Map(Object.entries(donePerPic));
     listeners.forEach((fn) => fn());
 }
 
@@ -78,41 +55,6 @@ export function setPlanCalendar(calendar) {
 export function plannedFor(date) {
     const day = byDate.get(date);
     return day ? day.planned : null;
-}
-
-/**
- * How many cases one person was planned for, across every day.
- *
- * @param {string} pic
- * @returns {?number} `null` when nobody ever planned work for them — not zero,
- *   for the reason `plannedFor` gives.
- */
-export function plannedForPic(pic) {
-    return byPic.has(pic) ? byPic.get(pic) : null;
-}
-
-/**
- * What one person executed on the days they were planned for.
- *
- * @param {string} pic
- * @returns {number} 0 for a person nobody planned — ask {@link plannedForPic}
- *   first, which is what tells "not planned" from "planned and did nothing".
- */
-export function actualForPic(pic) {
-    return actualByPic.get(pic) || 0;
-}
-
-/**
- * The whole team against the whole plan: every planned person's plan, and what
- * each of them executed on their planned days.
- *
- * @returns {{planned: number, actual: number}}
- */
-export function planTotals() {
-    let planned = 0;
-    let actual = 0;
-    byPic.forEach((n, pic) => { planned += n; actual += actualForPic(pic); });
-    return { planned, actual };
 }
 
 /** @returns {boolean} Whether any day at all has been planned. */
@@ -131,8 +73,8 @@ export function planDays() {
 /**
  * Run `fn` whenever the plan changes.
  *
- * Saving a day's plan changes what Daily's Plan column and Productivity's
- * attainment bar mean, and both are usually off screen when it happens.
+ * Saving a day's plan changes what Daily's Plan column and the Member tab's
+ * figures mean, and both are usually off screen when it happens.
  *
  * @param {() => void} fn
  */

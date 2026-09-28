@@ -22,6 +22,8 @@ let statuses = [];
 let needsReason = new Set();
 /** @type {Set<string>} status keys that count as work actually carried out */
 let executed = new Set();
+/** @type {Set<string>} status keys that have left the remaining pile — what a plan is read against */
+let worked = new Set();
 /** @type {Set<string>} status keys that are shown but left out of the total */
 let excluded = new Set();
 /** @type {Set<string>} status keys the report's Issues sheet lists */
@@ -40,12 +42,14 @@ let shadeOf = {};
  * read the status list to decide which columns to emit.
  *
  * @param {{statuses?: Status[], needs_reason?: string[], executed?: string[],
- *          excluded?: string[], review?: string[], issue?: string[]}} taxonomy
+ *          excluded?: string[], review?: string[], issue?: string[],
+ *          worked?: string[]}} taxonomy
  */
 export function setTaxonomy(taxonomy) {
     statuses = taxonomy.statuses || [];
     needsReason = new Set(taxonomy.needs_reason || []);
     executed = new Set(taxonomy.executed || []);
+    worked = new Set(taxonomy.worked || []);
     excluded = new Set(taxonomy.excluded || []);
     review = new Set(taxonomy.review || []);
     issue = new Set(taxonomy.issue || []);
@@ -82,6 +86,19 @@ export function getStatuses() {
  */
 export function getExecutedStatuses() {
     return statuses.filter((s) => executed.has(s.key));
+}
+
+/**
+ * The statuses a plan counts as done that productivity does not: worked but
+ * not executed. Cancel with a PIC, as shipped — off the pile, never run.
+ *
+ * The Member tab draws them beside the executed band, set aside, so a reader
+ * can see Executed plus these make the Actual a plan is measured against.
+ *
+ * @returns {Status[]}
+ */
+export function getWorkedAsideStatuses() {
+    return statuses.filter((s) => worked.has(s.key) && !executed.has(s.key));
 }
 
 /**
@@ -141,9 +158,9 @@ export function requiresReason(key) {
 /**
  * Executed cases in one row or roll-up, by the taxonomy's definition.
  *
- * One definition because four places ask it — Daily's column, the rail's Today
- * card, Productivity's heatmap and its NG rate — and a copy per place is how a
- * status newly flagged `executed` would reach some of them and not the others.
+ * One definition because several places ask it — Daily's column and chart, and
+ * the rail's Today card — and a copy per place is how a status newly flagged
+ * `executed` would reach some of them and not the others.
  *
  * @param {Object} row Any row carrying one count per status key.
  * @returns {number}
@@ -155,7 +172,7 @@ export function executedIn(row) {
 /**
  * The executed statuses that are also issues — NG, as shipped.
  *
- * What Productivity's NG rate counts. Read off the `executed` and `issue`
+ * What the Member tab's NG rate column is shown for. Read off the `executed` and `issue`
  * flags rather than named, so the column follows the taxonomy: a Pending is an
  * issue but was never carried out, so it is not a failure rate's numerator.
  *

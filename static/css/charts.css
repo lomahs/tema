@@ -73,36 +73,8 @@
 .swatch--bar { background: var(--tone-success); border-radius: 2px; }
 .swatch--plan { width: 14px; height: 2px; border-radius: 0; background: var(--tone-danger); }
 
-/* --- the member × day heatmap ---------------------------------------------
- * A success-tone ramp, mixed into the paper by `--heat`: every cell counts
- * executed work, so it takes the same tone as Daily's bars. The tone has its
- * own dark-mode value, so the ramp needs no second definition.
- */
-.heatmap { width: auto; }
-.heatmap th, .heatmap td { border-bottom: 0; height: auto; }
-.heatmap .heat-pic { position: sticky; left: 0; z-index: 1; background: var(--paper-raised);
-                     padding: 3px var(--sp-4) 3px var(--sp-5); font-weight: 500; }
-.heatmap thead .heat-pic { z-index: 11; background: var(--paper-sunk); }
-.heatmap .heat-day { padding: var(--sp-2) 2px; text-align: center; font-size: 10px; }
-.heatmap .heat-cell { padding: 2px; }
-.heatmap tbody tr:hover td { background: none; }
-.heatmap tbody tr:hover .heat-pic { background: var(--paper-raised); }
-.heat {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 26px;
-    border-radius: var(--r-xs);
-    background: color-mix(in srgb, var(--tone-success) var(--heat, 0%), var(--paper-sunk));
-    color: var(--ink);
-    font-size: 10.5px;
-}
-.heat--dark { color: var(--ink-invert); }
-.heatmap-empty { padding: var(--sp-4) var(--sp-5); }
-
 /* --- a bar inside a table cell -------------------------------------------
- * Summary's Executed column, Daily's Cumulative, Productivity's Attainment.
+ * Summary's Executed column, Daily's Cumulative, the Member tab's Attainment.
  * One treatment, because they are the same idea three times.
  */
 

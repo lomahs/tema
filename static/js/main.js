@@ -29,9 +29,7 @@ import {
 import { initCompareView, showCompare } from "./views/compare.js";
 import { setJumpHandler } from "./views/summaryOverview.js";
 import { initDaily, initDailyView, renderDailyHead } from "./views/daily.js";
-import {
-    initProductivity, initProductivityView, renderProductivityHead,
-} from "./views/productivity.js";
+import { initMemberView, refreshMember, renderMemberHead } from "./views/member/index.js";
 import { setPlanCalendar } from "./plan.js";
 import { initPlanning, initPlanningView } from "./views/planning/index.js";
 import {
@@ -44,7 +42,7 @@ import {
  *
  * The subtitle is a function rather than a string because two of them are only
  * answerable once the taxonomy has loaded, and because both exist to correct a
- * reasonable wrong assumption: that Productivity answers to Daily's filters,
+ * reasonable wrong assumption: that the Member tab answers to Daily's filters,
  * and that Review shows everything.
  */
 const VIEWS = {
@@ -56,10 +54,10 @@ const VIEWS = {
         title: "Daily",
         sub: () => "Cases executed per day. Cases with no test date are not counted here.",
     },
-    productivity: {
-        title: "Productivity",
-        sub: () => "Executed cases divided by the days that member actually tested. "
-                 + "Covers everything loaded — Daily's filters do not apply.",
+    member: {
+        title: "Member",
+        sub: () => "Each member's throughput, and each member against the plan. "
+                 + "Counts everything loaded up to yesterday — Daily's filters do not apply.",
     },
     planning: {
         title: "Planning",
@@ -207,12 +205,12 @@ async function openCompare(base, head) {
  */
 async function refreshViews(loadResult, { show = true } = {}) {
     lastLoad = loadResult;
-    const { taxonomy, summary, daily, productivity } = await fetchAll();
+    const { taxonomy, summary, daily } = await fetchAll();
 
     setTaxonomy(taxonomy);
     renderDetailCards();
     renderDailyHead();
-    renderProductivityHead();
+    renderMemberHead();
     renderDetailHead();
     renderResultToggles();
     renderFileHeads();
@@ -226,17 +224,16 @@ async function refreshViews(loadResult, { show = true } = {}) {
     // daily rows rather than the summary ones.
     renderSummary(summary, daily);
     initDaily(daily);
-    // The daily rows ride along for the member × day heatmap, which is the same
-    // per-PIC figure as the table above it split by date.
-    initProductivity(productivity, daily);
 
     // The plan is not part of `fetchAll`: it is not read out of the workbooks
-    // and it does not change when they are re-read. What Daily and Productivity
-    // need of it is the calendar — one line per day — which `plan.js` holds and
-    // both draw their plan figures from.
+    // and it does not change when they are re-read. What Daily needs of it is
+    // the calendar — one line per day — which `plan.js` holds.
     const plan = await getPlanCalendar();
     if (plan.ok) setPlanCalendar(plan.json);
     await initPlanning();
+    // The Member tab measures the load against the plan, so it is fetched after
+    // both — its own four endpoints, which `fetchAll` does not carry.
+    await refreshMember();
 
     // There is something to publish now.
     setReportEnabled(true);
@@ -374,11 +371,11 @@ initSummaryView({
     onOpenFile: (name) => openFile(name, "summary"),
     onDrillIn: openStatusCases,
 });
-initProductivityView();
-// Saving a day's plan changes what Daily's Plan column and Productivity's
-// attainment bar mean, and both are usually off screen when it happens. Neither
-// view learns about Planning to hear it: `plan.js` announces the change, the
-// same arrangement `theme.js` uses and the one `target.js` used before it.
+initMemberView();
+// Saving a day's plan changes what Daily's Plan column and the Member tab mean,
+// and both are usually off screen when it happens. Neither view learns about
+// Planning to hear it: `plan.js` announces the change, the same arrangement
+// `theme.js` uses and the one `target.js` used before it.
 initPlanningView();
 
 /**

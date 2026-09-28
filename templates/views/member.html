@@ -1,0 +1,31 @@
+        <!-- ==================== Member ====================
+             Each person, two ways. Productivity is throughput — executed cases
+             over the days they tested. The matrix is the plan — what each
+             person was given against what they got through, day by day and
+             for the phase. Both stop at yesterday: today is half a day. Every
+             figure is served by /api/member/*; views/member/ only draws. -->
+        <section class="view" id="memberView" hidden>
+            <section class="card card--table">
+                <div class="card-head card-head--row">
+                    <h2>Productivity by member</h2>
+                    <p class="status-line" id="memberProdNote"></p>
+                </div>
+                <div class="scroll-x scroll-x--flush">
+                    <table class="ledger">
+                        <thead><tr id="memberProdHead"></tr></thead>
+                        <tbody id="memberProdBody"></tbody>
+                        <tfoot id="memberProdFoot"></tfoot>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Plan against actual, member by day. Actual is worked — executed
+                 plus Cancel — the measure every plan figure in the app uses. The
+                 totals on the right are the whole phase through yesterday, not
+                 the week on screen. -->
+            <section class="card card--table">
+                <div class="card-head card-head--row" id="memberMatrixHead"></div>
+                <p class="empty-note is-error" id="memberMatrixError" hidden></p>
+                <div class="scroll-x scroll-x--flush" id="memberMatrix"></div>
+            </section>
+        </section>

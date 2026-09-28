@@ -56,6 +56,7 @@ test-case-management/
 │   │   ├── identity.py         # ai đang đăng nhập Graph, tiến trình device login
 │   │   ├── aggregation.py      # tổng hợp summary / daily / productivity / issues / remaining
 │   │   ├── planning.py         # kế hoạch theo ngày, KPI/burndown/lưới của phase, bảng một ngày
+│   │   ├── members.py          # tab Member: năng suất, plan vs actual theo member × ngày (tính đến hôm qua)
 │   │   ├── phases.py           # phase và thành viên; gợi ý PIC có trong dữ liệu mà chưa có trong danh sách
 │   │   ├── publishing.py       # ghi 3 bảng vào workbook trên SharePoint
 │   │   ├── preparation.py      # chạy 2 thao tác trên nhiều file, lỗi tính theo file (thao tác trên file nguồn)
@@ -64,8 +65,9 @@ test-case-management/
 │       ├── app.py              # Flask app factory: nơi duy nhất chọn implementation
 │       └── blueprints/         # /api/* tách theo tài nguyên, lấy workspace/identity từ app.extensions
 │           ├── source.py        # /api/load, /api/reload, /api/browse, /api/prepare/files
-│           ├── analytics.py     # /api/summary, /api/daily, /api/productivity, /api/cases, /api/file, /api/statuses
+│           ├── analytics.py     # /api/summary, /api/daily, /api/cases, /api/file, /api/statuses
 │           ├── plan.py          # /api/plan (+ /<date>, /phase, /board/<date>, /settings)
+│           ├── member.py        # /api/member/productivity, /totals, /weeks, /week/<thứ 2>
 │           ├── prepare.py       # /api/prepare/tool-data, /api/prepare/clear
 │           ├── settings.py      # /api/config (+ PUT /api/config/<name>)
 │           ├── sharepoint.py    # /api/sharepoint/*, /api/report/publish
@@ -109,7 +111,7 @@ test-case-management/
 │   └── views/              # mỗi view một partial, include theo đúng thứ tự VIEWS trong main.js
 │       ├── summary.html
 │       ├── daily.html
-│       ├── productivity.html
+│       ├── member.html
 │       ├── detail.html
 │       ├── file.html       # vào bằng cách bấm tên file, không có mục trên rail
 │       ├── tools.html
@@ -133,7 +135,7 @@ test-case-management/
         ├── reportPanel.js  # đăng nhập SharePoint + nút Publish
         ├── preparePanel.js # tạo/kiểm TOOL_DATA, xoá kết quả vòng cũ
         ├── filesTable.js   # một bảng file dùng chung cho 2 panel trên
-        ├── plan.js         # lịch kế hoạch (ngày + theo người), nguồn của Plan/Attain ở Daily/Productivity
+        ├── plan.js         # lịch kế hoạch theo ngày, nguồn của Plan/Attain ở Daily
         ├── taxonomy.js     # status từ /api/statuses + scaffolding bảng
         ├── groupedTable.js # bảng gộp nhóm, đóng/mở, dòng cha cộng dồn
         ├── sorting.js      # sort theo cột (asc -> desc -> bỏ sort)
@@ -148,7 +150,10 @@ test-case-management/
             │   └── index.js    # bind listener, renderSummary, export ra ngoài
             ├── summaryOverview.js # dải KPI phía trên các bảng Summary
             ├── daily.js    # tiến độ theo ngày, gộp theo ngày
-            ├── productivity.js # năng suất theo thành viên
+            ├── member/     # tab Member: năng suất + ma trận plan vs actual theo tuần
+            │   ├── productivity.js # bảng năng suất (số liệu từ server)
+            │   ├── matrix.js   # ma trận member × ngày, phân trang theo tuần
+            │   └── index.js    # gọi 4 endpoint /api/member/*, giữ tuần đang xem
             ├── planning/   # phase, KPI, Day plan (ma trận/danh sách), burndown, lưới phase
             │   ├── state.js    # nơi DUY NHẤT khai báo state của Planning
             │   ├── cells.js    # phân loại ô, trạng thái trễ — không đụng DOM
@@ -267,10 +272,13 @@ của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không s�
 | POST   | `/api/reload`  | Nạp lại từ source đã load trước đó |
 | POST   | `/api/browse`  | Mở hộp thoại chọn folder/file của hệ điều hành, trả `{paths}` |
 | GET    | `/api/cases`   | Query `?status=<key>` — các case thuộc đúng status đó, kèm `scope_group` và `device_family`. Thiếu `status` hoặc status lạ → 400 |
-| GET    | `/api/statuses`| Danh sách status (key / label / badge / text) + `needs_reason` + `executed` + `issue` |
+| GET    | `/api/statuses`| Danh sách status (key / label / badge / text) + `needs_reason` + `executed` + `issue` + `worked` |
 | GET    | `/api/summary` | Gộp theo (nhóm Scope, file, device) + danh sách nhóm Scope + danh sách case thiếu lý do |
 | GET    | `/api/daily`   | Gộp theo (file, device, PIC, date) |
-| GET    | `/api/productivity` | Năng suất từng PIC: số case đã thực hiện / số ngày có làm việc |
+| GET    | `/api/member/productivity` | Năng suất từng PIC đến hôm qua: executed / số ngày có làm, kèm Cancel, NG rate, Attainment, dòng Team |
+| GET    | `/api/member/totals` | Mỗi member (và cả team) đến hôm qua: Plan, Actual (worked), Δ, On plan, Unplanned |
+| GET    | `/api/member/weeks` | Các tuần thứ 2 – thứ 6 của ma trận, và tuần chứa hôm nay |
+| GET    | `/api/member/week/<YYYY-MM-DD>` | Ô member × ngày của một tuần (ngày phải là thứ 2) |
 | GET    | `/api/prepare/files` | Các file của source đang nạp: đã có `TOOL_DATA` chưa, mấy block |
 | POST   | `/api/prepare/tool-data` | Body `{"files": [...], "apply": false}` — dò layout, ghi khi `apply` |
 | POST   | `/api/prepare/clear` | Body `{"files": [...], "keep": [...], "apply": false}` — xoá ô kết quả |
@@ -278,7 +286,7 @@ của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không s�
 | POST   | `/api/sharepoint/login`  | Bắt đầu device code flow, trả `{user_code, verification_uri}` |
 | POST   | `/api/sharepoint/logout` | Quên tài khoản đã cache |
 | POST   | `/api/report/publish`    | Body `{"url": "<link SharePoint>", "run_date": "YYYY-MM-DD"?}` |
-| GET    | `/api/plan`    | Query `?from=&to=` — lịch tổng: mỗi ngày một dòng, kèm `by_pic` |
+| GET    | `/api/plan`    | Query `?from=&to=` — lịch tổng: mỗi ngày một dòng (actual tính theo worked) |
 | GET    | `/api/plan/<date>` | Kế hoạch một ngày, mỗi dòng đã ghép với thực tế |
 | PUT    | `/api/plan/<date>` | Body `{"entries": [{pic, file, device, planned}, ...]}` — ghi cả ngày |
 | GET    | `/api/plan/phase` | Query `?window=3\|5\|10\|all` — KPI, burndown và lưới ngày của cả phase |
@@ -313,7 +321,7 @@ migrate một database cũ, app sao lưu nó thành `tcm.db.v<N>-<thời gian>.b
   vẫn áp dụng đúng cho snapshot cũ.
 - **Phase và thành viên** (Planning → Phases & members): có nhiều phase, mỗi phase có tên, ngày
   bắt đầu/kết thúc, target và danh sách thành viên; một phase đang dùng (chọn ở thanh phase).
-  Mọi con số kế hoạch — Planning, dòng Plan của Daily, Attainment của Productivity — đều theo
+  Mọi con số kế hoạch — Planning, dòng Plan của Daily, tab Member — đều theo
   phase đang dùng. Tên PIC có trong dữ liệu nhưng chưa có trong danh sách được gợi ý để thêm.
 - `plan.json` cũ không còn được dùng và không được chuyển sang database.
 
@@ -545,7 +553,7 @@ câu hỏi nào.
 **`"excluded": true` — phần việc có báo cáo nhưng không cam kết.** Nhóm vẫn giữ nguyên bảng
 Summary của mình (con số phải nhìn thấy được, và tiêu đề bảng có nhãn *Not in total*), nhưng
 bị loại khỏi **mọi con số cộng chung các nhóm lại**: dải KPI phía trên, tab Daily, tab
-Productivity, tab Review, và cả báo cáo đẩy lên SharePoint. Cùng một chữ và cùng một ý nghĩa
+Member, tab Review, và cả báo cáo đẩy lên SharePoint. Cùng một chữ và cùng một ý nghĩa
 với `"excluded": true` của status trong `config/result_status.json`.
 
 `fallback` **không được** đặt `excluded` — đó là nơi Scope gõ sai rơi vào, loại nó đi đồng

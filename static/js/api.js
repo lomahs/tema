@@ -69,21 +69,22 @@ export async function postReload() {
  * all eagerly meant every load carried every case of every workbook before
  * anyone had looked at one.
  *
- * @returns {Promise<{taxonomy: Object, summary: Object, daily: Object[],
- *   productivity: Object[]}>}
+ * The Member tab is not among them either: its figures are measured against the
+ * plan, so it is fetched by `views/member/` whenever the load *or* the plan
+ * changes, through the four `getMember*` functions below.
+ *
+ * @returns {Promise<{taxonomy: Object, summary: Object, daily: Object[]}>}
  */
 export async function fetchAll() {
-    const [statusRes, summaryRes, dailyRes, prodRes] = await Promise.all([
+    const [statusRes, summaryRes, dailyRes] = await Promise.all([
         fetch("/api/statuses"),
         fetch("/api/summary"),
         fetch("/api/daily"),
-        fetch("/api/productivity"),
     ]);
     return {
         taxonomy: await statusRes.json(),
         summary: await summaryRes.json(),
         daily: await dailyRes.json(),
-        productivity: await prodRes.json(),
     };
 }
 
@@ -351,6 +352,55 @@ export async function getPlanPhase(window = "5") {
  */
 export async function getPlanBoard(date) {
     const res = await fetch(`/api/plan/board/${encodeURIComponent(date)}`);
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * Productivity per member through yesterday, with each member's plan beside it.
+ *
+ * @returns {Promise<ApiResponse>} On success `json` is `{today, through, rows,
+ *   team}`; each row carries the executed statuses, the worked-but-not-executed
+ *   ones, `executed`, `worked`, `days`, `productivity`, `ng_rate`, `planned` and
+ *   `attainment`.
+ */
+export async function getMemberProductivity() {
+    const res = await fetch("/api/member/productivity");
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * Each member against the plan through yesterday, and the team.
+ *
+ * @returns {Promise<ApiResponse>} On success `json` is `{today, through,
+ *   members: [{pic, aside, planned, actual, executed, cancel, unplanned, delta,
+ *   adherence, attainment}], team}`.
+ */
+export async function getMemberTotals() {
+    const res = await fetch("/api/member/totals");
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * The Monday-to-Friday weeks the member matrix pages through.
+ *
+ * @returns {Promise<ApiResponse>} On success `json` is `{today, through,
+ *   weeks: [{start, end, days: [{date, in_phase}]}], current}`.
+ */
+export async function getMemberWeeks() {
+    const res = await fetch("/api/member/weeks");
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
+ * One week of the member matrix.
+ *
+ * @param {string} monday "YYYY-MM-DD", a Monday.
+ * @returns {Promise<ApiResponse>} On success `json` is `{today, through, start,
+ *   days, cells: {pic: {date: {state, planned, actual, executed, cancel, delta,
+ *   short}}}, team: {date: {planned, actual, delta}}}`; on failure `{error}`.
+ */
+export async function getMemberWeek(monday) {
+    const res = await fetch(`/api/member/week/${encodeURIComponent(monday)}`);
     return { ok: res.ok, json: await res.json() };
 }
 

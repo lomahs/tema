@@ -312,7 +312,7 @@ function renderScopes(data) {
             <td><div class="config-flags">
                 ${flag(i, "excluded", "excl.", g.excluded,
                        "Reported in its own Summary table, but left out of the totals, "
-                     + "the Daily and Productivity figures, Review and the published report")}
+                     + "the Daily and Member figures, Review and the published report")}
             </div></td>
             <td class="actions">
                 <button type="button" class="btn btn-sm" data-act="remove" data-row="${i}"

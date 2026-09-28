@@ -162,6 +162,10 @@ function dailyAggregate(rows) {
         device: shared("device"),
         pic: shared("pic"),
         members: new Set(rows.map((r) => r.pic).filter(Boolean)).size,
+        // What the plan is read against: executed plus what left the pile
+        // unrun (Cancel). Summed from the rows' own field, which the server
+        // counts, rather than re-derived from the taxonomy here.
+        worked: rows.reduce((acc, r) => acc + (r.worked || 0), 0),
     };
 }
 
@@ -183,8 +187,10 @@ function dailyCells(row, depth) {
     // `null` when that date was never planned, which is not a plan of zero:
     // the day was not behind, it was never scheduled. Every day already in the
     // workbooks reads this way until somebody plans it.
+    // Attain divides worked, not executed: a plan of 100 that ended 90 OK and
+    // 10 Cancel is on plan, as Planning and the Member tab read it too.
     const plan = plannedFor(row.date);
-    const attain = plan ? Math.round((executed / plan) * 100) : null;
+    const attain = plan ? Math.round((row.worked / plan) * 100) : null;
     // Three bands, as the design has them: on plan, close, behind. The tone is
     // the same vocabulary the statuses use, so nothing new is being said here.
     const tone = attain === null ? "muted" : attain >= 100 ? "success" : attain >= 80 ? "warn" : "danger";
@@ -292,7 +298,11 @@ function renderDaily() {
     // Cumulative runs in date order regardless of how the table is sorted:
     // a running total that reversed with the sort would not be one.
     const byDate = new Map();
-    rows.forEach((r) => byDate.set(r.date, (byDate.get(r.date) || 0) + executedIn(r)));
+    const workedByDate = new Map();
+    rows.forEach((r) => {
+        byDate.set(r.date, (byDate.get(r.date) || 0) + executedIn(r));
+        workedByDate.set(r.date, (workedByDate.get(r.date) || 0) + (r.worked || 0));
+    });
     cumulative = new Map();
     let running = 0;
     [...byDate.keys()].sort().forEach((d) => {
@@ -306,7 +316,7 @@ function renderDaily() {
         ...[...byDate.keys()].map((d) => plannedFor(d) || 0),
     ) * 1.12;
 
-    renderChart(byDate);
+    renderChart(byDate, workedByDate);
 
     currentPage = 1;
     renderDailyBody();
@@ -324,9 +334,13 @@ function renderDaily() {
  * the whole dataset — a chart contradicting the table beneath it is worse than
  * a chart with a narrower question.
  *
+ * The bar is executed — throughput — while its tone says how the day went
+ * against the plan, which is worked: the same pairing the Attain column makes.
+ *
  * @param {Map<string, number>} byDate Executed cases per date.
+ * @param {Map<string, number>} workedByDate Worked cases per date.
  */
-function renderChart(byDate) {
+function renderChart(byDate, workedByDate) {
     const dates = [...byDate.keys()].sort();
 
     if (!dates.length) {
@@ -343,14 +357,16 @@ function renderChart(byDate) {
 
     $("#dailyChart").innerHTML = dates.map((d) => {
         const n = byDate.get(d) || 0;
+        const done = workedByDate.get(d) || 0;
         const plan = plannedFor(d);
-        const attain = plan ? (n / plan) * 100 : null;
+        const attain = plan ? (done / plan) * 100 : null;
         // A day with no plan has nothing to be on or behind, so its bar keeps
         // the Executed colour the legend names; a planned day shows how it went.
         const tone = attain === null ? ""
             : attain >= 100 ? "success" : attain >= 80 ? "warn" : "danger";
         const toneAttr = tone ? ` data-tone="${tone}"` : "";
         return `<div class="bar-col" title="${esc(d)}: ${n} executed${
+            done !== n ? `, ${done} done against the plan` : ""}${
             plan ? `, plan ${plan}` : ""}">
             <span class="bar-count num"${toneAttr}>${n || ""}</span>
             <span class="bar-track">

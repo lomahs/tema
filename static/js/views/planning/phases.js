@@ -5,7 +5,7 @@
  * Every write answers with the whole overview, which this adopts and redraws;
  * anything that changes what the planner reads (switching or editing the active
  * phase, the roster) is reported through `onChanged`, because reloading the
- * planner, Daily and Productivity is `index.js`'s job. A write that only changes
+ * planner, Daily and the Member tab is `index.js`'s job. A write that only changes
  * the list of phases — a new one, a rename — reports through `onListed`, so the
  * phase bar's select is redrawn without reloading every figure. Rows address a phase or
  * a member by index into `data.phases`, never through an attribute holding a name.
