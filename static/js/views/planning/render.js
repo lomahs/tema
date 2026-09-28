@@ -31,7 +31,7 @@ export function drawn() {
 }
 
 const num = (n) => Number(n || 0).toLocaleString();
-const toneOf = { ok: "success", togo: "warn", missed: "danger" };
+const toneOf = { ok: "success", exceeded: "success", offset: "success", togo: "warn", missed: "danger" };
 
 // --- phase bar and KPIs ------------------------------------------------------
 
@@ -217,8 +217,13 @@ function renderMatrix(day) {
         <thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table>`;
 }
 
+/** A total's standing, and — when it beat its plan with a cell still short — that shortfall beneath it. */
 function behindLine(b) {
-    return b.text ? `<span class="plan-behind" data-tone="${toneOf[b.kind]}">${esc(b.text)}</span>` : "";
+    if (!b.text) return "";
+    const line = `<span class="plan-behind" data-tone="${toneOf[b.kind]}">${esc(b.text)}</span>`;
+    return b.note
+        ? `${line}<span class="plan-behind plan-behind--note" data-tone="${toneOf[b.note.kind]}">${esc(b.note.text)}</span>`
+        : line;
 }
 
 function renderList(day) {

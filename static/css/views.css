@@ -607,24 +607,46 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 .plan-cell[data-state="empty"]     { --base: var(--level-0); color: var(--ink-faint); }
 .plan-cell[data-state="future"]    { --base: var(--tone-neutral-bg); }
 .plan-cell[data-state="nys"]       { --base: var(--tone-neutral-bg); }
-.plan-cell[data-state="wip"]       { --fill: var(--level-0); --base: var(--tone-neutral-bg); }
+/* Work under way is the one state a reader scans the board for, so it is the
+   one drawn in outline: a warn-tone bar over a blank track, ringed, where NYS
+   and Planned are flat grey and Unplanned a flat tint with no ring. */
+.plan-cell[data-state="wip"]       { --fill: color-mix(in srgb, var(--tone-warn) 45%, var(--tone-warn-bg));
+                                     --base: var(--paper-raised);
+                                     box-shadow: inset 0 0 0 1.5px var(--tone-warn); }
+.plan-cell[data-state="wip"]:hover { box-shadow: inset 0 0 0 1.5px var(--ink); }
 .plan-cell[data-state="done"]      { --fill: var(--tone-success-bg); --base: var(--tone-success-bg); }
 .plan-cell[data-state="exceeded"]  { --fill: color-mix(in srgb, var(--tone-success) 35%, var(--tone-success-bg));
                                      --base: var(--fill); }
 .plan-cell[data-state="unplanned"] { --fill: var(--tone-warn-bg); --base: var(--tone-warn-bg); }
 .plan-cell[data-state="done"] .plan-cell-state,
 .plan-cell[data-state="exceeded"] .plan-cell-state { color: var(--tone-success-fg); }
-.plan-cell[data-state="unplanned"] .plan-cell-state { color: var(--tone-warn-fg); }
+.plan-cell[data-state="unplanned"] .plan-cell-state,
+.plan-cell[data-state="wip"] .plan-cell-state { color: var(--tone-warn-fg); }
 .plan-cell--over { --base: var(--tone-danger-bg); color: var(--tone-danger-fg); }
 .plan-cell--over[data-state="wip"],
 .plan-cell--over[data-state="done"],
 .plan-cell--over[data-state="exceeded"] { --fill: color-mix(in srgb, var(--tone-danger) 25%, var(--tone-danger-bg)); }
-.plan-cell--over .plan-cell-state { color: var(--tone-danger-fg); }
+.plan-cell--over[data-state="wip"] { box-shadow: inset 0 0 0 1.5px var(--tone-danger); }
+.plan-cell--over[data-state="wip"]:hover { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.plan-cell--over .plan-cell-state,
+.plan-cell--over[data-state="wip"] .plan-cell-state { color: var(--tone-danger-fg); }
 
 .plan-behind { display: block; font-size: 10.5px; font-weight: 600; font-family: var(--font-sans, inherit); }
 .plan-behind[data-tone="success"] { color: var(--tone-success-fg); }
 .plan-behind[data-tone="warn"]    { color: var(--tone-warn-fg); }
 .plan-behind[data-tone="danger"]  { color: var(--tone-danger-fg); }
+/* The shortfall under a total that beat its plan anyway. A tinted token rather
+   than a second plain line, so "exceeded +20" above it cannot be read as the
+   whole story: the surplus came from one cell and the debt sits in another. */
+.plan-behind--note {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 0 var(--sp-1);
+    border-radius: var(--r-full);
+    white-space: nowrap;
+}
+.plan-behind--note[data-tone="warn"]   { background: var(--tone-warn-bg); }
+.plan-behind--note[data-tone="danger"] { background: var(--tone-danger-bg); }
 .plan-matrix td.is-heavy { color: var(--tone-warn-fg); }
 
 /* The matrix spans the card: unlike a ledger of figures it is a board you
