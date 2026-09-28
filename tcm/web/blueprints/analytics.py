@@ -111,9 +111,3 @@ def get_file():
 def get_daily():
     """Stats grouped by file, device, PIC, and test_date."""
     return jsonify(aggregate.daily_rows(workspace().cases))
-
-
-@bp.route("/api/productivity")
-def get_productivity():
-    """Cases executed per working day, per PIC."""
-    return jsonify(aggregate.productivity_rows(workspace().cases))

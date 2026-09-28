@@ -300,10 +300,12 @@ def test_daily_rows_reconcile_and_skip_cases_without_a_date(client, workbook_dir
     assert sum(r["total"] for r in rows) == 5
 
 
-# --- /api/productivity -----------------------------------------------------
+# --- /api/member/productivity ----------------------------------------------
+# The fixtures are dated August 2026, so every case is before the app's today
+# and inside the totals, which stop at yesterday.
 
 def rows_by_pic(client):
-    return {r["pic"]: r for r in client.get("/api/productivity").get_json()}
+    return {r["pic"]: r for r in client.get("/api/member/productivity").get_json()["rows"]}
 
 
 def test_productivity_is_executed_cases_over_working_days(client, productivity_dir):
@@ -375,7 +377,7 @@ def test_reload_reuses_the_remembered_source(client, workbook_dir):
 def test_empty_store_returns_empty_aggregates(client):
     assert client.get("/api/cases?status=OK").get_json() == []
     assert client.get("/api/daily").get_json() == []
-    assert client.get("/api/productivity").get_json() == []
+    assert client.get("/api/member/productivity").get_json()["rows"] == []
     body = client.get("/api/summary").get_json()
     assert body["groups"] == [] and body["missing_reason"] == []
     # The scope groups describe the tables, not the data, so they are served
@@ -545,7 +547,7 @@ def test_every_figure_that_adds_groups_together_drops_one_outside_the_plan(
     load(client, workbook_dir)
 
     assert client.get("/api/daily").get_json() == []
-    assert client.get("/api/productivity").get_json() == []
+    assert client.get("/api/member/productivity").get_json()["rows"] == []
 
 
 def test_detail_is_served_a_scope_group_outside_the_plan_to_label(

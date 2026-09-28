@@ -142,6 +142,10 @@ class PlanningService:
         """The store this service was built over."""
         return self._repo
 
+    def today(self) -> str:
+        """The date this service reads as today — injected, so tests can pick it."""
+        return self._today()
+
     # --- reading and writing the plan --------------------------------------
 
     def get_day(self, date: str) -> DayPlan:

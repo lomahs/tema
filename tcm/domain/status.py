@@ -99,7 +99,7 @@ class StatusSet:
         self.keys = [s.key for s in statuses]
         self.needs_reason = needs_reason
         #: Statuses that count as work actually carried out, in taxonomy order.
-        #: `/api/productivity` measures cases per working day against these.
+        #: `/api/member/productivity` measures cases per working day against these.
         self.executed = executed
         #: Statuses a reader needs to chase up, in taxonomy order. The report's
         #: Issues sheet lists exactly these, so "which results are problems" is

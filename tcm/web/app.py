@@ -13,10 +13,12 @@ from tcm.infrastructure.excel.loader import ExcelCaseLoader
 from tcm.infrastructure.graph.auth import GraphAuth
 from tcm.infrastructure.store.memory import InMemoryCaseStore
 from tcm.services.identity import IdentityService
+from tcm.services.members import MemberService
 from tcm.services.phases import PhaseService
 from tcm.services.planning import PlanningService
 from tcm.services.workspace import Workspace
 from tcm.web.blueprints import analytics, pages, plan, prepare, sharepoint, snapshots, source
+from tcm.web.blueprints import member as member_bp
 from tcm.web.blueprints import phases as phases_bp
 from tcm.web.blueprints import settings as settings_bp
 
@@ -67,9 +69,12 @@ def create_app(workspace=None, identity=None, planning=None, phases=None, databa
     ))
     app.extensions["planning"] = planning or PlanningService(SqlPlanRepository(database))
     app.extensions["phases"] = phases or PhaseService(SqlPhaseRepository(database))
+    # Built over the planning service rather than handed in: it adds no I/O of
+    # its own, so a test that fakes the plan has already faked everything here.
+    app.extensions["member"] = MemberService(app.extensions["planning"])
 
-    for module in (source, snapshots, analytics, plan, phases_bp, prepare, settings_bp,
-                   sharepoint, pages):
+    for module in (source, snapshots, analytics, plan, member_bp, phases_bp, prepare,
+                   settings_bp, sharepoint, pages):
         app.register_blueprint(module.bp)
 
     return app

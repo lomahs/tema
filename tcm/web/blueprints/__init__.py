@@ -29,3 +29,12 @@ def phase_service():
     this package, and would silently replace a helper called the same.
     """
     return current_app.extensions["phases"]
+
+
+def member_report():
+    """The MemberService this app was built with.
+
+    Not `member()`, for the reason `phase_service` is not `phases()`: the
+    `member` blueprint module would bind that name on this package.
+    """
+    return current_app.extensions["member"]
