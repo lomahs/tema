@@ -6,25 +6,24 @@
  * every plan figure in the app was multiplied out of, kept in `localStorage`
  * because nothing on the server knew about it. A plan says what was actually
  * meant to happen on a given day, for named people on named files, so it lives
- * on the server, it differs per day, and it is the thing Daily's plan line is
- * drawn from.
+ * on the server and it differs per day.
  *
- * What is held here is the *calendar*: one line per day, planned against done.
- * That is what Daily needs, and it is small — a few hundred numbers for a
- * sprint. The phase and a single day's board are fetched by `views/planning/`,
- * and each member's figures by `views/member/`, when somebody is looking at
- * them; the calendar used to carry per-person totals too, and two sources for
- * one attainment figure is how they would come to disagree.
+ * What is held here is the *calendar* — one line per day — and what it is for
+ * is narrower than it was: whether anything is planned at all, and the
+ * announcement that the plan changed. No figure is read off it any more. Every
+ * plan-against-actual number is the server's, for the selection it is about:
+ * Daily asks `/api/plan/daily` with its filters, the Member tab asks
+ * `/api/member/*`, Planning asks for the phase and the board. A calendar total
+ * divided in the browser is how a filtered Daily was measured against the
+ * whole team's plan.
  *
  * It lives in its own module for the reason `theme.js` and the old `target.js`
  * do: an imported ES binding cannot be reassigned by the importer, so the value
  * is reached through functions and changes are announced.
  *
- * One consequence is deliberate and worth knowing. A day nobody planned has no
- * plan figure at all — `plannedFor` answers `null`, not `0`. Zero is a plan
- * somebody set; "no plan" is the absence of one, and a chart drawing a plan
- * line at zero across every day before this feature existed would be inventing
- * a target nobody agreed to.
+ * The calendar also lists days that were worked but never planned, with a
+ * plan of 0 — so "is anything planned" is asked of the figures, not of how
+ * many days there are.
  */
 
 /** @typedef {{date: string, planned: number, actual: number, people: number}} PlanDay */
@@ -45,29 +44,9 @@ export function setPlanCalendar(calendar) {
     listeners.forEach((fn) => fn());
 }
 
-/**
- * How many cases were planned for one day.
- *
- * @param {string} date "YYYY-MM-DD".
- * @returns {?number} `null` when that day was never planned — which is not the
- *   same as a plan of zero, and callers must not treat it as one.
- */
-export function plannedFor(date) {
-    const day = byDate.get(date);
-    return day ? day.planned : null;
-}
-
 /** @returns {boolean} Whether any day at all has been planned. */
 export function hasPlan() {
-    return byDate.size > 0;
-}
-
-/**
- * Every planned day, in date order.
- * @returns {PlanDay[]}
- */
-export function planDays() {
-    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+    return [...byDate.values()].some((d) => d.planned > 0);
 }
 
 /**

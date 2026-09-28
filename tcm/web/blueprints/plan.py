@@ -6,7 +6,7 @@ against actuals, the phase and board figures — is the service's; what stays
 here is the request: which date, which window, and turning the domain's
 `ValueError` into the 400 that carries its message.
 
-The named routes (`phase`, `settings`, `board/<date>`) are registered before
+The named routes (`daily`, `phase`, `settings`, `board/<date>`) are registered before
 `/api/plan/<date>` on purpose: registered after it, "phase" would be read as a
 date and refused.
 
@@ -35,6 +35,23 @@ def get_calendar():
     try:
         return jsonify(planning().calendar_view(
             request.args.get("from"), request.args.get("to"), _cases()))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.route("/api/plan/daily")
+def get_daily_plan():
+    """GET /api/plan/daily?file=&device=&pic=&from=&to= — Daily's plan and attain.
+
+    Filtered on both sides by exactly the values Daily's filters hold, so a
+    narrowed Daily is measured against the plan for that same narrowing.
+    """
+    args = request.args
+    try:
+        return jsonify(planning().daily_plan(
+            _cases(),
+            file=args.get("file") or None, device=args.get("device") or None,
+            pic=args.get("pic") or None, start=args.get("from"), end=args.get("to")))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 

@@ -287,6 +287,7 @@ của team bạn ghi `Status` thay vì `結果` thì sửa file đó, không s�
 | POST   | `/api/sharepoint/logout` | Quên tài khoản đã cache |
 | POST   | `/api/report/publish`    | Body `{"url": "<link SharePoint>", "run_date": "YYYY-MM-DD"?}` |
 | GET    | `/api/plan`    | Query `?from=&to=` — lịch tổng: mỗi ngày một dòng (actual tính theo worked) |
+| GET    | `/api/plan/daily` | Query `?file=&device=&pic=&from=&to=` — plan, worked và Attain theo ngày, lọc giống bộ lọc của Daily |
 | GET    | `/api/plan/<date>` | Kế hoạch một ngày, mỗi dòng đã ghép với thực tế |
 | PUT    | `/api/plan/<date>` | Body `{"entries": [{pic, file, device, planned}, ...]}` — ghi cả ngày |
 | GET    | `/api/plan/phase` | Query `?window=3\|5\|10\|all` — KPI, burndown và lưới ngày của cả phase |

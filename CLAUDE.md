@@ -515,14 +515,18 @@ There used to be a `target.js`: cases per person per day, kept in `localStorage`
 the people who happened to work that day to produce Daily's plan line, the daily log's Plan and
 Attain columns and Productivity's attainment bar. It is gone. Those figures now come from
 what somebody actually planned for a named day — see the Planning section below. `plan.js`
-holds the *calendar* (one line per day), because that is what Daily needs and it is small, and
-announces changes through `onPlanChange` exactly as `theme.js` does. It no longer carries a
-per-PIC total: the Member tab asks `/api/member/*`, whose figures are computed together on the
-server, and two sources for one attainment figure is how they would come to disagree. The phase
-and a single day's board are fetched by `views/planning/` when somebody is looking at them.
+holds the *calendar* (one line per day), but **no figure is read off it any more**: it answers
+`hasPlan()` and announces changes through `onPlanChange` exactly as `theme.js` does. Every
+plan-against-actual number is the server's, for the selection it is about — Daily asks
+`/api/plan/daily` with its filters, the Member tab `/api/member/*`, Planning the phase and the
+board. A calendar total divided in the browser is how a Daily filtered to one member was measured
+against the whole team's plan (one member exactly on plan read as 60%). `hasPlan()` asks whether
+any day's `planned` is above zero, not how many days there are: the calendar also lists days that
+were worked and never planned.
 
-**A day nobody planned has no plan figure, not a plan of zero.** `plannedFor(date)` answers
-`null`, and Daily draws no line and no Attain figure for such a day; the Member tab's `delta`,
+**A day nobody planned has no plan figure, not a plan of zero.** `/api/plan/daily` answers
+`planned: null` for a day whose plan has no row matching the filters, and Daily draws no line and
+no Attain figure for it; the Member tab's `delta`,
 `adherence` and `attainment` are `null` for a member or a day with no plan, for the same reason.
 Zero is a plan somebody set; the absence of one is not, and a chart drawing a flat zero across
 every day that predates this feature would be inventing a target nobody agreed to. **The cost is
@@ -716,6 +720,14 @@ Behavior worth preserving when touching the UI:
   design's, it answers to the filters above it — a chart contradicting the table beneath it is
   worse than a chart with a narrower question. Cumulative is computed in date order regardless of
   how the table is sorted, because a running total that reversed with the sort would not be one.
+  **The plan side answers to the filters too, and it is the server's.** Every filter change asks
+  `/api/plan/daily?file=&device=&pic=&from=&to=` (`PlanningService.daily_plan`), which narrows the
+  plan and the worked cases by the same values and divides; the chart's plan line, its bar tone
+  and the Plan / Attain columns are drawn from that and nothing else. Until it answers they show
+  no plan rather than the previous filters' one, and a ticket drops an answer that arrives after a
+  newer request. The status band, Executed and Cumulative are still summed in the browser from
+  `/api/daily` — the filters are client-side, and moving Daily itself onto the server is a bigger
+  change than this one.
 - **Every figure in a status band is a door into the cases it counts**, and there is one
   implementation of that: `statusCells` in `taxonomy.js` takes a `link` context and renders each
   non-zero figure as a button carrying it. Summary's rows and footers, the file page and Daily all
@@ -881,7 +893,7 @@ since work was planned and done on it. Order is fewest-remaining first.
 without being executed — nobody passed or failed it, but nobody will run it either — so a plan
 of 100 that ended 90 OK and 10 Cancel is on plan. The burndown has to reconcile too (remaining +
 worked = every counted case). So **every** plan comparison — `phase_view`, `board_view`,
-`day_view`, `calendar_view`, Daily's Attain and bar tone, the Member tab's Actual — measures
+`day_view`, `calendar_view`, `daily_plan` (Daily's Attain and bar tone), the Member tab's Actual — measures
 `worked`, while throughput — Daily's Executed column and bars, the Member tab's productivity —
 stays `executed`. `daily_rows` carries both as fields, so nothing downstream re-derives them
 from the taxonomy, and `/api/statuses` names the `worked` keys so the browser can draw the

@@ -20,7 +20,8 @@ import { makeSortable, paintSortIndicators, sortableTh, sortGrouped } from "../s
 import {
     executedIn, getStatuses, statusCells, statusHeadCells, sumRows,
 } from "../taxonomy.js";
-import { hasPlan, onPlanChange, plannedFor } from "../plan.js";
+import { hasPlan, onPlanChange } from "../plan.js";
+import { getDailyPlan } from "../api.js";
 
 /** Dates per page. A date is a group, however many rows it holds. */
 const PAGE_SIZE = 10;
@@ -42,6 +43,17 @@ let dailyData = [];
 let cumulative = new Map();
 /** The largest of (any day's executed, the plan) — the chart's ceiling. */
 let chartMax = 1;
+/** Executed cases per date over the filtered rows — the chart's bars. */
+let executedByDate = new Map();
+/**
+ * `/api/plan/daily` for the current filters, by date: `{planned, worked,
+ * attain}`. The server narrows the plan and the worked cases by the same
+ * filters and divides, so nothing here measures anything against a plan.
+ * @type {Map<string, {planned: ?number, worked: number, attain: ?number}>}
+ */
+let planByDate = new Map();
+/** Bumped per request, so a slow answer for old filters cannot land last. */
+let planRequest = 0;
 /** @type {Object[]} `dailyData` after filters and sorting */
 let dailyRows = [];
 let currentPage = 1;
@@ -162,10 +174,6 @@ function dailyAggregate(rows) {
         device: shared("device"),
         pic: shared("pic"),
         members: new Set(rows.map((r) => r.pic).filter(Boolean)).size,
-        // What the plan is read against: executed plus what left the pile
-        // unrun (Cancel). Summed from the rows' own field, which the server
-        // counts, rather than re-derived from the taxonomy here.
-        worked: rows.reduce((acc, r) => acc + (r.worked || 0), 0),
     };
 }
 
@@ -184,13 +192,13 @@ function dailyCells(row, depth) {
 
     if (depth !== 0) return executedCell + blank;
 
-    // `null` when that date was never planned, which is not a plan of zero:
-    // the day was not behind, it was never scheduled. Every day already in the
-    // workbooks reads this way until somebody plans it.
-    // Attain divides worked, not executed: a plan of 100 that ended 90 OK and
-    // 10 Cancel is on plan, as Planning and the Member tab read it too.
-    const plan = plannedFor(row.date);
-    const attain = plan ? Math.round((row.worked / plan) * 100) : null;
+    // Both figures are the server's, for the filters on screen. `null` when no
+    // plan matches that date and selection, which is not a plan of zero: the
+    // day was not behind, it was never scheduled. Attain is worked over plan —
+    // a plan of 100 that ended 90 OK and 10 Cancel is on plan.
+    const day = planByDate.get(row.date);
+    const plan = day ? day.planned : null;
+    const attain = day && day.attain !== null ? Math.round(day.attain * 100) : null;
     // Three bands, as the design has them: on plan, close, behind. The tone is
     // the same vocabulary the statuses use, so nothing new is being said here.
     const tone = attain === null ? "muted" : attain >= 100 ? "success" : attain >= 80 ? "warn" : "danger";
@@ -297,28 +305,37 @@ function renderDaily() {
 
     // Cumulative runs in date order regardless of how the table is sorted:
     // a running total that reversed with the sort would not be one.
-    const byDate = new Map();
-    const workedByDate = new Map();
-    rows.forEach((r) => {
-        byDate.set(r.date, (byDate.get(r.date) || 0) + executedIn(r));
-        workedByDate.set(r.date, (workedByDate.get(r.date) || 0) + (r.worked || 0));
-    });
+    executedByDate = new Map();
+    rows.forEach((r) => executedByDate.set(r.date, (executedByDate.get(r.date) || 0) + executedIn(r)));
     cumulative = new Map();
     let running = 0;
-    [...byDate.keys()].sort().forEach((d) => {
-        running += byDate.get(d);
+    [...executedByDate.keys()].sort().forEach((d) => {
+        running += executedByDate.get(d);
         cumulative.set(d, running);
     });
 
-    chartMax = Math.max(
-        1,
-        ...[...byDate.values()],
-        ...[...byDate.keys()].map((d) => plannedFor(d) || 0),
-    ) * 1.12;
-
-    renderChart(byDate, workedByDate);
-
+    // The plan for these filters is a request away. Until it answers, no plan
+    // figure is drawn rather than one for the previous filters.
+    planByDate = new Map();
+    renderChart();
     currentPage = 1;
+    renderDailyBody();
+    loadPlan({ file: ff, device: fd, pic: fp, from: dfrom, to: dto });
+}
+
+/**
+ * Fetch the plan and attainment for the filters on screen, then redraw what
+ * reads them: the chart and the Plan / Attain columns. The page is kept —
+ * this is the same selection arriving complete, not a new one.
+ *
+ * @param {Object} filters Daily's filter values, as `getDailyPlan` takes them.
+ */
+async function loadPlan(filters) {
+    const ticket = ++planRequest;
+    const { ok, json } = await getDailyPlan(filters);
+    if (!ok || ticket !== planRequest) return;
+    planByDate = new Map(json.days.map((d) => [d.date, d]));
+    renderChart();
     renderDailyBody();
 }
 
@@ -335,13 +352,14 @@ function renderDaily() {
  * a chart with a narrower question.
  *
  * The bar is executed — throughput — while its tone says how the day went
- * against the plan, which is worked: the same pairing the Attain column makes.
- *
- * @param {Map<string, number>} byDate Executed cases per date.
- * @param {Map<string, number>} workedByDate Worked cases per date.
+ * against the plan, which is the server's attain for these filters: the same
+ * pairing the Attain column makes.
  */
-function renderChart(byDate, workedByDate) {
+function renderChart() {
+    const byDate = executedByDate;
     const dates = [...byDate.keys()].sort();
+    chartMax = Math.max(1, ...byDate.values(),
+        ...dates.map((d) => (planByDate.get(d) || {}).planned || 0)) * 1.12;
 
     if (!dates.length) {
         $("#dailyChart").innerHTML = `<p class="panel-empty">No dated cases match these filters.</p>`;
@@ -357,9 +375,10 @@ function renderChart(byDate, workedByDate) {
 
     $("#dailyChart").innerHTML = dates.map((d) => {
         const n = byDate.get(d) || 0;
-        const done = workedByDate.get(d) || 0;
-        const plan = plannedFor(d);
-        const attain = plan ? (done / plan) * 100 : null;
+        const day = planByDate.get(d);
+        const plan = day ? day.planned : null;
+        const done = day ? day.worked : n;
+        const attain = day && day.attain !== null ? day.attain * 100 : null;
         // A day with no plan has nothing to be on or behind, so its bar keeps
         // the Executed colour the legend names; a planned day shows how it went.
         const tone = attain === null ? ""

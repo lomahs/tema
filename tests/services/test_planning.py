@@ -244,6 +244,54 @@ def test_the_calendar_no_longer_carries_per_person_totals():
     assert "by_pic" not in view and "actual_by_pic" not in view
 
 
+# --- Daily's plan, under Daily's filters ---------------------------------------
+# Daily filters its rows by file, device, PIC and date, so the plan it measures
+# them against has to be filtered the same way: a PIC's worked cases over the
+# whole team's plan is how one member on plan read as 60% attained.
+
+def _two_members():
+    svc = service()
+    svc.save_day("2026-09-23", [entry(pic="An", file="A.xlsx", planned=30),
+                                entry(pic="Binh", file="B.xlsx", planned=20)])
+    cases = ([case(pic="An", file_name="A.xlsx", test_date="2026-09-23", result="OK", row_num=i)
+              for i in range(20)]
+             + [case(pic="An", file_name="A.xlsx", test_date="2026-09-23", result="対象外",
+                     row_num=100 + i) for i in range(10)]
+             + [case(pic="Binh", file_name="B.xlsx", test_date="2026-09-23", result="OK",
+                     row_num=200 + i) for i in range(25)])
+    return svc, cases
+
+
+def test_daily_plan_unfiltered_is_the_whole_team():
+    svc, cases = _two_members()
+    assert svc.daily_plan(cases)["days"] == [
+        {"date": "2026-09-23", "planned": 50, "worked": 55, "attain": 1.1}]
+
+
+def test_daily_plan_follows_a_pic_filter_on_both_sides():
+    svc, cases = _two_members()
+    assert svc.daily_plan(cases, pic="An")["days"] == [
+        {"date": "2026-09-23", "planned": 30, "worked": 30, "attain": 1.0}]
+
+
+def test_daily_plan_follows_a_file_filter_on_both_sides():
+    svc, cases = _two_members()
+    day = svc.daily_plan(cases, file="B.xlsx")["days"][0]
+    assert (day["planned"], day["worked"]) == (20, 25)
+
+
+def test_a_filter_nobody_planned_has_no_plan_rather_than_a_plan_of_zero():
+    svc, cases = _two_members()
+    cases += [case(pic="Chi", file_name="A.xlsx", test_date="2026-09-23", result="OK", row_num=300)]
+    assert svc.daily_plan(cases, pic="Chi")["days"] == [
+        {"date": "2026-09-23", "planned": None, "worked": 1, "attain": None}]
+
+
+def test_daily_plan_respects_the_date_range():
+    svc, cases = _two_members()
+    assert svc.daily_plan(cases, start="2026-09-24")["days"] == []
+
+
 # --- the phase and the day board -------------------------------------------
 # 2026-09-22 is a Tuesday. The load: ten cases nobody has run, four An ran on
 # Monday and two An ran today.

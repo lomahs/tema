@@ -295,6 +295,26 @@ export async function getPlanCalendar(range = {}) {
 }
 
 /**
+ * Daily's plan and attainment, per day, under Daily's filters.
+ *
+ * Both sides — what was planned and what was worked — are narrowed by the same
+ * file / device / PIC / date values on the server, which also does the
+ * division, so a filtered Daily is never measured against the whole team's plan.
+ *
+ * @param {{file?: string, device?: string, pic?: string, from?: string, to?: string}} filters
+ *   Empty values mean "not filtered".
+ * @returns {Promise<ApiResponse>} On success `json` is `{days: [{date, planned,
+ *   worked, attain}]}` — `planned` and `attain` are null for a day with no
+ *   matching plan; on failure `{error}`.
+ */
+export async function getDailyPlan(filters = {}) {
+    const q = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => { if (v) q.set(k, v); });
+    const res = await fetch(`/api/plan/daily${q.toString() ? `?${q}` : ""}`);
+    return { ok: res.ok, json: await res.json() };
+}
+
+/**
  * One day's plan, each row joined to what that person actually ran.
  *
  * Rows with an `actual` but no `planned` are work nobody scheduled; they are

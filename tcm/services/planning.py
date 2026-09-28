@@ -255,6 +255,43 @@ class PlanningService:
             "actual_total": sum(d["actual"] for d in days),
         }
 
+    def daily_plan(self, cases, file=None, device=None, pic=None, start=None, end=None) -> dict:
+        """Planned against worked per day, under Daily's filters.
+
+        Daily narrows its rows by file, device, PIC and date, and the plan it
+        reads them against has to be narrowed the same way — one member's worked
+        cases over the whole team's plan is how a member on plan read as 60%
+        attained. So both sides are filtered here, by the same four values, and
+        the division is done here rather than in the browser.
+
+        A day whose plan has no row matching the filters has `planned: None`,
+        not 0: nobody set a figure for that selection.
+        """
+        start = parse_date(start, "from") if start else None
+        end = parse_date(end, "to") if end else None
+
+        def keep(date, p, f, d):
+            return ((file is None or f == file) and (device is None or d == device)
+                    and (pic is None or p == pic)
+                    and (start is None or date >= start) and (end is None or date <= end))
+
+        planned = {}
+        for day in self._repo.days():
+            for e in day.entries:
+                if keep(day.date, e.pic, e.file, e.device):
+                    planned[day.date] = planned.get(day.date, 0) + e.planned
+
+        worked = defaultdict(int)
+        for (date, p, f, d), n in _actuals(cases).items():
+            if n and keep(date, p, f, d):
+                worked[date] += n
+
+        return {"days": [
+            {"date": date, "planned": planned.get(date), "worked": worked.get(date, 0),
+             "attain": worked.get(date, 0) / planned[date] if planned.get(date) else None}
+            for date in sorted(set(planned) | set(worked))
+        ]}
+
     # --- settings ---------------------------------------------------------
 
     def get_settings(self, cases) -> dict:

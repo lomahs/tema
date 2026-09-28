@@ -180,3 +180,25 @@ def test_the_removed_cuts_are_gone(client):
     assert client.post("/api/plan/2026-08-05/baseline").status_code in (404, 405)
     # "suggest" now reads as a date and is refused as one.
     assert client.get("/api/plan/suggest?date=2026-08-05").status_code == 400
+
+
+# --- Daily's plan, under Daily's filters --------------------------------------
+
+def test_daily_plan_is_filtered_like_daily(loaded):
+    loaded.put("/api/plan/2026-08-05", json={"entries": [entry(pic="lee", planned=4),
+                                                        entry(pic="kim", planned=6)]})
+    whole = loaded.get("/api/plan/daily").get_json()["days"]
+    lee = loaded.get("/api/plan/daily?pic=lee").get_json()["days"]
+    assert [(d["planned"], d["worked"]) for d in whole] == [(10, 2)]
+    assert [(d["planned"], d["worked"], d["attain"]) for d in lee] == [(4, 2, 0.5)]
+
+
+def test_daily_plan_is_not_read_as_a_date(client):
+    """Registered before /api/plan/<date>, or "daily" would be refused as a date."""
+    assert client.get("/api/plan/daily").status_code == 200
+
+
+def test_daily_plan_refuses_a_bad_bound(client):
+    res = client.get("/api/plan/daily?from=nope")
+    assert res.status_code == 400
+    assert "error" in res.get_json()
