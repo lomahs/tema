@@ -867,6 +867,15 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 .plan-grid-cell[data-kind="unplanned"] { background: var(--tone-warn-bg);    color: var(--tone-warn-fg); }
 .plan-grid-cell.is-ring { box-shadow: inset 0 0 0 1.5px var(--tone-danger); }
 .plan-grid tfoot td[data-tone="danger"] { color: var(--tone-danger); }
+.plan-grid td[data-tone="warn"] { color: var(--tone-warn-fg); }
+.plan-grid td[data-tone="success"] { color: var(--tone-success-fg); }
+.plan-grid td.plan-grid-need { font-weight: 600; }
+/* A header with a hover card explaining it: a dotted rule says there is more to read. */
+.plan-grid-hint { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.plan-grid-answer { color: var(--ink); font-size: var(--fs-md); }
+.plan-grid-answer[data-tone="warn"] strong { color: var(--tone-warn-fg); }
+.plan-grid-answer[data-tone="success"] { color: var(--tone-success-fg); }
+.plan-grid-day.is-out:not(.is-selected) button { color: var(--ink-faint); font-weight: 400; }
 
 .plan-tip {
     position: fixed;

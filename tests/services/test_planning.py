@@ -302,6 +302,20 @@ def _load():
             + [case(row_num=30 + i, result="OK", pic="An", test_date="2026-09-22") for i in range(2)])
 
 
+def test_board_counts_the_day_s_devices_by_family_not_by_name():
+    """Two iPhone blocks and an iPad read as "2 iPhone · 1 iPad", in config order."""
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    svc.save_day("2026-09-23", [entry(device="iPad Air", planned=2),
+                                entry(device="iPhone Min size", planned=2),
+                                entry(pic="Bo", device="iPhone Max size", planned=2)])
+    cs = [case(device=d, row_num=i) for i, d in
+          enumerate(["iPad Air", "iPhone Min size", "iPhone Max size"])]
+    assert svc.board_view(cs, "2026-09-23")["device_families"] == [
+        {"key": "iPhone", "label": "iPhone", "slots": 2},
+        {"key": "iPad", "label": "iPad", "slots": 1}]
+
+
 def test_board_joins_plan_to_worked_and_reports_remaining_at_start():
     svc = service()
     svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
@@ -410,6 +424,66 @@ def test_the_grid_marks_a_future_plan_beyond_what_is_left():
     assert cells["2026-09-21"]["worked"] == 4
     assert not cells["2026-09-23"]["over_remaining"]
     assert cells["2026-09-24"]["over_remaining"]         # 16 planned > 12 left at start of today
+
+
+def test_the_grid_runs_monday_to_friday_from_the_start_week_to_the_end_week():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-23", "phase_end": "2026-10-06"})
+    g = svc.phase_view(_load())["grid"]
+    assert [w["start"] for w in g["weeks"]] == ["2026-09-21", "2026-09-28", "2026-10-05"]
+    assert g["days"][0] == "2026-09-21" and g["days"][-1] == "2026-10-09"
+    assert len(g["days"]) == 15
+    first = g["weeks"][0]["days"]
+    assert [d["in_phase"] for d in first] == [False, False, True, True, True]
+    assert g["current"] == 0                              # today, 22 Sept, is in week one
+
+
+def test_the_grid_totals_each_slot_against_every_plan_the_phase_holds():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    svc.save_day("2026-09-21", [entry(planned=3)])        # past
+    svc.save_day("2026-09-24", [entry(planned=5)])        # future
+    svc.save_day("2026-10-20", [entry(planned=2)])        # past the phase end: still a plan
+    cs = _load() + [case(row_num=90, result="保留"),       # Pending: still to run
+                    case(row_num=91, result="対象外")]     # no PIC: Out Of Scope, not a case
+    slot = svc.phase_view(cs)["grid"]["slots"][0]
+    assert slot["total"] == 17
+    assert slot["plan_ahead"] == 7                        # the past day's 3 is history
+    assert slot["remaining"] == 11
+    assert slot["need_plan"] == 4                         # 11 left, 5 + 2 planned from today on
+    assert slot["plan_ahead"] + slot["need_plan"] == slot["remaining"]
+
+
+def test_need_plan_takes_only_what_today_s_plan_still_has_to_run():
+    """An already ran 2 there today, and Remain has already dropped them."""
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    svc.save_day("2026-09-22", [entry(pic="An", planned=5)])
+    slot = svc.phase_view(_load())["grid"]["slots"][0]
+    assert (slot["remaining"], slot["plan_ahead"], slot["need_plan"]) == (10, 3, 7)
+
+
+def test_need_plan_is_capped_per_device_at_zero():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-09-21", "phase_end": "2026-09-25"})
+    svc.save_day("2026-09-24", [entry(planned=40), entry(pic="Bo", device="iPad", planned=3)])
+    cs = _load() + [case(device="iPad", row_num=i) for i in range(5)]
+    v = svc.phase_view(cs)
+    need = {s["device"]: s["need_plan"] for s in v["grid"]["slots"]}
+    assert need == {"iPhone": 0, "iPad": 2}               # iPhone's excess does not cover iPad
+    # Plan ahead is not capped: planning past what is left is what it is there to show.
+    assert {s["device"]: s["plan_ahead"] for s in v["grid"]["slots"]} == {"iPhone": 40, "iPad": 3}
+    # The table's answer and the Unplanned KPI are one figure.
+    assert sum(need.values()) == v["kpis"]["unplanned"]
+
+
+def test_the_grid_lists_a_finished_slot_so_its_total_is_on_screen():
+    svc = service()
+    svc.save_settings({"phase_start": "2026-10-05", "phase_end": "2026-10-09"})
+    cs = _load() + [case(file_name="Done.xlsx", row_num=1, result="OK", pic="An",
+                         test_date="2026-09-01")]
+    files = [s["file"] for s in svc.phase_view(cs)["grid"]["slots"]]
+    assert "Done.xlsx" in files
 
 
 def test_the_forecast_window_changes_the_rate():

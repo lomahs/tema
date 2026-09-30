@@ -12,12 +12,8 @@ import {
     STATE_LABEL, arrangeDay, dayLabel, gridCell, listRows, shortFile,
 } from "./cells.js";
 import {
-    data, expanded, getFocus, getGridOffset, getLayout, getWindow, listFilter, listSort,
+    data, expanded, getFocus, getGridNeedOnly, getGridWeek, getLayout, getWindow, listFilter, listSort,
 } from "./state.js";
-
-/** The grid's visible width, in days, and how far ‹ › move it. */
-export const GRID_WINDOW = 10;
-export const GRID_STEP = 5;
 
 const WINDOW_OPTIONS = [["3", "3d"], ["5", "5d"], ["10", "10d"], ["all", "All"]];
 const LIST_NUMERIC = new Set(["planned", "done", "left"]);
@@ -121,14 +117,12 @@ export function renderDay() {
 function renderDayHead(day, board) {
     const badge = day.date === day.today ? ["Today", "plan-badge--today"]
         : day.date < day.today ? ["Past", ""] : ["Upcoming", ""];
-    const devices = {};
-    board.slots.forEach((s) => { devices[s.device] = (devices[s.device] || 0) + 1; });
     const parts = [dayLabel(day.date), board.entries.length ? `${num(day.planned)} planned` : "nothing planned"];
     if (day.showDone) parts.push(`${num(day.worked)} done`);
     if (day.activeMembers) {
         parts.push(`${day.activeMembers} member${day.activeMembers === 1 ? "" : "s"}`,
                    `${day.files.length} file${day.files.length === 1 ? "" : "s"}`,
-                   ...Object.keys(devices).sort().map((d) => `${devices[d]} ${d}`));
+                   ...board.device_families.map((f) => `${f.slots} ${f.label}`));
     }
     const layout = getLayout();
     $("#planDayHead").innerHTML = `
@@ -326,12 +320,16 @@ export function renderBurndown() {
 
 // --- the phase grid ------------------------------------------------------------
 
+/**
+ * The week the grid shows: the one remembered by its Monday, else the one
+ * holding today, as the server names it.
+ */
 export function gridBounds() {
-    const cols = data.phase ? data.phase.grid.days : [];
-    const ti = Math.max(0, cols.indexOf(data.phase ? data.phase.today : ""));
-    const maxOff = Math.max(0, cols.length - GRID_WINDOW);
-    const off = Math.min(maxOff, Math.max(0, getGridOffset() ?? ti - 3));
-    return { cols, off, maxOff };
+    const g = data.phase ? data.phase.grid : null;
+    const weeks = g ? g.weeks : [];
+    const kept = getGridWeek() ? weeks.findIndex((w) => w.start === getGridWeek()) : -1;
+    const index = kept >= 0 ? kept : Math.min(g ? g.current : 0, Math.max(0, weeks.length - 1));
+    return { weeks, index, week: weeks[index] || null };
 }
 
 export function renderGrid() {
@@ -339,36 +337,59 @@ export function renderGrid() {
     if (!p) return;
     const g = p.grid;
     const today = p.today;
-    const { cols, off, maxOff } = gridBounds();
-    const wcols = cols.slice(off, off + GRID_WINDOW);
+    const { weeks, index, week } = gridBounds();
+    const wdays = week ? week.days : [];
+    const wcols = wdays.map((d) => d.date);
     last.gridCols = wcols;
     const planDay = data.board ? data.board.date : today;
+    const current = Math.min(g.current, Math.max(0, weeks.length - 1));
 
-    const files = [...new Set(g.slots.map((s) => s.file))];
+    // The question the table is for: is any case still to run left without a
+    // plan? The server floors Need plan per device, so the sum is the answer.
+    const needOnly = getGridNeedOnly();
+    const needs = (s) => s.need_plan > 0;
+    const shown = needOnly ? g.slots.filter(needs) : g.slots;
+    const files = [...new Set(shown.map((s) => s.file))];
     const allOpen = files.length > 0 && files.every((f) => expanded.has(f));
+    const need = g.slots.reduce((a, s) => a + s.need_plan, 0);
+    const needFiles = new Set(g.slots.filter(needs).map((s) => s.file)).size;
+    const allFiles = new Set(g.slots.map((s) => s.file)).size;
+    const answer = need
+        ? `<strong class="num">${num(need)}</strong> cases still need a plan, in ${needFiles} of ${allFiles} files.`
+        : g.slots.some((s) => s.remaining > 0) ? "Every case still to run is planned."
+        : "Nothing is left to run.";
     $("#planGridHead").innerHTML = `
         <div class="card-head">
             <h2>Phase plan</h2>
-            <p>Executed cases on past days, planned cases ahead. Hover a cell for details; click a day to open it in Day plan.</p>
+            <p class="plan-grid-answer" data-tone="${need ? "warn" : "success"}">${answer}</p>
         </div>
         <div class="plan-grid-controls">
-            <span class="plan-muted">${wcols.length ? `${dayLabel(wcols[0])} – ${dayLabel(wcols[wcols.length - 1])} · ${cols.length} days in phase` : ""}</span>
+            <span class="plan-muted">${week ? `${dayLabel(week.start)} – ${dayLabel(week.end)} · week ${index + 1} of ${weeks.length}` : ""}</span>
             <div class="plan-stepper">
-                <button type="button" class="btn btn-sm" data-act="grid-prev" ${off > 0 ? "" : "disabled"} aria-label="Earlier days">&lsaquo;</button>
-                <button type="button" class="btn btn-sm" data-act="grid-today">Today</button>
-                <button type="button" class="btn btn-sm" data-act="grid-next" ${off < maxOff ? "" : "disabled"} aria-label="Later days">&rsaquo;</button>
+                <button type="button" class="btn btn-sm" data-act="grid-prev" ${index > 0 ? "" : "disabled"} aria-label="Previous week">&lsaquo;</button>
+                <button type="button" class="btn btn-sm" data-act="grid-today" ${index === current ? "disabled" : ""}>This week</button>
+                <button type="button" class="btn btn-sm" data-act="grid-next" ${index < weeks.length - 1 ? "" : "disabled"} aria-label="Next week">&rsaquo;</button>
             </div>
+            <button type="button" class="toggle" data-act="grid-need" aria-pressed="${needOnly}"
+                    ${need || needOnly ? "" : "disabled"}>Needs plan only</button>
             <button type="button" class="btn btn-sm" data-act="grid-all">${allOpen ? "Collapse devices" : "Show devices"}</button>
         </div>`;
 
+    const sum = (slots, key) => slots.reduce((a, s) => a + s[key], 0);
+    const figures = (slots) => ({
+        total: sum(slots, "total"), remaining: sum(slots, "remaining"),
+        planAhead: sum(slots, "plan_ahead"), needPlan: sum(slots, "need_plan"),
+        // Per device, or one device's surplus would hide another's shortfall.
+        overPlanned: slots.some((s) => s.plan_ahead > s.remaining),
+    });
     const rows = [];
     files.forEach((f) => {
-        const slots = g.slots.filter((s) => s.file === f);
+        const slots = shown.filter((s) => s.file === f);
         const devs = (d) => slots.map((s) => ({ device: s.device, pl: s.cells[d].planned, ex: s.cells[d].worked }));
         rows.push({
             file: f, device: null, label: shortFile(f), title: f, fileRow: true, open: expanded.has(f),
             sub: `${slots.length} device${slots.length > 1 ? "s" : ""}`,
-            left: slots.reduce((a, s) => a + s.remaining, 0),
+            ...figures(slots),
             cells: wcols.map((d) => ({
                 pl: slots.reduce((a, s) => a + s.cells[d].planned, 0),
                 ex: slots.reduce((a, s) => a + s.cells[d].worked, 0),
@@ -378,7 +399,7 @@ export function renderGrid() {
         if (expanded.has(f)) {
             slots.forEach((s) => rows.push({
                 file: f, device: s.device, label: s.device, title: `${f} · ${s.device}`, fileRow: false,
-                left: s.remaining,
+                ...figures([s]),
                 cells: wcols.map((d) => ({ pl: s.cells[d].planned, ex: s.cells[d].worked,
                                           over: s.cells[d].over_remaining, devs: devs(d) })),
             }));
@@ -386,34 +407,88 @@ export function renderGrid() {
     });
     last.gridRows = rows;
 
-    const head = `<tr><th class="plan-sticky">File</th><th class="num">Left</th>
-        ${wcols.map((d, c) => `<th class="plan-grid-day${d === planDay ? " is-selected" : d === today ? " is-today" : ""}">
+    // Need plan is the column the table exists for: amber while cases are
+    // uncovered, green once every case still to run has a plan. A plan larger
+    // than what is left is worth seeing too — those cases cannot all be run.
+    const figureCells = (r) => `<td class="num">${num(r.total)}</td>
+        <td class="num">${num(r.remaining)}</td>
+        <td class="num"${r.overPlanned ? ' data-tone="warn" title="Planned beyond what is left to run on a device"' : ""}>${num(r.planAhead)}</td>
+        <td class="num plan-grid-need"${r.needPlan ? ' data-tone="warn"' : r.remaining ? ' data-tone="success"' : ""}>${num(r.needPlan)}</td>`;
+    const hint = (key, label, cls = "") =>
+        `<th class="${cls}" data-col="${key}"><span class="plan-grid-hint">${label}</span></th>`;
+    const head = `<tr>${hint("file", "File", "plan-sticky")}
+        ${hint("total", "Total", "num")}${hint("remain", "Remain", "num")}
+        ${hint("ahead", "Plan ahead", "num")}${hint("need", "Need plan", "num")}
+        ${wdays.map((wd, c) => {
+            const d = wd.date;
+            const cls = d === planDay ? " is-selected" : d === today ? " is-today" : "";
+            return `<th class="plan-grid-day${cls}${wd.in_phase ? "" : " is-out"}" data-col="day" data-c="${c}">
             <button type="button" data-act="grid-day" data-c="${c}"><span>${dayLabel(d).slice(0, 3)}</span>
-            <span class="num">${d.slice(5)}</span></button></th>`).join("")}</tr>`;
+            <span class="num">${d.slice(5)}</span></button></th>`;
+        }).join("")}</tr>`;
     const body = rows.length ? rows.map((r, ri) => `<tr class="${r.fileRow ? "plan-grid-file" : "plan-grid-device"}">
         <td class="plan-sticky">${r.fileRow
             ? `<button type="button" class="plan-grid-name" data-act="grid-toggle" data-r="${ri}" title="${esc(r.title)}"
                    aria-expanded="${r.open}"><span aria-hidden="true">${r.open ? "▾" : "▸"}</span>
                    <span>${esc(r.label)}</span><span class="plan-muted">${esc(r.sub)}</span></button>`
             : `<span class="plan-grid-name plan-grid-name--device" title="${esc(r.title)}">${esc(r.label)}</span>`}</td>
-        <td class="num">${num(r.left)}</td>
+        ${figureCells(r)}
         ${r.cells.map((c, ci) => {
             const cell = gridCell(c.pl, c.ex, wcols[ci], today, c.over);
             return `<td><button type="button" class="plan-grid-cell${cell.ring ? " is-ring" : ""}"
                 ${cell.kind ? `data-kind="${cell.kind}"` : ""} data-act="grid-cell" data-r="${ri}" data-c="${ci}"
                 ${cell.empty ? "disabled" : ""} aria-label="${esc(cell.label)}"><span class="num">${esc(cell.text)}</span></button></td>`;
         }).join("")}</tr>`).join("")
-        : `<tr><td colspan="${wcols.length + 2}" class="empty-note">Nothing in this phase yet.</td></tr>`;
-    const foot = `<tr><td class="plan-sticky">Planned</td><td></td>
-            ${wcols.map((d) => `<td class="num">${g.planned_by_date[d] || ""}</td>`).join("")}</tr>
-        <tr><td class="plan-sticky">Executed</td><td></td>
+        : `<tr><td colspan="${wcols.length + 5}" class="empty-note">${needOnly
+            ? "Every case still to run is planned." : "Nothing in this phase yet."}</td></tr>`;
+    const all = figures(g.slots);
+    const blank = "<td></td>".repeat(4);
+    const foot = `<tr><td class="plan-sticky">All files</td>${figureCells(all)}${"<td></td>".repeat(wcols.length)}</tr>
+        <tr><td class="plan-sticky">Planned</td>${blank}
+            ${wcols.map((d) => `<td class="num center">${g.planned_by_date[d] || ""}</td>`).join("")}</tr>
+        <tr><td class="plan-sticky">Executed</td>${blank}
             ${wcols.map((d) => {
                 const pv = g.planned_by_date[d] || 0;
                 const ev = g.worked_by_date[d] || 0;
-                return `<td class="num"${d <= today && ev < pv ? ' data-tone="danger"' : ""}>${d <= today ? ev : ""}</td>`;
+                return `<td class="num center"${d <= today && ev < pv ? ' data-tone="danger"' : ""}>${d <= today ? ev : ""}</td>`;
             }).join("")}</tr>`;
     $("#planGridTable").innerHTML = `<table class="ledger plan-grid">
         <thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table>`;
+}
+
+/** What each column header's hover card says. */
+const COL_TIPS = {
+    file: ["File", "Click a file to show its devices. Hover a day cell for its plan and actual by device."],
+    total: ["Total", "Cases in scope: every counted case in the plan, whatever its result."],
+    remain: ["Remain", "Cases still to run (NYS + Pending)."],
+    ahead: ["Plan ahead", "What the plan still asks of Remain: today's plan not yet run, plus every later day's plan. "
+        + "Amber when a device is planned beyond what it has left."],
+    need: ["Need plan", "Cases still to run that no plan covers yet: Remain − Plan ahead, never below 0 per device. "
+        + "Amber while any case is uncovered, green once all are planned."],
+    day: ["Day", "Executed cases on past days, planned cases from today on. Click to open this day in Day plan."],
+};
+
+/** Put the hover card over (or, near the top of the window, under) `anchor`. */
+function placeTip(tip, anchor) {
+    tip.hidden = false;
+    const r = anchor.getBoundingClientRect();
+    const below = r.top < 190;
+    const x = Math.max(140, Math.min(window.innerWidth - 140, r.left + r.width / 2));
+    tip.style.left = `${x}px`;
+    tip.style.top = `${below ? r.bottom + 8 : r.top - 8}px`;
+    tip.classList.toggle("is-below", below);
+}
+
+/** The hover card over a column header, saying what the column means. */
+export function showColTip(key, ci, anchor) {
+    const t = COL_TIPS[key];
+    if (!t) return;
+    const d = key === "day" ? last.gridCols[ci] : null;
+    const out = d && data.phase && !data.phase.grid.weeks.some((w) => w.days.some((x) => x.date === d && x.in_phase));
+    const tip = $("#planTip");
+    tip.innerHTML = `<div class="plan-tip-head"><strong>${esc(d ? dayLabel(d) : t[0])}</strong></div>
+        <span>${esc(t[1])}</span>${out ? `<span class="plan-muted">Outside the phase.</span>` : ""}`;
+    placeTip(tip, anchor);
 }
 
 /** The hover card over a grid cell. */
@@ -436,13 +511,7 @@ export function showTip(ri, ci, anchor) {
             <td class="num">${ahead ? "—" : c.devs.reduce((a, o) => a + o.ex, 0)}</td></tr></tfoot></table>
         <span class="plan-tip-status"${cell.kind && cell.kind !== "future" ? ` data-kind="${cell.kind}"` : ""}>${esc(cell.label)}</span>
         <span class="plan-muted">Click to open in Day plan</span>`;
-    tip.hidden = false;
-    const r = anchor.getBoundingClientRect();
-    const below = r.top < 190;
-    const x = Math.max(140, Math.min(window.innerWidth - 140, r.left + r.width / 2));
-    tip.style.left = `${x}px`;
-    tip.style.top = `${below ? r.bottom + 8 : r.top - 8}px`;
-    tip.classList.toggle("is-below", below);
+    placeTip(tip, anchor);
 }
 
 export function hideTip() {

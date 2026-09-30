@@ -980,6 +980,16 @@ Two rules are worth knowing:
   the axis, but the cases run on it left the pile; today's point also takes work dated after
   today. Without that the line ends above the Remaining figure — the real samples showed a gap of
   twelve thousand.
+- **The phase grid pages a Monday-to-Friday week at a time**, from the week holding the phase
+  start to the week holding its end, as the Member tab does; a day of those weeks outside the
+  phase is drawn greyed. Its figure columns answer one question — *how many cases still need a
+  plan?* Per slot it serves `total` (counted in-plan cases), `remaining`, `plan_ahead` (today's
+  plan net of what that person already ran there today, plus every later day's, whether or not
+  its day is a column) and `need_plan`, `remaining − plan_ahead` floored at zero per slot so one
+  device's surplus never covers another. That is the reading `_plan_finish` makes, so the slots'
+  `need_plan` add up to the Unplanned KPI — a test pins it. The card heading states the sum and a
+  "Needs plan only" toggle narrows the rows to it. Every slot the load has is listed, finished or
+  not, so each file's size is on screen.
 - **The plan's finish is capped per slot.** Today contributes what its plan still has to run
   (planned less what that person already worked there today); each later day its plan; every
   slot capped at what that slot has left, so planning a finished slot twice covers nothing.

@@ -153,7 +153,7 @@ function render() {
                         <span>${esc(r.pic)}</span>
                         <span class="num">${showDone && slot ? workedBy(r.pic, slot) : "—"}</span>
                         <span class="plan-editor-count">
-                            <input type="number" min="0" class="input input-mono${changed ? " is-changed" : ""}"
+                            <input type="text" inputmode="numeric" autocomplete="off" class="input input-mono${changed ? " is-changed" : ""}"
                                    data-ed="count" data-i="${i}" value="${esc(r.count)}" placeholder="0" aria-label="Planned for ${esc(r.pic)}">
                             ${changed ? `<span class="plan-muted">was ${r.init}</span>` : ""}
                         </span>
@@ -260,16 +260,21 @@ export function initEditor() {
         }
     });
     // Counts redraw on every keystroke so the totals and the fit line follow;
-    // focus is put back on the input that was being typed in.
+    // focus and the caret are put back on the input that was being typed in.
+    // It is a text input, not a number one: a number input reports no caret,
+    // so the redraw would drop it at the start and "123" would type as "321".
+    // Anything but a digit is dropped here instead, caret kept in step.
     dlg.addEventListener("input", (ev) => {
         const el = ev.target;
         if (!ed || el.dataset.ed !== "count") return;
         const i = Number(el.dataset.i);
-        ed.rows[i].count = el.value;
-        const pos = el.selectionStart;
+        const raw = el.value;
+        const at = el.selectionStart ?? raw.length;
+        const pos = raw.slice(0, at).replace(/\D/g, "").length;
+        ed.rows[i].count = raw.replace(/\D/g, "");
         render();
         const again = dlg.querySelector(`[data-ed="count"][data-i="${i}"]`);
-        if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch { /* number inputs */ } }
+        if (again) { again.focus(); again.setSelectionRange(pos, pos); }
     });
     // Enter in a count submits the form, and a `method="dialog"` form closes
     // the dialog on submit: that would throw the edit away. It saves instead.

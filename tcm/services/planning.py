@@ -34,8 +34,9 @@ fields of the same `daily_rows` rows; nothing here counts cases itself.
 """
 import math
 from collections import defaultdict
-from datetime import datetime, date as _date
+from datetime import datetime, date as _date, timedelta
 
+from tcm.domain.device import DEVICES
 from tcm.domain.plan import (DayPlan, PlanEntry, PlanSettings, add_workdays,
                              parse_date, phase_days)
 from tcm.services.aggregation import daily_rows, remaining_rows
@@ -62,7 +63,7 @@ def _actuals(cases, date=None, pic=None) -> dict:
 #: is nobody a plan can be written for, so it is never offered as a member.
 _NO_PIC = "N/A"
 
-#: How far past the phase end the burndown and the grid will reach, in working
+#: How far past the phase end the burndown will reach, in working
 #: days, when the plan or the forecast runs late. Past that the chart would be
 #: all overrun and no phase.
 _OVERRUN_DAYS = 20
@@ -90,10 +91,12 @@ class _Facts:
     def __init__(self, cases, days, today):
         self.today = today
         self.rem = {}             # (file, device) -> remaining
+        self.counted = {}         # (file, device) -> counted cases in the plan
         self.total = 0            # every counted case in the plan
         self.undated = 0          # worked cases with no test date
         for r in remaining_rows(cases, keep_finished=True):
             self.rem[(r["file"], r["device"])] = r["remaining"]
+            self.counted[(r["file"], r["device"])] = r["counted"]
             self.total += r["counted"]
             self.undated += r["worked_undated"]
         # Load order: the files as `remaining_rows` names them, alphabetised,
@@ -369,7 +372,7 @@ class PlanningService:
             },
             "burndown": self._burndown(facts, start, end, cap, at_start, rate,
                                        [end, forecast, plan_finish, last_plan]),
-            "grid": self._grid(facts, start, min(max(end, last_plan or end), cap)),
+            "grid": self._grid(facts, start, end),
         }
 
     @staticmethod
@@ -456,23 +459,58 @@ class PlanningService:
         }
 
     @staticmethod
-    def _grid(facts, start, cols_end):
-        """One row per slot, one column per phase day: planned ahead, worked behind.
+    def _grid(facts, start, end):
+        """One row per slot, one column per weekday of every week the phase touches.
+
+        Columns run Monday to Friday, from the week holding the phase start to
+        the week holding its end, the way the Member tab pages; a day of those
+        weeks outside the phase is still drawn, and `weeks` says which.
+
+        The table answers "how many cases still need a plan?". Each slot
+        carries its size (`total`, the counted cases in the plan), what is
+        still to run (`remaining`), what the plan still asks of it
+        (`plan_ahead`: today's plan net of what that person already ran there
+        today, the way the plan finish reads it, and every later day's plan,
+        whether or not that day is a column) and what of `remaining` no plan
+        covers yet (`need_plan`, never below zero). So `plan_ahead + need_plan
+        == remaining` unless the slot is planned past what it has left, which
+        `plan_ahead > remaining` then shows. The cap is per slot, because cases
+        planned past one device's size do not run on another -- and it is the
+        same reading `_plan_finish` makes, so the slots' `need_plan` add up to
+        the Unplanned KPI.
 
         A future cell is flagged `over_remaining` once the slot's plan from
         today through that day exceeds what the slot had left when today began.
         """
         today = facts.today
-        cols = phase_days(start, cols_end, today)
+        weeks = []
+        monday = _date.fromisoformat(start) - timedelta(days=_date.fromisoformat(start).weekday())
+        while monday.isoformat() <= end:
+            days = [(monday + timedelta(days=i)).isoformat() for i in range(5)]
+            weeks.append({"start": days[0], "end": days[-1],
+                          "days": [{"date": d, "in_phase": start <= d <= end} for d in days]})
+            monday += timedelta(days=7)
+        cols = [d["date"] for w in weeks for d in w["days"]]
         col_set = set(cols)
+        this_week = [i for i, w in enumerate(weeks) if w["start"] <= today]
+        current = this_week[-1] if this_week else 0
+
         plan_sd = defaultdict(lambda: {"n": 0, "pics": []})
+        ahead = defaultdict(int)                  # slot -> planned still to run
         for d, e in facts.plans:
-            cell = plan_sd[((e.file, e.device), d)]
+            slot = (e.file, e.device)
+            cell = plan_sd[(slot, d)]
             cell["n"] += e.planned
             cell["pics"].append([e.pic, e.planned])
+            if d == today:
+                done = facts.by_pic_slot_date.get((e.pic, slot, today), 0)
+                ahead[slot] += max(0, e.planned - done)
+            elif d > today:
+                ahead[slot] += e.planned
 
-        slots = {s for s, n in facts.rem.items() if n > 0}
-        slots |= {s for (s, d) in plan_sd if d in col_set}
+        # Every slot the load has, finished or not, so each file's size is on
+        # screen; plus any slot a plan names, and any worked in view.
+        slots = set(facts.rem) | {(e.file, e.device) for _, e in facts.plans}
         slots |= {s for (s, d) in facts.by_slot_date if d in col_set}
 
         rows = []
@@ -487,15 +525,19 @@ class PlanningService:
                             "worked": facts.by_slot_date.get((slot, d), 0),
                             "over_remaining": d >= today and n > 0 and cum > rs,
                             "pics": p["pics"] if p else []}
+            remaining = facts.remaining(slot)
             rows.append({"file": slot[0], "device": slot[1],
-                         "remaining": facts.remaining(slot),
+                         "total": facts.counted.get(slot, 0),
+                         "remaining": remaining,
+                         "plan_ahead": ahead[slot],
+                         "need_plan": max(0, remaining - ahead[slot]),
                          "remaining_at_start": rs, "cells": cells})
 
         planned_by_date = defaultdict(int)
         for (_, d), p in plan_sd.items():
             if d in col_set:
                 planned_by_date[d] += p["n"]
-        return {"days": cols, "slots": rows,
+        return {"days": cols, "weeks": weeks, "current": current, "slots": rows,
                 "planned_by_date": dict(planned_by_date),
                 "worked_by_date": {d: facts.by_date.get(d, 0) for d in cols}}
 
@@ -564,11 +606,23 @@ class PlanningService:
                      for s in facts.order(every_slot - day_slots)
                      if facts.remaining_at_start(s) > 0]
 
+        # The heading says how many iPhones and iPads the day uses, not which
+        # models: one per slot, grouped the way Summary's "By device type" is,
+        # configured families first in config order, then any unclaimed name.
+        per_family = defaultdict(int)
+        for r in slot_rows:
+            per_family[DEVICES.classify(r["device"])] += 1
+        order = {k: i for i, k in enumerate(DEVICES.keys)}
+        families = [{"key": k, "label": DEVICES.label_of(k), "slots": n}
+                    for k, n in sorted(per_family.items(),
+                                       key=lambda kv: (order.get(kv[0], len(order)), kv[0]))]
+
         return {
             "date": date, "today": today,
             "daily_target": self._repo.settings().daily_target,
             "entries": [e.to_dict() for e in day.entries],
             "slots": slot_rows, "cells": cells, "load": dict(load),
+            "device_families": families,
             "members": sorted(members), "available": available,
         }
 

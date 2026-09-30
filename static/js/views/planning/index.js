@@ -17,12 +17,12 @@ import { shiftWorkday } from "./cells.js";
 import { closeEditor, initEditor, openEditor, setOnSave } from "./editor.js";
 import { bindPhases, renderPhases } from "./phases.js";
 import {
-    GRID_STEP, drawn, gridBounds, hideTip, renderBurndown, renderDay, renderGrid,
-    renderKpis, renderPhase, showError, showTip,
+    drawn, gridBounds, hideTip, renderBurndown, renderDay, renderGrid,
+    renderKpis, renderPhase, showColTip, showError, showTip,
 } from "./render.js";
 import {
-    data, expanded, getDay, getWindow, listFilter, setDay, setFocus, setGridOffset,
-    setLayout, setWindow,
+    data, expanded, getDay, getGridNeedOnly, getWindow, listFilter, setDay, setFocus,
+    setGridNeedOnly, setGridWeek, setLayout, setWindow,
 } from "./state.js";
 
 let focusTimer = null;
@@ -218,13 +218,15 @@ function bindGrid() {
     $("#planGridHead").addEventListener("click", (ev) => {
         const el = ev.target.closest("[data-act]");
         if (!el) return;
-        const { off, maxOff } = gridBounds();
+        const { weeks, index } = gridBounds();
         switch (el.dataset.act) {
-        case "grid-prev": setGridOffset(Math.max(0, off - GRID_STEP)); break;
-        case "grid-next": setGridOffset(Math.min(maxOff, off + GRID_STEP)); break;
-        case "grid-today": setGridOffset(null); break;
+        case "grid-prev": setGridWeek(weeks[Math.max(0, index - 1)].start); break;
+        case "grid-next": setGridWeek(weeks[Math.min(weeks.length - 1, index + 1)].start); break;
+        case "grid-today": setGridWeek(null); break;
+        case "grid-need": setGridNeedOnly(!getGridNeedOnly()); break;
         case "grid-all": {
-            const files = [...new Set(data.phase.grid.slots.map((s) => s.file))];
+            // The files on screen, so the filter and the button's label agree.
+            const files = drawn().gridRows.filter((r) => r.fileRow).map((r) => r.file);
             const allOpen = files.length > 0 && files.every((f) => expanded.has(f));
             expanded.clear();
             if (!allOpen) files.forEach((f) => expanded.add(f));
@@ -253,11 +255,13 @@ function bindGrid() {
         }
     });
     table.addEventListener("mouseover", (ev) => {
+        const th = ev.target.closest("th[data-col]");
+        if (th) { showColTip(th.dataset.col, Number(th.dataset.c), th); return; }
         const el = ev.target.closest("[data-act='grid-cell']");
         if (el && !el.disabled) showTip(Number(el.dataset.r), Number(el.dataset.c), el);
     });
     table.addEventListener("mouseout", (ev) => {
-        const el = ev.target.closest("[data-act='grid-cell']");
+        const el = ev.target.closest("th[data-col], [data-act='grid-cell']");
         if (el && !el.contains(ev.relatedTarget)) hideTip();
     });
 }

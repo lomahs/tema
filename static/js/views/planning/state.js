@@ -16,8 +16,11 @@ let layout = "matrix";
 /** Past phase days the forecast pace is read over: "3" | "5" | "10" | "all". */
 let fcWindow = "5";
 
-/** First visible column of the phase grid; null centres it on today. */
-let gridOffset = null;
+/** Monday of the phase grid's week on screen; null shows the week holding today. */
+let gridWeek = null;
+
+/** The phase grid lists only the files and devices that still need a plan. */
+let gridNeedOnly = false;
 
 /** The slot highlighted after a grid click: `{file, device}` (device null = every device). */
 let focus = null;
@@ -41,7 +44,9 @@ export const getLayout = () => layout;
 export const setLayout = (v) => { layout = v; };
 export const getWindow = () => fcWindow;
 export const setWindow = (v) => { fcWindow = v; };
-export const getGridOffset = () => gridOffset;
-export const setGridOffset = (v) => { gridOffset = v; };
+export const getGridWeek = () => gridWeek;
+export const setGridWeek = (v) => { gridWeek = v; };
+export const getGridNeedOnly = () => gridNeedOnly;
+export const setGridNeedOnly = (v) => { gridNeedOnly = v; };
 export const getFocus = () => focus;
 export const setFocus = (v) => { focus = v; };
