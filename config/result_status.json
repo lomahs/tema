@@ -46,7 +46,7 @@
       "badge": "bg-warning text-dark",
       "issue": true,
       "key": "Pending",
-      "label": "Pending (保留)",
+      "label": "Pending",
       "match": [
         "保留"
       ],
@@ -59,7 +59,7 @@
       "badge": "bg-secondary",
       "issue": true,
       "key": "Cancel",
-      "label": "Cancel (対象外)",
+      "label": "Cancel",
       "match": [
         "対象外"
       ],
