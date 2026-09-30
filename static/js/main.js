@@ -80,8 +80,9 @@ const VIEWS = {
     compare: {
         // A drill-in like File, reached from Tools' Snapshots card.
         title: "Compare",
-        sub: () => "What changed between two snapshots. Both are classified with the "
-                 + "taxonomy as it is now, over the scope groups in the plan.",
+        sub: () => "What changed between two snapshots, classified with the taxonomy as "
+                 + "it is now. Totals count the plan; moves include cases that left or "
+                 + "entered it. Press a count to list its cases.",
     },
     tools: {
         title: "Tools",

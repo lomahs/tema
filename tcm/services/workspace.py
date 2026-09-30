@@ -14,7 +14,7 @@ back to live data.
 import os
 
 from tcm.domain.ports import CaseLoader, CaseStore, Snapshot, SnapshotRepository
-from tcm.services.aggregation import compare_cases
+from tcm.services.aggregation import compare_cases, compared_cases
 
 _NO_STORE = {"error": "Snapshots are not available: no database is configured."}
 
@@ -150,6 +150,16 @@ class Workspace:
             return {"error": f"No snapshot with id {missing[0]}"}, 404
         return {"base": base.origin, "head": head.origin,
                 **compare_cases(base.cases, head.cases)}, 200
+
+    def compared_cases(self, base_id: int, head_id: int, was, now):
+        """The cases behind one move of `compare` — see `compared_cases`."""
+        if self._snapshots is None:
+            return _NO_STORE, 400
+        base, head = self._snapshots.load(base_id), self._snapshots.load(head_id)
+        missing = [i for i, s in ((base_id, base), (head_id, head)) if s is None]
+        if missing:
+            return {"error": f"No snapshot with id {missing[0]}"}, 404
+        return {"cases": compared_cases(base.cases, head.cases, was, now)}, 200
 
     def _remember(self, source, cases, file_results):
         self._store.put(Snapshot(cases=cases, file_results=file_results, source=source))

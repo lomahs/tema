@@ -494,6 +494,21 @@ export const getSnapshotCompare = (base, head) =>
     call(`/api/snapshots/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
 
 /**
+ * The cases behind one move of {@link getSnapshotCompare}.
+ * @param {number} base
+ * @param {number} head
+ * @param {?{scope: string, status: string}} from The move's `from`; null for rows added.
+ * @param {?{scope: string, status: string}} to The move's `to`; null for rows removed.
+ * @returns {Promise<ApiResponse>} `{cases: [{file, sheet, device, row, case_no, base, head}]}`.
+ */
+export function getSnapshotCompareCases(base, head, from, to) {
+    const q = new URLSearchParams({ base, head });
+    if (from) { q.set("from_scope", from.scope); q.set("from_status", from.status); }
+    if (to) { q.set("to_scope", to.scope); q.set("to_status", to.status); }
+    return call(`/api/snapshots/compare/cases?${q}`);
+}
+
+/**
  * Phases and the roster. Every write below answers with the same shape.
  * @returns {Promise<ApiResponse>} `{phases, active_id, members, suggestions}`.
  */

@@ -418,15 +418,74 @@ def remaining_rows(cases, keep_finished=False):
     return rows
 
 
+def _compared(base, head):
+    """Pair two loads case by case, for `compare_cases` and `compared_cases`.
+
+    Yields `(was_case, was, now_case, now)` per (file, sheet, device, row), where
+    `was` / `now` is the `(scope group, status)` that case classified as on that
+    side, or None when the row is not there at all. Matching runs *before* the
+    plan filter, so a case whose Scope moved from a counted group to an excluded
+    one is a move rather than a removal; a key whose scope counts on neither side
+    is skipped, which is the plan filter applied to the pair instead of to each
+    side.
+    """
+    sides = ({}, {})
+    for cases, found in ((base, sides[0]), (head, sides[1])):
+        for c in cases:
+            found[(c.file_name, c.sheet, c.device, c.row_num)] = c
+
+    def state(c):
+        return None if c is None else (SCOPES.classify(c.scope), STATUS.classify_case(c))
+
+    in_sheet_order = lambda k: (str(k[0]), str(k[1]), str(k[2]), k[3] or 0)
+    for key in sorted(sides[0].keys() | sides[1].keys(), key=in_sheet_order):
+        was_case, now_case = sides[0].get(key), sides[1].get(key)
+        if not any(c is not None and SCOPES.is_counted(c.scope) for c in (was_case, now_case)):
+            continue
+        yield was_case, state(was_case), now_case, state(now_case)
+
+
+def _in_total(state):
+    """True when a `(scope group, status)` is part of Summary's Total."""
+    return state is not None and state[0] in SCOPES.counted and state[1] in STATUS.counted
+
+
 def compare_cases(base, head):
     """What changed between two loads, classified with today's taxonomy.
 
-    Both sides run through `in_plan`, so the figures are the ones Summary's
-    Total would have shown for each. Cases are matched on (file, sheet, device,
-    row): a case on one side only is added (`from: None`) or removed
-    (`to: None`). Every matched key is either a transition or unchanged, so the
-    two add up to every case either side holds.
+    The figures -- `totals`, `total`, `rows` -- run through `in_plan`, so they
+    are the ones Summary's Total would have shown for each side. The moves are
+    wider: cases are matched on (file, sheet, device, row) across every scope
+    group, so a move is a change of scope group, of status, or both. `plan`
+    says whether a move crossed Total's boundary -- `"left"` or `"entered"` --
+    whether through the scope (FPT -> JP) or through an excluded status (a
+    Cancel losing its PIC). A row on one side only is added (`from: None`) or
+    removed (`to: None`) and carries no direction: it is not a case that moved.
+    Every compared key is either a move or unchanged, so the two add up to every
+    case whose scope counts on at least one side.
     """
+    moves, unchanged = Counter(), 0
+    for _, was, _, now in _compared(base, head):
+        if was == now:
+            unchanged += 1
+        else:
+            moves[(was, now)] += 1
+
+    def as_side(state):
+        return None if state is None else {"scope": state[0], "status": state[1]}
+
+    def move(was, now, n):
+        crossed = was is not None and now is not None and _in_total(was) != _in_total(now)
+        return {
+            "from": as_side(was), "to": as_side(now), "count": n,
+            "plan": ("left" if _in_total(was) else "entered") if crossed else None,
+            "scope_changed": bool(was and now and was[0] != now[0]),
+            "status_changed": bool(was and now and was[1] != now[1]),
+        }
+
+    transitions = [move(was, now, n) for (was, now), n in
+                   sorted(moves.items(), key=lambda kv: (-kv[1], str(kv[0])))]
+
     base, head = in_plan(base), in_plan(head)
 
     def with_total(counts):
@@ -437,13 +496,11 @@ def compare_cases(base, head):
 
     totals_b, totals_h = STATUS.zero_counts(), STATUS.zero_counts()
     per_row = defaultdict(lambda: (STATUS.zero_counts(), STATUS.zero_counts()))
-    status_of = ({}, {})
     for side, cases, totals in ((0, base, totals_b), (1, head, totals_h)):
         for c in cases:
             key = STATUS.classify_case(c)
             totals[key] += 1
             per_row[(c.file_name, c.device)][side][key] += 1
-            status_of[side][(c.file_name, c.sheet, c.device, c.row_num)] = key
 
     rows = []
     for (file_name, device), (b, h) in sorted(per_row.items()):
@@ -451,21 +508,37 @@ def compare_cases(base, head):
         rows.append({"file": file_name, "device": device,
                      "base": b, "head": h, "delta": diff(b, h)})
 
-    moves, unchanged = Counter(), 0
-    for key in status_of[0].keys() | status_of[1].keys():
-        was, now = status_of[0].get(key), status_of[1].get(key)
-        if was == now:
-            unchanged += 1
-        else:
-            moves[(was, now)] += 1
-
     tb, th = _counted_total(totals_b), _counted_total(totals_h)
     return {
         "totals": {k: {"base": totals_b[k], "head": totals_h[k],
                        "delta": totals_h[k] - totals_b[k]} for k in STATUS.keys},
         "total": {"base": tb, "head": th, "delta": th - tb},
         "rows": rows,
-        "transitions": [{"from": f, "to": t, "count": n} for (f, t), n in
-                        sorted(moves.items(), key=lambda kv: (-kv[1], str(kv[0])))],
+        "transitions": transitions,
         "unchanged": unchanged,
+        # A move names scope groups by key; the view labels them from this.
+        "scopes": SCOPES.to_dict()["groups"],
     }
+
+
+def compared_cases(base, head, was, now):
+    """The cases behind one of `compare_cases`' moves, both sides raw.
+
+    `was` and `now` are `(scope group, status)` pairs, or None for a row absent
+    on that side -- the same values the move's `from` / `to` carry. Served one
+    move at a time, the way `status_cases` serves one status: two snapshots a
+    week apart can differ by tens of thousands of cases, and the reader asks
+    about one move. Each side keeps the raw Scope, Result and PIC it was read
+    with, because "which cell do I look at" is the question this answers.
+    """
+    def raw(c, state):
+        if c is None:
+            return None
+        return {"scope": c.scope, "scope_group": state[0], "result": c.result,
+                "pic": c.pic, "status": state[1]}
+
+    ref = lambda c: {"file": c.file_name, "sheet": c.sheet, "device": c.device,
+                     "row": c.row_num, "case_no": c.case_no}
+    return [{**ref(was_case or now_case), "base": raw(was_case, w), "head": raw(now_case, n)}
+            for was_case, w, now_case, n in _compared(base, head)
+            if w == was and n == now and was != now]

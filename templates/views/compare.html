@@ -1,8 +1,10 @@
         <!-- ==================== Compare ====================
              Two snapshots side by side: the drill-in behind Tools' Compare
              button. Like File it has no nav item and draws its own Back. Both
-             sides are classified with the taxonomy as it is now, over the scope
-             groups in the plan. Filled by views/compare.js. -->
+             sides are classified with the taxonomy as it is now. The figures are
+             over the scope groups in the plan; the moves are over every case
+             whose scope counts on either side, so a case that left the plan is
+             a move rather than a removal. Filled by views/compare.js. -->
         <section class="view" id="compareView" hidden>
             <div class="file-bar">
                 <button class="btn btn-quiet" id="btnCompareBack">&lsaquo; Back</button>
@@ -16,10 +18,30 @@
 
             <section class="card card--table">
                 <div class="card-head card-head--row">
+                    <h2>In / out of plan</h2>
+                    <span class="card-note" id="comparePlanNote"></span>
+                </div>
+                <div class="scroll-x scroll-x--rows"><table class="ledger" id="comparePlan"></table></div>
+            </section>
+
+            <section class="card card--table">
+                <div class="card-head card-head--row">
                     <h2>What moved</h2>
+                    <div class="toggles toggles--seg" id="compareFilter" role="group"
+                         aria-label="Which moves to list"></div>
                     <span class="card-note" id="compareUnchanged"></span>
                 </div>
                 <div class="scroll-x scroll-x--rows"><table class="ledger" id="compareMoves"></table></div>
+            </section>
+
+            <section class="card card--table" id="compareCasesCard" hidden>
+                <div class="card-head card-head--row">
+                    <h2>Cases</h2>
+                    <span class="card-note" id="compareCasesMove"></span>
+                    <button class="btn btn-sm btn-quiet" id="btnCompareCasesClose">Close</button>
+                </div>
+                <div class="scroll-x scroll-x--rows"><table class="ledger" id="compareCases"></table></div>
+                <div class="card-foot" id="compareCasesFoot"></div>
             </section>
 
             <section class="card card--table">

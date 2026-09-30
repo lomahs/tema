@@ -849,12 +849,20 @@ figures as today's rows and a save would make a copy stamped *now* that becomes 
 start's restore. Save is disabled in the UI for the same reason.
 About 70,000 sample cases save in a fraction of a second.
 
-**`compare_cases(base, head)` in `aggregation.py` is the one diff.** Both sides run through
-`in_plan` and today's taxonomy, so its totals are the ones Summary's Total would have shown for
-each. Cases match on (file, sheet, device, row): a key on one side only is added (`from: null`)
-or removed (`to: null`), and **transitions + unchanged equals every key either side holds** —
-`tests/services/test_compare.py` asserts it, the same partition property the status slices
-keep.
+**`compare_cases(base, head)` in `aggregation.py` is the one diff.** Its figures — `totals`,
+`total`, `rows` — run through `in_plan` and today's taxonomy, so they are the ones Summary's
+Total would have shown for each side. **Its moves do not**: cases are matched on (file, sheet,
+device, row) *before* the plan filter, and a move is a change of `(scope group, status)`. That is
+what makes a case whose Scope went FPT → JP a move rather than a "Removed" indistinguishable from
+a deleted row. A key whose scope counts on neither side is skipped — the plan filter applied to
+the pair rather than to each side. Each move says whether it crossed Total's boundary (`plan`:
+`left` / `entered`), by scope or by an excluded status (a Cancel losing its PIC becomes Out Of
+Scope), and which half changed; a row on one side only is added (`from: null`) or removed
+(`to: null`) and carries no direction. **Moves + unchanged equals every compared key** —
+`tests/services/test_compare.py` asserts it, the same partition property the status slices keep.
+`compared_cases(base, head, was, now)` is the list behind one move, served by
+`/api/snapshots/compare/cases` one move at a time for the reason `/api/cases` serves one status
+at a time; `_compared` is the one pairing both walk, so a count and its list cannot disagree.
 
 **The schema is versioned and backed up.** `tcm/infrastructure/db/schema.py` is an append-only
 list of migrations; `PRAGMA user_version` is the version. `Database.migrate` copies an existing

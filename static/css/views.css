@@ -929,6 +929,16 @@ thead .plan-sticky, tfoot .plan-sticky { background: var(--paper-sunk); z-index:
 /* The Compare view's "base → head" line beside its Back button. */
 .compare-sides { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--ink-soft); margin-left: var(--sp-3); }
 #compareView > .card { margin-bottom: var(--sp-4); }
+/* A move names a scope group beside a status badge. A group outside the plan
+   carries the dashed rule that means "the sum stops here", as `chip--aside`
+   does. The half of a move that did not change is faded, so the half that did
+   is what reads -- by weight, never a hue, because colour means status. */
+.compare-scope { display: inline-block; padding: 0 var(--sp-2); font-weight: 500; }
+.compare-scope--out { border: 1px dashed var(--rule-strong); border-radius: var(--r-full); color: var(--ink-soft); }
+#compareView td.is-same > * { opacity: 0.4; }
+#compareView span.is-changed { font-weight: 600; }
+.compare-arrow, .compare-blank { color: var(--ink-soft); }
+#compareCasesMove { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
 
 /* --- the member matrix -----------------------------------------------------
    Plan against actual, member by day, then the phase totals. A cell is drawn

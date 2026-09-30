@@ -66,3 +66,39 @@ def test_a_label_must_be_text(source):
     c = make_client()
     c.post("/api/load", json={"folder": source})
     assert c.post("/api/snapshots", json={"label": 5}).status_code == 400
+
+
+def test_compare_lists_the_cases_behind_one_move(tmp_path, source):
+    c = make_client()
+    c.post("/api/load", json={"folder": source})
+    a = c.post("/api/snapshots", json={"label": "a"}).get_json()["id"]
+    write_workbook(tmp_path / "src" / "TC.xlsx", [config_row("Login", "iPhone", 4, 5)], {"Login": {
+        (4, "A"): "TC-1", (4, "B"): "JP", (4, "C"): "OK", (4, "D"): "2026-08-05", (4, "E"): "lee",
+        (5, "A"): "TC-2", (5, "B"): "FPT",
+    }})
+    c.post("/api/load", json={"folder": source})
+    b = c.post("/api/snapshots", json={"label": "b"}).get_json()["id"]
+
+    [move] = c.get(f"/api/snapshots/compare?base={a}&head={b}").get_json()["transitions"]
+    assert move["plan"] == "left"
+    frm, to = move["from"], move["to"]
+    url = (f"/api/snapshots/compare/cases?base={a}&head={b}"
+           f"&from_scope={frm['scope']}&from_status={frm['status']}"
+           f"&to_scope={to['scope']}&to_status={to['status']}")
+    listed = c.get(url).get_json()["cases"]
+    assert [(r["row"], r["case_no"], r["base"]["scope"], r["head"]["scope"]) for r in listed] \
+        == [(4, "TC-1", "FPT", "JP")]
+
+
+def test_compare_cases_refuses_a_half_named_or_unknown_side(source):
+    c = make_client()
+    c.post("/api/load", json={"folder": source})
+    a = c.post("/api/snapshots", json={"label": "a"}).get_json()["id"]
+    url = f"/api/snapshots/compare/cases?base={a}&head={a}"
+    assert c.get(url).status_code == 400                                   # no side at all
+    assert c.get(url + "&from_scope=FPT").status_code == 400                # scope, no status
+    assert c.get(url + "&to_scope=FPT&to_status=Nope").status_code == 400    # unknown status
+    assert c.get(url + "&to_scope=Nope&to_status=OK").status_code == 400     # unknown scope
+    assert c.get(url + "&to_scope=FPT&to_status=OK").get_json() == {"cases": []}
+    assert c.get(f"/api/snapshots/compare/cases?base={a}&head=999"
+                 "&to_scope=FPT&to_status=OK").status_code == 404

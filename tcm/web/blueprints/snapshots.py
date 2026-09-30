@@ -6,6 +6,8 @@ loaded before deciding whether to open on Tools.
 """
 from flask import Blueprint, jsonify, request
 
+from tcm.domain.scope import SCOPES
+from tcm.domain.status import STATUS
 from tcm.web.blueprints import workspace
 
 bp = Blueprint("snapshots", __name__)
@@ -41,6 +43,48 @@ def compare_snapshots():
     if base is None or head is None:
         return jsonify({"error": "Provide 'base' and 'head' snapshot ids"}), 400
     result, status = workspace().compare(base, head)
+    return jsonify(result), status
+
+
+def _compare_side(prefix):
+    """One side of a move from the query: `(scope group, status)`, None, or an error.
+
+    A side is named by both halves or neither -- neither is how an added or a
+    removed row is asked for. Keys are checked against the taxonomy and the
+    scope groups as they stand, because a move named with a key that no longer
+    exists would list nothing and read as "nothing moved".
+    """
+    scope = request.args.get(f"{prefix}_scope")
+    status = request.args.get(f"{prefix}_status")
+    if scope is None and status is None:
+        return None, None
+    if scope is None or status is None:
+        return None, f"Give both '{prefix}_scope' and '{prefix}_status', or neither"
+    if scope not in SCOPES.keys:
+        return None, f"Unknown scope group {scope!r}; expected one of {', '.join(SCOPES.keys)}"
+    if status not in STATUS.keys:
+        return None, f"Unknown status {status!r}; expected one of {', '.join(STATUS.keys)}"
+    return (scope, status), None
+
+
+@bp.route("/api/snapshots/compare/cases")
+def compare_snapshot_cases():
+    """GET /api/snapshots/compare/cases?base&head&from_scope&from_status&to_scope&to_status
+
+    The cases behind one move of `/api/snapshots/compare`. Leave out the `from_*`
+    pair for rows added, the `to_*` pair for rows removed.
+    """
+    base = request.args.get("base", type=int)
+    head = request.args.get("head", type=int)
+    if base is None or head is None:
+        return jsonify({"error": "Provide 'base' and 'head' snapshot ids"}), 400
+    was, error = _compare_side("from")
+    now, error = (None, error) if error else _compare_side("to")
+    if error:
+        return jsonify({"error": error}), 400
+    if was is None and now is None:
+        return jsonify({"error": "Name at least one side of the move"}), 400
+    result, status = workspace().compared_cases(base, head, was, now)
     return jsonify(result), status
 
 
